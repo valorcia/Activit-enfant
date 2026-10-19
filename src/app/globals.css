@@ -1,0 +1,54 @@
+@import "tailwindcss";
+
+@font-face { font-family: "Nunito"; src: url("/fonts/nunito-400.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Nunito"; src: url("/fonts/nunito-400-italic.ttf") format("truetype"); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: "Nunito"; src: url("/fonts/nunito-700.ttf") format("truetype"); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "Nunito"; src: url("/fonts/nunito-900.ttf") format("truetype"); font-weight: 900; font-style: normal; font-display: swap; }
+@font-face { font-family: "Fredoka"; src: url("/fonts/fredoka-400.ttf") format("truetype"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Fredoka"; src: url("/fonts/fredoka-600.ttf") format("truetype"); font-weight: 600; font-display: swap; }
+@font-face { font-family: "Fredoka"; src: url("/fonts/fredoka-700.ttf") format("truetype"); font-weight: 700; font-display: swap; }
+@font-face { font-family: "Baloo 2"; src: url("/fonts/baloo2-400.ttf") format("truetype"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Baloo 2"; src: url("/fonts/baloo2-700.ttf") format("truetype"); font-weight: 700; font-display: swap; }
+@font-face { font-family: "Baloo 2"; src: url("/fonts/baloo2-800.ttf") format("truetype"); font-weight: 800; font-display: swap; }
+
+@theme {
+  --font-sans: "Nunito", ui-sans-serif, system-ui, sans-serif;
+}
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  @apply bg-slate-50 text-slate-900 antialiased;
+}
+
+/* Pages du livre (aperçu et impression) */
+.book-page {
+  position: relative;
+  overflow: hidden;
+  background: #fff;
+  box-sizing: border-box;
+}
+.book-page [data-block-id] {
+  position: absolute;
+  box-sizing: border-box;
+}
+.book-page p { margin: 0; }
+.book-page [data-measure] { box-sizing: border-box; }
+.book-page img { max-width: none; }
+.print-root .book-page {
+  page-break-after: always;
+  break-after: page;
+  box-shadow: none !important;
+}
+.print-root .book-page:last-child { page-break-after: auto; break-after: auto; }
+
+@media print {
+  html, body { margin: 0; padding: 0; background: #fff; }
+}
+
+/* Éditeur */
+.editor-selected { outline: 2px solid #2563eb; outline-offset: 1px; }
+.editor-hover:hover { outline: 1px dashed #93c5fd; }
+.resize-handle { position: absolute; width: 10px; height: 10px; background: #2563eb; border: 2px solid #fff; border-radius: 2px; right: -5px; bottom: -5px; cursor: nwse-resize; }

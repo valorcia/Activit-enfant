@@ -1,0 +1,410 @@
+// Inventor Studio — schéma de données
+// PostgreSQL + Prisma. Les contenus riches (fiches d'activité, mises en page,
+// fiches de référence visuelle) sont stockés en JSON validé par schéma Zod côté application.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum BookStatus {
+  DRAFT        // assistant en cours / sommaire non validé
+  PLANNED      // sommaire validé, production non lancée
+  GENERATING   // lot en cours
+  REVIEW       // contenus à valider
+  READY        // tout validé, exportable
+  EXPORTED     // au moins un export final produit
+  ARCHIVED
+}
+
+enum ActivityStatus {
+  CONCEPT      // simple proposition de sommaire
+  DRAFT        // fiche rédigée, non vérifiée
+  REVIEW       // fiche complète, en attente de validation humaine
+  BLOCKED      // bloquée par le contrôle sécurité (validation humaine requise)
+  VALIDATED    // validée, réutilisable
+  ARCHIVED
+}
+
+enum IllustrationKind {
+  FINAL
+  STEP
+  COVER
+  MATERIAL
+}
+
+enum IllustrationStatus {
+  PENDING
+  GENERATING
+  GENERATED    // produite, non vérifiée
+  ACCEPTED     // validée visuellement
+  REJECTED     // refusée (incohérence)
+  FAILED
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  PAUSED
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum ExportKind {
+  BOOK_PRINT       // PDF A4 imprimable
+  BOOK_DIGITAL     // PDF numérique optimisé
+  ACTIVITY         // PDF d'une activité
+  ACTIVITY_SHEETS  // fiches d'activités
+  COVER            // couverture seule
+}
+
+enum ExportStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum IssueSeverity {
+  INFO
+  WARNING
+  ERROR
+  BLOCKER
+}
+
+// ---------------------------------------------------------------------------
+// Livres
+// ---------------------------------------------------------------------------
+
+model Book {
+  id            String     @id @default(cuid())
+  title         String
+  subtitle      String?
+  collection    String?
+  bookType      String     // inventions | sciences | bricolages | creativite | nature | jeux | prescolaire
+  ageRange      String     // "3-5" | "4-6" | "6-9" | "9-12"
+  targetCount   Int        @default(10)
+  artStyle      String     // aquarelle | vectoriel | pedagogique | bd | realiste | pastel
+  pageFormat    String     @default("A4_PORTRAIT")
+  customWidthMm  Int?
+  customHeightMm Int?
+  language      String     @default("fr")
+  status        BookStatus @default(DRAFT)
+  brief         String?    // demande initiale de l'utilisateur
+  cover         Json?      // CoverData (textes + illustration + variante)
+  theme         Json?      // BookTheme (couleurs, polices, modèle graphique)
+  version       Int        @default(1)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  activities BookActivity[]
+  pages      BookPage[]
+  exports    Export[]
+  jobs       Job[]
+  issues     QualityIssue[]
+  snapshots  BookSnapshot[]
+  illustrations Illustration[]
+
+  @@index([status])
+}
+
+model BookActivity {
+  id         String   @id @default(cuid())
+  bookId     String
+  activityId String
+  position   Int
+  book       Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  @@unique([bookId, activityId])
+  @@index([bookId, position])
+}
+
+// Version figée d'un livre (utilisée pour les exports reproductibles)
+model BookSnapshot {
+  id        String   @id @default(cuid())
+  bookId    String
+  version   Int
+  label     String?
+  data      Json     // livre + activités + pages + assets au moment de la prise
+  createdAt DateTime @default(now())
+  book      Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  exports   Export[]
+
+  @@unique([bookId, version])
+}
+
+// ---------------------------------------------------------------------------
+// Activités (bibliothèque centralisée)
+// ---------------------------------------------------------------------------
+
+model Activity {
+  id               String         @id @default(cuid())
+  slug             String         @unique
+  title            String
+  category         String         // sciences | inventions | bricolage | ...
+  ageRange         String
+  difficulty       Int            @default(2) // 1..5
+  durationMinutes  Int            @default(30)
+  status           ActivityStatus @default(CONCEPT)
+  concept          Json?          // ActivityConcept (proposition de sommaire)
+  currentVersionId String?        @unique
+  contentHash      String?        // empreinte pour détection de doublons
+  tags             String[]       @default([])
+  safetyBlocked    Boolean        @default(false)
+  safetyNotes      String?
+  validatedAt      DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  versions      ActivityVersion[]
+  currentVersion ActivityVersion? @relation("CurrentVersion", fields: [currentVersionId], references: [id])
+  visualRef     VisualReference?
+  illustrations Illustration[]
+  books         BookActivity[]
+  issues        QualityIssue[]
+  jobs          Job[]
+  pages         BookPage[]
+
+  @@index([status])
+  @@index([category, ageRange])
+}
+
+model ActivityVersion {
+  id         String   @id @default(cuid())
+  activityId String
+  number     Int
+  content    Json     // ActivityContent validé par Zod
+  note       String?
+  source     String   @default("ai") // ai | manual | seed | import
+  createdAt  DateTime @default(now())
+  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  currentOf  Activity? @relation("CurrentVersion")
+
+  @@unique([activityId, number])
+}
+
+// Fiche de référence visuelle (objet final, couleurs, matériaux, étapes)
+model VisualReference {
+  id         String   @id @default(cuid())
+  activityId String   @unique
+  data       Json     // VisualReferenceSheet
+  version    Int      @default(1)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------------------------
+// Illustrations & assets
+// ---------------------------------------------------------------------------
+
+model Asset {
+  id        String   @id @default(cuid())
+  key       String   @unique // clé de stockage (local ou S3)
+  mime      String
+  bytes     Int
+  width     Int?
+  height    Int?
+  sha256    String?
+  createdAt DateTime @default(now())
+
+  illustrations Illustration[]
+  exports       Export[]
+}
+
+model Illustration {
+  id          String             @id @default(cuid())
+  activityId  String?
+  bookId      String?
+  kind        IllustrationKind
+  stepIndex   Int?               // pour kind = STEP
+  version     Int                @default(1)
+  parentId    String?            // version précédente
+  status      IllustrationStatus @default(PENDING)
+  prompt      String?
+  negative    String?
+  provider    String?
+  model       String?
+  isDemo      Boolean            @default(false) // image de démonstration, PAS une illustration définitive
+  isCurrent   Boolean            @default(true)
+  assetId     String?
+  costUsd     Decimal?           @db.Decimal(10, 5)
+  reviewNote  String?
+  error       String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  activity Activity? @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  book     Book?     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  asset    Asset?    @relation(fields: [assetId], references: [id])
+
+  @@index([activityId, kind, stepIndex])
+  @@index([bookId, kind])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// Pages & mise en page
+// ---------------------------------------------------------------------------
+
+model BookPage {
+  id          String   @id @default(cuid())
+  bookId      String
+  activityId  String?
+  position    Int
+  templateKey String   // cover | toc | activity_intro | materials | steps | science | challenge | diploma | conclusion | blank
+  layout      Json     // PageLayout (blocs positionnés en mm)
+  locked      Boolean  @default(false) // page éditée manuellement : ne pas régénérer automatiquement
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  book     Book      @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  activity Activity? @relation(fields: [activityId], references: [id], onDelete: SetNull)
+
+  @@index([bookId, position])
+}
+
+model Template {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  name        String
+  description String?
+  theme       Json     // BookTheme
+  builtin     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Exports
+// ---------------------------------------------------------------------------
+
+model Export {
+  id          String       @id @default(cuid())
+  bookId      String?
+  snapshotId  String?
+  activityId  String?
+  kind        ExportKind
+  status      ExportStatus @default(QUEUED)
+  label       String?
+  assetId     String?
+  pageCount   Int?
+  checks      Json?        // résultats des vérifications (polices, images, pages)
+  error       String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  book     Book?         @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  snapshot BookSnapshot? @relation(fields: [snapshotId], references: [id])
+  asset    Asset?        @relation(fields: [assetId], references: [id])
+
+  @@index([bookId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Tâches asynchrones (miroir applicatif de la file pg-boss)
+// ---------------------------------------------------------------------------
+
+model Job {
+  id          String    @id @default(cuid())
+  queueJobId  String?   // identifiant pg-boss
+  type        String    // book.pipeline | activity.generate | activity.illustrate | book.layout | book.export | ...
+  status      JobStatus @default(QUEUED)
+  bookId      String?
+  activityId  String?
+  parentId    String?
+  payload     Json?
+  progress    Int       @default(0) // 0..100
+  step        String?   // étape courante lisible
+  result      Json?
+  error       String?
+  attempts    Int       @default(0)
+  costUsd     Decimal   @default(0) @db.Decimal(10, 5)
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  book     Book?     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  activity Activity? @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  logs     JobLog[]
+
+  @@index([bookId, createdAt])
+  @@index([status])
+}
+
+model JobLog {
+  id        String   @id @default(cuid())
+  jobId     String
+  level     String   @default("info") // info | warn | error
+  message   String
+  data      Json?
+  createdAt DateTime @default(now())
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId, createdAt])
+}
+
+// Historique de chaque appel IA (texte ou image)
+model GenerationLog {
+  id           String   @id @default(cuid())
+  kind         String   // text | image
+  provider     String
+  model        String
+  purpose      String   // outline | activity | visual_reference | illustration | cover | qc
+  bookId       String?
+  activityId   String?
+  jobId        String?
+  inputTokens  Int?
+  outputTokens Int?
+  images       Int?
+  costUsd      Decimal  @default(0) @db.Decimal(10, 5)
+  durationMs   Int?
+  success      Boolean  @default(true)
+  error        String?
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([bookId])
+}
+
+// ---------------------------------------------------------------------------
+// Contrôle qualité
+// ---------------------------------------------------------------------------
+
+model QualityIssue {
+  id         String        @id @default(cuid())
+  bookId     String?
+  activityId String?
+  pageId     String?
+  severity   IssueSeverity
+  code       String        // missing_field | step_incoherent | material_unused | duration | ...
+  message    String
+  resolved   Boolean       @default(false)
+  createdAt  DateTime      @default(now())
+
+  book     Book?     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  activity Activity? @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  @@index([bookId, resolved])
+  @@index([activityId, resolved])
+}
+
+// ---------------------------------------------------------------------------
+// Paramètres (singleton clé/valeur)
+// ---------------------------------------------------------------------------
+
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
