@@ -129,6 +129,7 @@ export const commerceSettingsSchema = z.object({
   defaultTaxRateBp: z.number().int().min(0).max(10000).default(2000),
   pricesIncludeTax: z.boolean().default(true),
   allowStripePromotionCodes: z.boolean().default(true),
+  collectTermsConsent: z.boolean().default(false), // case CGV dans Stripe Checkout (URL des CGV requise côté Stripe)
   downloadMaxPerEntitlement: z.number().int().min(1).max(1000).default(50),
   downloadLinkValidityHours: z.number().int().min(1).max(24 * 365).default(72),
   abandonedCartDelayMinutes: z.number().int().min(30).max(60 * 24 * 7).default(120),

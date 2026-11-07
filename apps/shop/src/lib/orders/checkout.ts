@@ -145,8 +145,10 @@ export async function createCheckoutSession(input: CheckoutInput): Promise<{ url
     allow_promotion_codes: discounts ? undefined : commerce.allowStripePromotionCodes || undefined,
     billing_address_collection: "auto",
     invoice_creation: { enabled: true },
-    consent_collection: { terms_of_service: "required" },
-    custom_text: { terms_of_service_acceptance: { message: commerce.withdrawalNotice } },
+    // Case « J'accepte les CGV » sur Stripe : nécessite l'URL des CGV dans les paramètres publics Stripe
+    ...(commerce.collectTermsConsent
+      ? { consent_collection: { terms_of_service: "required" as const }, custom_text: { terms_of_service_acceptance: { message: commerce.withdrawalNotice }, submit: { message: commerce.withdrawalNotice } } }
+      : { custom_text: { submit: { message: commerce.withdrawalNotice } } }),
     success_url: `${env.appUrl}/commande/confirmation?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${env.appUrl}/panier?annule=1`,
     metadata: { orderId: order.id, orderNumber: order.number },

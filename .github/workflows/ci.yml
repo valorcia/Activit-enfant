@@ -1,0 +1,36 @@
+name: CI boutique
+
+on:
+  push:
+    branches: ["**"]
+    paths: ["apps/shop/**", "pnpm-workspace.yaml", "package.json", ".github/workflows/ci.yml"]
+  pull_request:
+    paths: ["apps/shop/**"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: shop_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/shop_test
+      AUTH_SECRET: ci-secret-ci-secret-ci-secret-ci-secret
+      DOWNLOAD_TOKEN_SECRET: ci-download-secret
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter shop typecheck
+      - run: pnpm --filter shop test
+      - run: pnpm --filter shop build
