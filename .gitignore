@@ -1,11 +1,13 @@
 node_modules
 .next
 out
-storage/*
-!storage/.gitkeep
 .env
 .env.local
+.env.*.local
 *.log
 .DS_Store
-/tmp
 coverage
+*.tsbuildinfo
+apps/*/storage/*
+!apps/*/storage/.gitkeep
+.vercel

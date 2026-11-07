@@ -1,0 +1,33 @@
+import { NextResponse, type NextRequest } from "next/server";
+import { getToken } from "next-auth/jwt";
+
+/**
+ * Protection des routes d'administration : toute route /admin/* (sauf la page de
+ * connexion) et /api/admin/* exige un jeton de session valide. Les vérifications
+ * de rôle fines sont faites dans les pages et actions (requirePermission).
+ */
+export async function proxy(req: NextRequest) {
+  const { pathname } = req.nextUrl;
+  const isLogin = pathname.startsWith("/admin/connexion");
+  if (isLogin) return NextResponse.next();
+
+  const token = await getToken({
+    req,
+    secret: process.env.AUTH_SECRET,
+    secureCookie: process.env.NODE_ENV === "production",
+  });
+
+  if (!token) {
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "Authentification requise" }, { status: 401 });
+    }
+    const url = new URL("/admin/connexion", req.url);
+    url.searchParams.set("callbackUrl", pathname);
+    return NextResponse.redirect(url);
+  }
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: ["/admin/:path*", "/api/admin/:path*"],
+};

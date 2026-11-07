@@ -1,0 +1,729 @@
+// Boutique — schéma de données
+// PostgreSQL + Prisma. Les montants sont stockés en centimes (Int) pour éviter
+// toute erreur d'arrondi. Les contenus structurés (contenu du kit, FAQ,
+// arguments) sont des JSON validés par Zod côté application (src/lib/schemas).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Role {
+  ADMIN
+  EDITOR
+  MARKETING
+  SUPPORT
+}
+
+enum ProductStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+  ARCHIVED
+}
+
+// Modèle de présentation de la fiche produit
+enum ProductTemplate {
+  ADVENTURE // chasse au trésor / aventure immersive
+  ACTIVITY  // cahier d'activités / jeux éducatifs
+  STORY     // histoire illustrée / e-book
+  EVENT     // kit événement (anniversaire, Noël, Pâques…)
+  CLASSIC   // fiche standard
+}
+
+enum MediaRole {
+  MAIN         // image principale
+  GALLERY      // galerie / aperçu
+  ILLUSTRATION // illustration immersive (hero, sections)
+  MOCKUP       // mise en situation
+  VIDEO        // vidéo (URL)
+  PDF_PREVIEW  // aperçu PDF public (extrait)
+  OG           // image Open Graph
+}
+
+enum FileKind {
+  MAIN_PDF
+  EXTRA_PDF
+  INSTRUCTIONS
+  BONUS
+}
+
+enum OrderStatus {
+  PENDING            // session Stripe créée, paiement non confirmé
+  PAID
+  FAILED
+  CANCELLED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+enum CouponType {
+  PERCENT
+  FIXED
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum PostStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+  ARCHIVED
+}
+
+enum SubscriberStatus {
+  PENDING      // double opt-in en attente
+  CONFIRMED
+  UNSUBSCRIBED
+}
+
+enum ImportSource {
+  CSV
+  API
+}
+
+enum ImportStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+// ---------------------------------------------------------------------------
+// Utilisateurs (back-office)
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  passwordHash  String
+  role          Role      @default(EDITOR)
+  isActive      Boolean   @default(true)
+  emailVerified DateTime?
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  productsCreated Product[]  @relation("ProductCreatedBy")
+  posts           BlogPost[]
+  reviewsModerated Review[]  @relation("ReviewModeratedBy")
+  apiKeys         ApiKey[]
+  auditLogs       AuditLog[]
+  imports         ImportJob[]
+  refunds         Refund[]
+}
+
+// Clés d'API pour l'importation / automatisation (hash uniquement)
+model ApiKey {
+  id          String    @id @default(cuid())
+  name        String
+  prefix      String    // 8 premiers caractères, pour identification
+  keyHash     String    @unique
+  scopes      String[]  @default(["products:write"])
+  createdById String?
+  createdBy   User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  actor     String?  // email ou "api:<prefix>" ou "stripe"
+  action    String   // product.create, product.publish, order.refund…
+  entity    String
+  entityId  String?
+  data      Json?
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Catalogue
+// ---------------------------------------------------------------------------
+
+model Category {
+  id             String    @id @default(cuid())
+  slug           String    @unique
+  name           String
+  description    String?
+  illustrationUrl String?
+  color          String?   // couleur distinctive (hex)
+  icon           String?   // nom d'icône lucide
+  position       Int       @default(0)
+  isVisible      Boolean   @default(true)
+  seoTitle       String?
+  seoDescription String?
+  parentId       String?
+  parent         Category? @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children       Category[] @relation("CategoryTree")
+  products       Product[]
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([position])
+}
+
+model Collection {
+  id             String   @id @default(cuid())
+  slug           String   @unique
+  name           String
+  description    String?
+  imageUrl       String?
+  color          String?
+  position       Int      @default(0)
+  isVisible      Boolean  @default(true)
+  seoTitle       String?
+  seoDescription String?
+  products       ProductCollection[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model ProductCollection {
+  productId    String
+  collectionId String
+  position     Int        @default(0)
+  product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+
+  @@id([productId, collectionId])
+  @@index([collectionId, position])
+}
+
+model Product {
+  id               String          @id @default(cuid())
+  slug             String          @unique
+  name             String
+  tagline          String?         // sous-titre : bénéfice principal
+  shortDescription String?
+  longDescription  String?         // markdown
+  story            String?         // présentation immersive (markdown)
+  template         ProductTemplate @default(CLASSIC)
+  categoryId       String?
+  category         Category?       @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  universe         String?         // pirates, dinosaures, espace…
+  tags             String[]        @default([])
+  badges           String[]        @default([]) // "Nouveau", "Best-seller"…
+
+  // Informations pratiques
+  ageMin           Int?
+  ageMax           Int?
+  playersMin       Int?
+  playersMax       Int?
+  durationMinutes  Int?
+  difficulty       Int?            // 1..5
+  pageCount        Int?
+  fileFormat       String          @default("PDF")
+  materials        String[]        @default([])
+
+  // Prix (centimes)
+  priceCents       Int
+  salePriceCents   Int?
+  saleStartsAt     DateTime?
+  saleEndsAt       DateTime?
+  currency         String          @default("EUR")
+  taxRateBp        Int             @default(2000) // 20,00 % en points de base
+
+  // Contenus structurés (validés par Zod)
+  kitContents      Json?           // [{ title, description, icon, quantity }]
+  faq              Json?           // [{ question, answer }]
+  sellingPoints    Json?           // [{ title, description, icon }]
+  heroBadges       String[]        @default([])
+
+  // Marketing / SEO
+  seoTitle         String?
+  seoDescription   String?
+  keywords         String[]        @default([])
+  ogImageUrl       String?
+  promoText        String?
+
+  // Publication
+  status           ProductStatus   @default(DRAFT)
+  publishedAt      DateTime?
+  scheduledAt      DateTime?
+  archivedAt       DateTime?
+  isFeatured       Boolean         @default(false)
+  needsReview      Boolean         @default(false) // créé via API : validation humaine requise
+
+  // Statistiques dénormalisées
+  salesCount       Int             @default(0)
+  viewCount        Int             @default(0)
+  ratingAvg        Float?
+  reviewCount      Int             @default(0)
+
+  createdById      String?
+  createdBy        User?           @relation("ProductCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  source           String          @default("admin") // admin | csv | api | duplicate
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  images           ProductImage[]
+  files            ProductFile[]
+  collections      ProductCollection[]
+  recommendations  ProductRecommendation[] @relation("RecoSource")
+  recommendedBy    ProductRecommendation[] @relation("RecoTarget")
+  bundleItems      BundleItem[]
+  orderItems       OrderItem[]
+  entitlements     DownloadEntitlement[]
+  reviews          Review[]
+
+  @@index([status, publishedAt])
+  @@index([categoryId, status])
+  @@index([salesCount])
+  @@index([ageMin, ageMax])
+  @@index([priceCents])
+}
+
+model ProductImage {
+  id         String    @id @default(cuid())
+  productId  String
+  product    Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url        String
+  storageKey String?
+  alt        String?
+  role       MediaRole @default(GALLERY)
+  position   Int       @default(0)
+  width      Int?
+  height     Int?
+  createdAt  DateTime  @default(now())
+
+  @@index([productId, role, position])
+}
+
+// Fichiers payants : jamais d'URL publique, uniquement une clé de stockage privée
+model ProductFile {
+  id          String   @id @default(cuid())
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  kind        FileKind @default(MAIN_PDF)
+  storageKey  String
+  mime        String   @default("application/pdf")
+  sizeBytes   Int      @default(0)
+  position    Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  downloads   DownloadLog[]
+
+  @@index([productId, position])
+}
+
+model ProductRecommendation {
+  productId     String
+  recommendedId String
+  position      Int     @default(0)
+  product       Product @relation("RecoSource", fields: [productId], references: [id], onDelete: Cascade)
+  recommended   Product @relation("RecoTarget", fields: [recommendedId], references: [id], onDelete: Cascade)
+
+  @@id([productId, recommendedId])
+}
+
+// ---------------------------------------------------------------------------
+// Packs
+// ---------------------------------------------------------------------------
+
+model Bundle {
+  id             String        @id @default(cuid())
+  slug           String        @unique
+  name           String
+  tagline        String?
+  description    String?
+  imageUrl       String?
+  priceCents     Int
+  currency       String        @default("EUR")
+  taxRateBp      Int           @default(2000)
+  badges         String[]      @default([])
+  status         ProductStatus @default(DRAFT)
+  publishedAt    DateTime?
+  isFeatured     Boolean       @default(false)
+  seoTitle       String?
+  seoDescription String?
+  salesCount     Int           @default(0)
+  items          BundleItem[]
+  orderItems     OrderItem[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([status])
+}
+
+model BundleItem {
+  bundleId  String
+  productId String
+  position  Int     @default(0)
+  bundle    Bundle  @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([bundleId, productId])
+}
+
+// ---------------------------------------------------------------------------
+// Clients, commandes, paiements
+// ---------------------------------------------------------------------------
+
+model Customer {
+  id               String   @id @default(cuid())
+  email            String   @unique
+  name             String?
+  stripeCustomerId String?  @unique
+  locale           String   @default("fr")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  orders       Order[]
+  entitlements DownloadEntitlement[]
+  accessLinks  AccessLink[]
+  reviews      Review[]
+  consents     MarketingConsent[]
+}
+
+model Order {
+  id                      String      @id @default(cuid())
+  number                  String      @unique // ex. CC-2026-000123
+  customerId              String?
+  customer                Customer?   @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  email                   String
+  status                  OrderStatus @default(PENDING)
+  currency                String      @default("EUR")
+  subtotalCents           Int
+  discountCents           Int         @default(0)
+  taxCents                Int         @default(0)
+  totalCents              Int
+  couponId                String?
+  coupon                  Coupon?     @relation(fields: [couponId], references: [id], onDelete: SetNull)
+  couponCode              String?
+  stripeCheckoutSessionId String?     @unique
+  stripePaymentIntentId   String?     @unique
+  stripeCustomerId        String?
+  paidAt                  DateTime?
+  cancelledAt             DateTime?
+  refundedCents           Int         @default(0)
+  invoiceNumber           String?     @unique
+  billingName             String?
+  billingAddress          Json?
+  utm                     Json?
+  metadata                Json?
+  abandonedEmailSentAt    DateTime?
+  createdAt               DateTime    @default(now())
+  updatedAt               DateTime    @updatedAt
+
+  items        OrderItem[]
+  payments     Payment[]
+  entitlements DownloadEntitlement[]
+  refunds      Refund[]
+  reviews      Review[]
+
+  @@index([status, createdAt])
+  @@index([email])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id             String   @id @default(cuid())
+  orderId        String
+  order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId      String?
+  product        Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  bundleId       String?
+  bundle         Bundle?  @relation(fields: [bundleId], references: [id], onDelete: SetNull)
+  name           String
+  unitPriceCents Int
+  quantity       Int      @default(1)
+  totalCents     Int
+  taxRateBp      Int      @default(2000)
+  snapshot       Json?    // copie du produit au moment de l'achat (historique conservé)
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model Payment {
+  id          String        @id @default(cuid())
+  orderId     String
+  order       Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  provider    String        @default("stripe")
+  providerId  String        @unique // payment_intent id
+  status      PaymentStatus @default(PENDING)
+  amountCents Int
+  currency    String        @default("EUR")
+  method      String?       // card, apple_pay…
+  raw         Json?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model Refund {
+  id             String   @id @default(cuid())
+  orderId        String
+  order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  stripeRefundId String?  @unique
+  amountCents    Int
+  reason         String?
+  createdById    String?
+  createdBy      User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt      DateTime @default(now())
+}
+
+// Événements Stripe traités (idempotence des webhooks)
+model StripeEvent {
+  id          String   @id // identifiant Stripe evt_…
+  type        String
+  processedAt DateTime @default(now())
+  payload     Json?
+}
+
+// ---------------------------------------------------------------------------
+// Livraison numérique
+// ---------------------------------------------------------------------------
+
+// Droit d'accès d'un client aux fichiers d'un produit (créé après paiement confirmé)
+model DownloadEntitlement {
+  id               String    @id @default(cuid())
+  orderId          String
+  order            Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  customerId       String?
+  customer         Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  productId        String
+  product          Product   @relation(fields: [productId], references: [id], onDelete: Restrict)
+  token            String    @unique
+  expiresAt        DateTime? // null = accès durable (renouvelable par email)
+  maxDownloads     Int       @default(50)
+  downloadCount    Int       @default(0)
+  lastDownloadedAt DateTime?
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+
+  downloads DownloadLog[]
+
+  @@unique([orderId, productId])
+  @@index([customerId])
+}
+
+model DownloadLog {
+  id            String              @id @default(cuid())
+  entitlementId String
+  entitlement   DownloadEntitlement @relation(fields: [entitlementId], references: [id], onDelete: Cascade)
+  fileId        String?
+  file          ProductFile?        @relation(fields: [fileId], references: [id], onDelete: SetNull)
+  ip            String?
+  userAgent     String?
+  createdAt     DateTime            @default(now())
+
+  @@index([entitlementId, createdAt])
+}
+
+// Lien magique « retrouver mes achats » envoyé par email
+model AccessLink {
+  id         String    @id @default(cuid())
+  customerId String
+  customer   Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  token      String    @unique
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Promotions
+// ---------------------------------------------------------------------------
+
+model Coupon {
+  id               String     @id @default(cuid())
+  code             String     @unique
+  description      String?
+  type             CouponType
+  percentOff       Int?       // 0..100
+  amountOffCents   Int?
+  minSubtotalCents Int?
+  maxUses          Int?
+  usedCount        Int        @default(0)
+  startsAt         DateTime?
+  endsAt           DateTime?
+  isActive         Boolean    @default(true)
+  stripeCouponId   String?    @unique
+  orders           Order[]
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Avis clients (modération obligatoire, jamais de faux avis)
+// ---------------------------------------------------------------------------
+
+model Review {
+  id                 String       @id @default(cuid())
+  productId          String
+  product            Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  customerId         String?
+  customer           Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  orderId            String?
+  order              Order?       @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  authorName         String
+  email              String
+  rating             Int          // 1..5
+  title              String?
+  body               String
+  status             ReviewStatus @default(PENDING)
+  isVerifiedPurchase Boolean      @default(false)
+  moderatedById      String?
+  moderatedBy        User?        @relation("ReviewModeratedBy", fields: [moderatedById], references: [id], onDelete: SetNull)
+  moderatedAt        DateTime?
+  moderationNote     String?
+  createdAt          DateTime     @default(now())
+
+  @@index([productId, status])
+  @@index([status, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Blog
+// ---------------------------------------------------------------------------
+
+model BlogPost {
+  id                String     @id @default(cuid())
+  slug              String     @unique
+  title             String
+  excerpt           String?
+  content           String     // markdown
+  coverImageUrl     String?
+  authorId          String?
+  author            User?      @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  status            PostStatus @default(DRAFT)
+  publishedAt       DateTime?
+  scheduledAt       DateTime?
+  tags              String[]   @default([])
+  seoTitle          String?
+  seoDescription    String?
+  relatedProductIds String[]   @default([])
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  @@index([status, publishedAt])
+}
+
+// ---------------------------------------------------------------------------
+// Marketing
+// ---------------------------------------------------------------------------
+
+model NewsletterSubscriber {
+  id             String           @id @default(cuid())
+  email          String           @unique
+  firstName      String?
+  status         SubscriberStatus @default(PENDING)
+  confirmToken   String?          @unique
+  unsubToken     String           @unique
+  confirmedAt    DateTime?
+  unsubscribedAt DateTime?
+  source         String?          // homepage, checkout, popup…
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+}
+
+model MarketingConsent {
+  id         String    @id @default(cuid())
+  email      String
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  channel    String    // email
+  purpose    String    // newsletter | promotions | abandoned_cart
+  granted    Boolean
+  text       String?   // texte de consentement affiché
+  source     String?
+  ip         String?
+  createdAt  DateTime  @default(now())
+
+  @@index([email, purpose])
+}
+
+// File d'événements marketing (outbox) : inscription, achat, panier abandonné…
+model MarketingEvent {
+  id          String    @id @default(cuid())
+  type        String    // subscriber.confirmed, order.paid, cart.abandoned, product.published
+  email       String?
+  payload     Json?
+  processedAt DateTime?
+  error       String?
+  createdAt   DateTime  @default(now())
+
+  @@index([processedAt, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Paramètres du site (apparence, textes, navigation, légal, analytics…)
+// ---------------------------------------------------------------------------
+
+model SiteSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+// Pages éditoriales et juridiques (CGV, confidentialité, mentions légales…)
+model StaticPage {
+  id             String     @id @default(cuid())
+  slug           String     @unique
+  title          String
+  content        String     // markdown
+  status         PostStatus @default(DRAFT)
+  showInFooter   Boolean    @default(true)
+  position       Int        @default(0)
+  seoTitle       String?
+  seoDescription String?
+  updatedAt      DateTime   @updatedAt
+  createdAt      DateTime   @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Importation
+// ---------------------------------------------------------------------------
+
+model ImportJob {
+  id          String       @id @default(cuid())
+  source      ImportSource
+  status      ImportStatus @default(RUNNING)
+  fileName    String?
+  total       Int          @default(0)
+  created     Int          @default(0)
+  updated     Int          @default(0)
+  failed      Int          @default(0)
+  errors      Json?
+  createdById String?
+  createdBy   User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime     @default(now())
+  finishedAt  DateTime?
+}
+
+// Statistiques journalières (trafic → taux de conversion)
+model DailyStat {
+  date             DateTime @id @db.Date
+  pageViews        Int      @default(0)
+  productViews     Int      @default(0)
+  checkoutsStarted Int      @default(0)
+  ordersPaid       Int      @default(0)
+  revenueCents     Int      @default(0)
+}
