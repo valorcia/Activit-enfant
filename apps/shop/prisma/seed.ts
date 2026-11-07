@@ -103,7 +103,7 @@ async function main() {
         { question: "Quel matériel faut-il prévoir ?", answer: "[À COMPLÉTER] Matériel nécessaire (imprimante, ciseaux, etc.)." },
         { question: "Combien de temps dure la chasse au trésor ?", answer: "[À COMPLÉTER] Durée indicative." },
       ],
-      seoTitle: "Chasse au trésor pirates à imprimer — Le trésor de la Capitaine Coquelicot",
+      seoTitle: "Chasse au trésor pirates à imprimer — Capitaine Coquelicot",
       seoDescription: "Kit de chasse au trésor pirates à imprimer pour enfants de 5 à 8 ans : carte, énigmes, invitations et diplômes. Téléchargement immédiat.",
       keywords: ["chasse au trésor pirate", "chasse au trésor à imprimer", "anniversaire pirate", "jeu enfant 5 ans"],
       status: "PUBLISHED",
