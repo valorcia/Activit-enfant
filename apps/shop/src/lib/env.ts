@@ -1,9 +1,18 @@
+/** URL publique : NEXT_PUBLIC_APP_URL, sinon l'URL fournie par Vercel, sinon localhost. */
+export function resolveAppUrl(): string {
+  const explicit = process.env.NEXT_PUBLIC_APP_URL;
+  if (explicit) return explicit.replace(/\/$/, "");
+  const vercel = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL;
+  if (vercel) return `https://${vercel}`;
+  return "http://localhost:3000";
+}
+
 /**
  * Accès centralisé aux variables d'environnement.
  * Les secrets (Stripe, S3, Resend…) ne sont lus que côté serveur.
  */
 export const env = {
-  appUrl: (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(/\/$/, ""),
+  appUrl: resolveAppUrl(),
   nodeEnv: process.env.NODE_ENV ?? "development",
   isProd: process.env.NODE_ENV === "production",
 

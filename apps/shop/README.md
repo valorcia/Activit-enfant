@@ -98,7 +98,7 @@ Les pages publiques sont statiques/ISR (`revalidate = 300`) et invalidées par t
 ## Déploiement sur Vercel
 
 1. Importer le dépôt, **Root Directory = `apps/shop`**, framework Next.js, commande de build `pnpm build` (exécute `prisma generate`).
-2. Base PostgreSQL managée (Neon, Vercel Postgres, Supabase…) : `DATABASE_URL`. Exécuter `pnpm db:deploy` puis `pnpm db:seed` (avec `ADMIN_EMAIL` / `ADMIN_PASSWORD`) depuis votre poste, ou ajouter `prisma migrate deploy` à la commande de build.
+2. Base PostgreSQL managée (Neon via l'onglet Storage de Vercel, Supabase…) : `DATABASE_URL` et `DATABASE_URL_UNPOOLED` (connexion directe pour les migrations). Commande de build Vercel : `pnpm build:vercel` (migrations + seed idempotent + build) avec `ADMIN_EMAIL` / `ADMIN_PASSWORD` définis.
 3. Variables d'environnement (voir `.env.example`) : `NEXT_PUBLIC_APP_URL`, `AUTH_SECRET`, `STRIPE_*`, `STORAGE_DRIVER=s3` + `S3_*`, `EMAIL_DRIVER=resend` + `RESEND_API_KEY` + `EMAIL_FROM`, `DOWNLOAD_TOKEN_SECRET`, `CRON_SECRET`.
 4. Webhook Stripe (dashboard → Developers → Webhooks) : `https://<domaine>/api/stripe/webhook` avec les événements listés ci-dessus ; copier le secret dans `STRIPE_WEBHOOK_SECRET`.
 5. Crons (`vercel.json`) : `/api/cron/publish` (publications programmées) et `/api/cron/marketing` (paniers abandonnés, nouveautés).

@@ -21,6 +21,7 @@ jobs:
           --health-cmd "pg_isready -U postgres" --health-interval 10s --health-timeout 5s --health-retries 5
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/shop_test
+      DATABASE_URL_UNPOOLED: postgresql://postgres:postgres@localhost:5432/shop_test
       AUTH_SECRET: ci-secret-ci-secret-ci-secret-ci-secret
       DOWNLOAD_TOKEN_SECRET: ci-download-secret
       NEXT_PUBLIC_APP_URL: http://localhost:3000

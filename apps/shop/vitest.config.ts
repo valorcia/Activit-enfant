@@ -13,6 +13,7 @@ export default defineConfig({
     hookTimeout: 60000,
     env: {
       DATABASE_URL: TEST_DATABASE_URL,
+      DATABASE_URL_UNPOOLED: TEST_DATABASE_URL,
       NEXT_PUBLIC_APP_URL: "http://localhost:3000",
       DOWNLOAD_TOKEN_SECRET: "test-download-secret",
       AUTH_SECRET: "test-auth-secret",
