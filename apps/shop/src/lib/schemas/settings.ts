@@ -3,7 +3,7 @@ import { z } from "zod";
 const hex = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Couleur hexadécimale attendue");
 
 export const brandSettingsSchema = z.object({
-  name: z.string().min(1).max(60).default("Capitaine Coquelicot"),
+  name: z.string().min(1).max(60).default("La Malle à Jeux"),
   tagline: z.string().max(160).default("Des aventures extraordinaires à vivre à la maison"),
   logoUrl: z.string().max(500).optional().nullable(),
   logoText: z.string().max(40).optional().nullable(),
@@ -37,7 +37,7 @@ export const themeSettingsSchema = z.object({
 export type ThemeSettings = z.infer<typeof themeSettingsSchema>;
 
 export const homepageSectionSchema = z.enum([
-  "hero", "categories", "bestsellers", "how-it-works", "new", "bundles", "reviews", "newsletter", "blog",
+  "hero", "funnel-offer", "categories", "bestsellers", "how-it-works", "new", "bundles", "reviews", "guarantee", "faq", "newsletter", "blog", "final-cta",
 ]);
 export type HomepageSection = z.infer<typeof homepageSectionSchema>;
 
@@ -66,7 +66,7 @@ export const homepageSettingsSchema = z.object({
     ],
   }),
   sectionsOrder: z.array(homepageSectionSchema).default([
-    "hero", "categories", "bestsellers", "how-it-works", "new", "bundles", "reviews", "newsletter",
+    "hero", "funnel-offer", "how-it-works", "reviews", "guarantee", "categories", "bestsellers", "faq", "bundles", "newsletter", "final-cta",
   ]),
   featuredProductIds: z.array(z.string()).default([]),
   howItWorks: z.array(z.object({ title: z.string().max(80), description: z.string().max(240), icon: z.string().max(40) })).max(5).default([
@@ -143,15 +143,63 @@ export const commerceSettingsSchema = z.object({
 export type CommerceSettings = z.infer<typeof commerceSettingsSchema>;
 
 export const seoSettingsSchema = z.object({
-  defaultTitle: z.string().max(70).default("Capitaine Coquelicot — Chasses au trésor et activités à imprimer"),
-  titleTemplate: z.string().max(70).default("%s | Capitaine Coquelicot"),
+  defaultTitle: z.string().max(70).default("La Malle à Jeux — Chasses au trésor et activités à imprimer"),
+  titleTemplate: z.string().max(70).default("%s | La Malle à Jeux"),
   defaultDescription: z.string().max(170).default("Chasses au trésor, cahiers d'activités, kits d'anniversaire et histoires à imprimer pour les enfants de 3 à 12 ans. Téléchargement immédiat."),
   ogImageUrl: z.string().max(500).optional().nullable(),
   robotsIndex: z.boolean().default(true),
 });
 export type SeoSettings = z.infer<typeof seoSettingsSchema>;
 
+/** Leviers de conversion (tunnel de vente). Tout est configurable depuis Admin → Apparence → Conversion. */
+export const conversionSettingsSchema = z.object({
+  heroMode: z.enum(["funnel", "catalogue"]).default("funnel"), // funnel : accueil centré sur le produit phare
+  flagshipProductId: z.string().optional().nullable(), // sinon : premier produit mis en avant, sinon meilleure vente
+  buyNowLabel: z.string().max(40).default("Acheter maintenant"),
+  trustBadges: z.array(z.object({ icon: z.string().max(40), label: z.string().max(60) })).max(6).default([
+    { icon: "lock", label: "Paiement sécurisé Stripe" },
+    { icon: "download", label: "Téléchargement immédiat" },
+    { icon: "printer", label: "Imprimable autant de fois que vous voulez" },
+    { icon: "mail", label: "Fichiers renvoyés par email à tout moment" },
+  ]),
+  guarantee: z.object({
+    enabled: z.boolean().default(false),
+    title: z.string().max(80).default("Satisfait ou remboursé pendant 14 jours"),
+    text: z.string().max(600).default("Si l'aventure ne plaît pas à vos enfants, écrivez-nous : nous vous remboursons intégralement, sans question."),
+    icon: z.string().max(40).default("shield-check"),
+  }).default({ enabled: false, title: "Satisfait ou remboursé pendant 14 jours", text: "Si l'aventure ne plaît pas à vos enfants, écrivez-nous : nous vous remboursons intégralement, sans question.", icon: "shield-check" }),
+  urgency: z.object({
+    enabled: z.boolean().default(false),
+    text: z.string().max(160).default(""),
+  }).default({ enabled: false, text: "" }),
+  orderBump: z.object({
+    enabled: z.boolean().default(true),
+    productId: z.string().optional().nullable(), // sinon : produit recommandé / meilleure vente non présente dans le panier
+    title: z.string().max(80).default("Envie d'une deuxième aventure ?"),
+    text: z.string().max(200).default("Ajoutez-la maintenant, elle sera livrée avec votre commande."),
+  }).default({ enabled: true, productId: null, title: "Envie d'une deuxième aventure ?", text: "Ajoutez-la maintenant, elle sera livrée avec votre commande." }),
+  exitPopup: z.object({
+    enabled: z.boolean().default(false),
+    title: z.string().max(80).default("Attendez, un cadeau avant de partir !"),
+    text: z.string().max(300).default("Inscrivez-vous et recevez nos idées d'activités gratuites chaque mois."),
+    couponCode: z.string().max(40).optional().nullable(),
+    delaySeconds: z.number().int().min(5).max(300).default(25),
+  }).default({ enabled: false, title: "Attendez, un cadeau avant de partir !", text: "Inscrivez-vous et recevez nos idées d'activités gratuites chaque mois.", couponCode: null, delaySeconds: 25 }),
+  faq: z.array(z.object({ question: z.string().max(200), answer: z.string().max(1000) })).max(12).default([
+    { question: "Comment je reçois mon kit ?", answer: "Dès le paiement validé, vous recevez un email avec vos liens de téléchargement. Vous pouvez aussi retrouver vos achats à tout moment depuis la page « Retrouver mes achats »." },
+    { question: "Faut-il du matériel particulier ?", answer: "Une imprimante (couleur ou noir et blanc), du papier et une paire de ciseaux suffisent dans la plupart des cas. Le matériel précis est indiqué sur chaque fiche." },
+    { question: "Puis-je réutiliser le kit ?", answer: "Oui : le fichier est à vous, vous pouvez l'imprimer autant de fois que vous le souhaitez pour un usage familial." },
+    { question: "Le paiement est-il sécurisé ?", answer: "Le paiement est traité par Stripe (carte bancaire, Apple Pay, Google Pay). Nous ne voyons ni ne stockons jamais vos données bancaires." },
+  ]),
+  finalCta: z.object({
+    title: z.string().max(120).default("Prêts à vivre une aventure inoubliable ?"),
+    text: z.string().max(240).default("Téléchargez votre kit en 2 minutes et lancez l'aventure dès aujourd'hui."),
+  }).default({ title: "Prêts à vivre une aventure inoubliable ?", text: "Téléchargez votre kit en 2 minutes et lancez l'aventure dès aujourd'hui." }),
+});
+export type ConversionSettings = z.infer<typeof conversionSettingsSchema>;
+
 export const settingsSchemas = {
+  conversion: conversionSettingsSchema,
   brand: brandSettingsSchema,
   theme: themeSettingsSchema,
   homepage: homepageSettingsSchema,

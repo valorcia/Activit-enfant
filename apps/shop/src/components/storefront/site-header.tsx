@@ -47,7 +47,7 @@ export function SiteHeader({ brand, navigation, banner, categories }: { brand: B
             ) : (
               <span className="flex items-center gap-2">
                 <span className="grid size-10 place-items-center rounded-2xl bg-coral text-white shadow-[0_4px_0_0_color-mix(in_oklab,var(--brand-coral)_70%,black)] rotate-[-6deg]">
-                  <Icon name="anchor" className="size-5" />
+                  <Icon name="box" className="size-5" />
                 </span>
                 <span className="font-heading text-xl font-bold leading-none sm:text-2xl">{brand.logoText ?? brand.name}</span>
               </span>

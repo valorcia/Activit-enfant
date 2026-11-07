@@ -5,7 +5,7 @@ Décisions prises pour livrer une plateforme commerciale opérationnelle. Celles
 ## ⚠️ À valider
 
 1. **Monorepo** : le studio existant a été déplacé dans `apps/studio` et la boutique créée dans `apps/shop` (workspace pnpm). Sur Vercel, le projet pointe sur `apps/shop` (Root Directory). Alternative : deux dépôts séparés.
-2. **Nom de marque provisoire « Capitaine Coquelicot »** (et personnage éponyme du premier produit). Le nom, le logo, le domaine et les textes de marque se modifient dans Admin → Apparence sans déploiement.
+2. **Nom de marque : « La Malle à Jeux »** (la Capitaine Coquelicot reste le personnage du premier produit). Le nom, le logo, le domaine et les textes de marque se modifient dans Admin → Apparence sans déploiement.
 3. **Prix du premier produit : 9,90 € TTC provisoire** (champ marqué « à confirmer » dans la seed). Les textes « [À COMPLÉTER] » de la fiche doivent être remplacés par les contenus définitifs.
 4. **Achat sans compte client** : l'accès aux fichiers repose sur l'email (lien signé dans l'email de confirmation + lien magique « Retrouver mes achats »). Un espace client avec mot de passe n'est pas implémenté (prévu possible : table Customer déjà en place).
 5. **Prix affichés TTC, TVA fixe par produit (20 % par défaut)** : pas de calcul de TVA par pays de l'acheteur (règles OSS UE). Si vous dépassez le seuil de 10 000 € de ventes intra-UE, activer Stripe Tax (`automatic_tax`) — l'architecture le permet (une option à ajouter dans `createCheckoutSession`).
