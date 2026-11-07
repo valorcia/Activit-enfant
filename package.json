@@ -10,6 +10,18 @@
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test"
   },
-  "engines": { "node": ">=20" },
-  "packageManager": "pnpm@10.28.0"
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@10.28.0",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "prisma",
+      "esbuild",
+      "sharp",
+      "playwright-core"
+    ]
+  }
 }
