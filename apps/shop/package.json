@@ -5,8 +5,8 @@
   "description": "Boutique e-commerce premium : e-books, chasses au trésor et activités à imprimer pour enfants",
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
-    "build:vercel": "prisma generate && prisma migrate deploy && tsx prisma/seed.ts && next build",
+    "build": "node scripts/build.mjs",
+    "build:vercel": "node scripts/build.mjs",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
@@ -18,7 +18,8 @@
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "build:next": "prisma generate && next build"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

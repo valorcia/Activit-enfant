@@ -21,17 +21,22 @@ const prisma = new PrismaClient();
 async function main() {
   const adminEmail = (process.env.ADMIN_EMAIL ?? "admin@example.com").toLowerCase();
   const adminPassword = process.env.ADMIN_PASSWORD ?? "ChangezMoi123!";
-  if (process.env.NODE_ENV === "production" && !process.env.ADMIN_PASSWORD) {
-    throw new Error("ADMIN_PASSWORD doit être défini en production");
+  const existingAdmins = await prisma.user.count({ where: { role: "ADMIN" } });
+  const isProd = process.env.NODE_ENV === "production" || !!process.env.VERCEL;
+  if (isProd && !process.env.ADMIN_PASSWORD && existingAdmins === 0) {
+    console.warn("⚠ ADMIN_PASSWORD non défini : aucun compte administrateur créé. Définissez ADMIN_EMAIL et ADMIN_PASSWORD puis redéployez.");
   }
-
-  // --- Administrateur ------------------------------------------------------
-  const admin = await prisma.user.upsert({
-    where: { email: adminEmail },
-    create: { email: adminEmail, name: "Administrateur", passwordHash: await bcrypt.hash(adminPassword, 12), role: "ADMIN" },
-    update: {},
-  });
-  console.log(`Administrateur : ${admin.email}`);
+  // --- Administrateur (créé uniquement si un mot de passe est fourni, ou en développement) ----
+  let adminId: string | null = null;
+  if (!isProd || process.env.ADMIN_PASSWORD) {
+    const admin = await prisma.user.upsert({
+      where: { email: adminEmail },
+      create: { email: adminEmail, name: "Administrateur", passwordHash: await bcrypt.hash(adminPassword, 12), role: "ADMIN" },
+      update: {},
+    });
+    adminId = admin.id;
+    console.log(`Administrateur : ${admin.email}`);
+  }
 
   // --- Catégories ------------------------------------------------------------
   const categories = [
@@ -109,7 +114,7 @@ async function main() {
       status: "PUBLISHED",
       publishedAt: new Date(),
       isFeatured: true,
-      createdById: admin.id,
+      createdById: adminId,
       source: "admin",
       collections: { create: [{ collectionId: colBySlug["pirates"], position: 0 }, { collectionId: colBySlug["5-8-ans"], position: 0 }] },
     },
@@ -161,7 +166,7 @@ async function main() {
         create: {
           slug: d.slug, name: d.name, template: d.template, categoryId: catBySlug[d.category], universe: d.universe,
           tagline: "[EXEMPLE] Sous-titre à compléter", shortDescription: "[EXEMPLE] Produit de démonstration créé par le seed pour visualiser le modèle de fiche. À supprimer ou remplacer.",
-          ageMin: d.ageMin, ageMax: d.ageMax, priceCents: d.price, status: "DRAFT", badges: ["Exemple"], createdById: admin.id, source: "admin",
+          ageMin: d.ageMin, ageMax: d.ageMax, priceCents: d.price, status: "DRAFT", badges: ["Exemple"], createdById: adminId, source: "admin",
         },
         update: {},
       });
