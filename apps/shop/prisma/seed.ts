@@ -15,8 +15,9 @@
 import "dotenv/config";
 import { PrismaClient, type ProductTemplate } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { resolveDbSchema, withDbSchema } from "../src/lib/db-url";
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({ datasourceUrl: withDbSchema(process.env.DATABASE_URL, resolveDbSchema()) });
 
 async function main() {
   const adminEmail = (process.env.ADMIN_EMAIL ?? "admin@example.com").toLowerCase();

@@ -10,6 +10,29 @@ import "dotenv/config"; // charge .env en local (sans effet sur Vercel où les v
 
 import { readdirSync } from "node:fs";
 
+// Copie de src/lib/db-url.ts (ce script tourne avant toute compilation TypeScript)
+function resolveDbSchema(env) {
+  const explicit = env.DB_SCHEMA?.trim();
+  if (explicit) return explicit === "public" ? undefined : explicit;
+  return env.VERCEL ? "shop" : undefined;
+}
+function withDbSchema(url, schema) {
+  if (!url || !schema) return url;
+  try {
+    const u = new URL(url);
+    if (!u.searchParams.has("schema")) u.searchParams.set("schema", schema);
+    if (u.hostname.includes("-pooler") && !u.searchParams.has("pgbouncer")) u.searchParams.set("pgbouncer", "true");
+    return u.toString();
+  } catch { return url; }
+}
+function applyDbSchemaToEnv(env) {
+  const schema = resolveDbSchema(env);
+  if (!schema) return undefined;
+  env.DATABASE_URL = withDbSchema(env.DATABASE_URL, schema);
+  env.DATABASE_URL_UNPOOLED = withDbSchema(env.DATABASE_URL_UNPOOLED ?? env.DATABASE_URL, schema);
+  return schema;
+}
+
 function run(cmd, args, { allowFailure = false } = {}) {
   console.log(`\n▶ ${cmd} ${args.join(" ")}`);
   const res = spawnSync(cmd, args, { stdio: allowFailure ? ["inherit", "pipe", "pipe"] : "inherit", shell: process.platform === "win32" });
@@ -45,6 +68,9 @@ if (process.env.DATABASE_URL) {
     console.log("ℹ DATABASE_URL_UNPOOLED absent : utilisation de DATABASE_URL pour les migrations.");
     process.env.DATABASE_URL_UNPOOLED = process.env.DATABASE_URL;
   }
+  // Schéma PostgreSQL dédié (« shop » sur Vercel, ou DB_SCHEMA) : n'écrase jamais les tables d'un autre projet
+  const schema = applyDbSchemaToEnv(process.env);
+  if (schema) console.log(`ℹ Tables de la boutique dans le schéma PostgreSQL « ${schema} ».`);
   migrate();
   if (process.env.SKIP_SEED !== "1") run("npx", ["tsx", "prisma/seed.ts"]);
 } else {
