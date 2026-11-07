@@ -8,6 +8,7 @@ import { Input, NativeSelect } from "@/components/ui/input";
 import { AdminPageHeader, StatusPill } from "@/components/admin/page-header";
 import { DataTable, AdminPagination } from "@/components/admin/data-table";
 import { ProductRowActions } from "@/components/admin/product-row-actions";
+import { PublishScheduledButton } from "@/components/admin/publish-scheduled-button";
 import { formatDate, formatPrice } from "@/lib/utils";
 
 export const metadata = { title: "Produits" };
@@ -42,12 +43,13 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
   ]);
   const pages = Math.max(1, Math.ceil(total / perPage));
   const reviewCount = await prisma.product.count({ where: { needsReview: true } });
+  const dueCount = await prisma.product.count({ where: { status: "SCHEDULED", scheduledAt: { lte: new Date() } } });
   const buildHref = (p: number) => { const u = new URLSearchParams({ ...(q && { q }), ...(status && { statut: status }), ...(categoryId && { categorie: categoryId }), tri: sort, page: String(p) }); return `/admin/produits?${u}`; };
 
   return (
     <div>
       <AdminPageHeader title="Produits" description={`${total} produit${total > 1 ? "s" : ""} · ${counts.map((c) => `${c._count} ${({ DRAFT: "brouillon(s)", SCHEDULED: "programmé(s)", PUBLISHED: "publié(s)", ARCHIVED: "archivé(s)" })[c.status]}`).join(" · ")}`}
-        actions={<><Button asChild variant="outline" size="sm"><Link href="/admin/import">Importer un CSV</Link></Button><Button asChild variant="admin" size="sm"><Link href="/admin/produits/nouveau"><Plus className="size-4" /> Nouveau produit</Link></Button></>} />
+        actions={<><PublishScheduledButton dueCount={dueCount} /><Button asChild variant="outline" size="sm"><Link href="/admin/import">Importer un CSV</Link></Button><Button asChild variant="admin" size="sm"><Link href="/admin/produits/nouveau"><Plus className="size-4" /> Nouveau produit</Link></Button></>} />
 
       {reviewCount > 0 && !needsReview && (
         <Link href="/admin/produits?validation=1" className="mb-4 flex items-center gap-2 rounded-xl border border-honey bg-honey-light px-4 py-2 text-sm font-semibold text-honey-dark"><AlertTriangle className="size-4" /> {reviewCount} produit{reviewCount > 1 ? "s" : ""} créé{reviewCount > 1 ? "s" : ""} via l&apos;API en attente de validation humaine</Link>

@@ -7,7 +7,7 @@ import { assertPermission } from "@/lib/auth/session";
 import { audit } from "@/lib/audit";
 import { revalidateCatalog } from "@/lib/catalog";
 import { getStorage } from "@/lib/storage";
-import { createProduct, deleteProduct, duplicateProduct, setProductStatus, updateProduct } from "@/lib/products/service";
+import { createProduct, deleteProduct, duplicateProduct, publishScheduledProducts, setProductStatus, updateProduct } from "@/lib/products/service";
 import { handleActionError, succeed, fail, type ActionResult } from "@/lib/admin/action-result";
 import { mediaRoleSchema, fileKindSchema } from "@/lib/schemas/product";
 
@@ -195,4 +195,18 @@ export async function updateFileAction(fileId: string, patch: { name?: string; d
     revalidateAdmin(f.productId);
     return succeed(undefined);
   } catch (e) { return handleActionError(e); }
+}
+
+/** Publie immédiatement les produits (et articles) programmés dont la date est passée — utile sans cron fréquent (plan Hobby). */
+export async function publishScheduledNowAction(): Promise<ActionResult<{ published: number; waiting: number }>> {
+  try {
+    const user = await assertPermission("products:publish");
+    const slugs = await publishScheduledProducts();
+    const waiting = await prisma.product.count({ where: { status: "SCHEDULED" } });
+    await audit({ userId: user.id, action: "product.publish_scheduled", entity: "product", data: { slugs } });
+    revalidateAdmin();
+    return succeed({ published: slugs.length, waiting });
+  } catch (e) {
+    return handleActionError(e);
+  }
 }
