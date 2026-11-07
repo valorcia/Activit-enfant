@@ -35,7 +35,10 @@ export function ProductCard({ product, priority = false, className }: { product:
             priority={priority}
           />
         ) : (
-          <PlaceholderArt universe={product.universe} className="transition-transform duration-500 ease-out group-hover:scale-[1.03]" />
+          <PlaceholderArt universe={product.universe} hideLabel className="transition-transform duration-500 ease-out group-hover:scale-[1.03]" />
+        )}
+        {!img && (
+          <span className="absolute bottom-3 left-3 rounded-full border border-dashed border-ink/30 bg-white/85 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-ink-soft">Illustration à venir</span>
         )}
         {badges.length > 0 && (
           <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
