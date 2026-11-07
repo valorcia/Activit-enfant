@@ -16,8 +16,8 @@ export default async function AppearancePage() {
   ]);
   return (
     <div>
-      <AdminPageHeader title="Apparence" description="Marque, couleurs, typographies, page d'accueil, navigation et pied de page. Les changements s'appliquent immédiatement sur le site." actions={<Button asChild variant="outline" size="sm"><a href="/" target="_blank" rel="noopener">Voir le site</a></Button>} />
-      <AppearanceForm brand={settings.brand} theme={settings.theme} homepage={settings.homepage} navigation={settings.navigation} products={products} />
+      <AdminPageHeader title="Apparence" description="Marque, couleurs, typographies, page d'accueil, tunnel de vente, navigation et pied de page. Les changements s'appliquent immédiatement sur le site." actions={<Button asChild variant="outline" size="sm"><a href="/" target="_blank" rel="noopener">Voir le site</a></Button>} />
+      <AppearanceForm brand={settings.brand} theme={settings.theme} homepage={settings.homepage} navigation={settings.navigation} conversion={settings.conversion} products={products} />
     </div>
   );
 }

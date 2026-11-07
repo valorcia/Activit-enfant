@@ -5,6 +5,7 @@ import { SiteFooter } from "@/components/storefront/site-footer";
 import { CartDrawer } from "@/components/storefront/cart-drawer";
 import { ConsentBanner } from "@/components/storefront/consent-banner";
 import { AnalyticsScripts } from "@/components/storefront/analytics-scripts";
+import { ExitPopup } from "@/components/storefront/exit-popup";
 import { prisma } from "@/lib/db";
 import { unstable_cache } from "next/cache";
 
@@ -24,6 +25,7 @@ export default async function StorefrontLayout({ children }: { children: React.R
       <CartDrawer withdrawalNotice={settings.commerce.withdrawalNotice} />
       <ConsentBanner enabled={settings.analytics.consentBannerEnabled} />
       <AnalyticsScripts analytics={settings.analytics} />
+      <ExitPopup config={settings.conversion.exitPopup} />
     </div>
   );
 }

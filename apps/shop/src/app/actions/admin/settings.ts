@@ -6,7 +6,7 @@ import { assertPermission } from "@/lib/auth/session";
 import { saveSetting } from "@/lib/settings";
 import { settingsSchemas, type SettingsKey } from "@/lib/schemas/settings";
 
-const APPEARANCE_KEYS: SettingsKey[] = ["brand", "theme", "homepage", "navigation"];
+const APPEARANCE_KEYS: SettingsKey[] = ["brand", "theme", "homepage", "navigation", "conversion"];
 
 export type SettingsResult = { ok: true } | { ok: false; error: string; fields?: Record<string, string> };
 

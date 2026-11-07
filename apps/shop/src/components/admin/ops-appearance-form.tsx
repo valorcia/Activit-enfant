@@ -9,10 +9,10 @@ import { FormField, FormSection, ListEditor } from "@/components/admin/form-cont
 import { SearchSelect } from "@/components/admin/search-select";
 import { UploadField } from "@/components/admin/upload-field";
 import { saveSettingAction } from "@/app/actions/admin/settings";
-import type { BrandSettings, HomepageSettings, HomepageSection, NavigationSettings, ThemeSettings } from "@/lib/schemas/settings";
+import type { BrandSettings, ConversionSettings, HomepageSettings, HomepageSection, NavigationSettings, ThemeSettings } from "@/lib/schemas/settings";
 import type { SettingsKey } from "@/lib/schemas/settings";
 
-const SECTION_LABELS: Record<HomepageSection, string> = { hero: "Hero", categories: "Catégories", bestsellers: "Meilleures ventes", "how-it-works": "Fonctionnement", new: "Nouveautés", bundles: "Packs", reviews: "Avis clients", newsletter: "Newsletter", blog: "Blog" };
+const SECTION_LABELS: Record<HomepageSection, string> = { hero: "Hero", "funnel-offer": "Offre produit phare (ce que vous recevez)", categories: "Catégories", bestsellers: "Meilleures ventes", "how-it-works": "Fonctionnement", new: "Nouveautés", bundles: "Packs", reviews: "Avis clients", guarantee: "Garantie", faq: "FAQ / objections", newsletter: "Newsletter", blog: "Blog", "final-cta": "Appel à l'action final" };
 const COLOR_LABELS: Record<keyof ThemeSettings["colors"], string> = { cream: "Crème (fond)", coral: "Corail (action)", honey: "Jaune miel", sage: "Vert sauge", sky: "Bleu ciel", lavender: "Lavande", ink: "Texte" };
 const HEADING_FONTS = ["Fredoka", "Baloo 2", "Nunito", "Quicksand", "Comfortaa"] as const;
 const BODY_FONTS = ["Nunito", "Quicksand", "Inter", "Mulish", "Poppins"] as const;
@@ -23,14 +23,15 @@ function useSave() {
   return { pending, save };
 }
 
-export function AppearanceForm({ brand: b0, theme: t0, homepage: h0, navigation: n0, products }: { brand: BrandSettings; theme: ThemeSettings; homepage: HomepageSettings; navigation: NavigationSettings; products: Array<{ id: string; name: string; slug: string }> }) {
+export function AppearanceForm({ brand: b0, theme: t0, homepage: h0, navigation: n0, conversion: c0, products }: { brand: BrandSettings; theme: ThemeSettings; homepage: HomepageSettings; navigation: NavigationSettings; conversion: ConversionSettings; products: Array<{ id: string; name: string; slug: string }> }) {
   const [brand, setBrand] = useState(b0);
   const [theme, setTheme] = useState(t0);
   const [home, setHome] = useState(h0);
   const [nav, setNav] = useState(n0);
+  const [conv, setConv] = useState(c0);
   const { pending, save } = useSave();
   const upd = <T,>(set: React.Dispatch<React.SetStateAction<T>>) => (patch: Partial<T>) => set((s) => ({ ...s, ...patch }));
-  const setB = upd(setBrand), setT = upd(setTheme), setH = upd(setHome), setN = upd(setNav);
+  const setB = upd(setBrand), setT = upd(setTheme), setH = upd(setHome), setN = upd(setNav), setC = upd(setConv);
 
   const moveSection = (i: number, d: -1 | 1) => {
     const next = [...home.sectionsOrder];
@@ -46,6 +47,7 @@ export function AppearanceForm({ brand: b0, theme: t0, homepage: h0, navigation:
         <TabsTrigger value="brand">Marque</TabsTrigger>
         <TabsTrigger value="theme">Couleurs & typographies</TabsTrigger>
         <TabsTrigger value="home">Page d&apos;accueil</TabsTrigger>
+        <TabsTrigger value="conversion">Conversion</TabsTrigger>
         <TabsTrigger value="nav">Navigation & pied de page</TabsTrigger>
       </TabsList>
 
@@ -171,6 +173,86 @@ export function AppearanceForm({ brand: b0, theme: t0, homepage: h0, navigation:
             </div>
           </FormSection>
           <div><Button variant="admin" disabled={pending} onClick={() => save("homepage", home)}>Enregistrer la page d&apos;accueil</Button></div>
+        </div>
+      </TabsContent>
+
+
+      <TabsContent value="conversion">
+        <div className="space-y-6">
+          <div className="rounded-2xl border border-honey bg-honey-light px-4 py-3 text-sm text-honey-dark">
+            Ces réglages pilotent le tunnel de vente : hero centré sur le produit phare, achat en un clic, réassurance, garantie, order bump, popup de sortie et FAQ d&apos;objections. Aucun chiffre ou avis n&apos;est inventé : seuls vos textes sont affichés.
+          </div>
+          <FormSection title="Produit phare et achat en un clic">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField label="Mode du hero" hint="« Tunnel » met le produit phare et le bouton d'achat au premier plan ; « Catalogue » garde le hero généraliste.">
+                <NativeSelect value={conv.heroMode} onChange={(e) => setC({ heroMode: e.target.value as ConversionSettings["heroMode"] })}>
+                  <option value="funnel">Tunnel de vente (produit phare)</option>
+                  <option value="catalogue">Catalogue (hero généraliste)</option>
+                </NativeSelect>
+              </FormField>
+              <FormField label="Produit phare" hint="Vide = premier produit mis en avant, sinon meilleure vente.">
+                <NativeSelect value={conv.flagshipProductId ?? ""} onChange={(e) => setC({ flagshipProductId: e.target.value || null })}>
+                  <option value="">Automatique</option>
+                  {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </NativeSelect>
+              </FormField>
+            </div>
+            <FormField label="Libellé du bouton d'achat" htmlFor="c-buy"><Input id="c-buy" value={conv.buyNowLabel} onChange={(e) => setC({ buyNowLabel: e.target.value })} maxLength={40} /></FormField>
+            <FormField label="Badges de confiance (max 6)" hint="Affichés sous les boutons d'achat. Icônes lucide (lock, download, printer, mail, shield-check…).">
+              <ListEditor items={conv.trustBadges} onChange={(items) => setC({ trustBadges: items.slice(0, 6) })} create={() => ({ icon: "check", label: "" })} addLabel="Ajouter un badge"
+                renderItem={(it, u) => <div className="grid gap-2 sm:grid-cols-[140px_1fr]"><Input value={it.icon} onChange={(e) => u({ icon: e.target.value })} placeholder="icône lucide" className="h-9 text-sm" /><Input value={it.label} onChange={(e) => u({ label: e.target.value })} placeholder="Libellé" className="h-9 text-sm" maxLength={60} /></div>} />
+            </FormField>
+          </FormSection>
+
+          <FormSection title="Garantie" description="Engagement commercial : à valider avant activation (conditions, délai, modalités de remboursement).">
+            <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={conv.guarantee.enabled} onChange={(e) => setC({ guarantee: { ...conv.guarantee, enabled: e.target.checked } })} className="size-4 accent-coral" /> Afficher le bloc garantie</label>
+            <div className="grid gap-4 sm:grid-cols-[140px_1fr]">
+              <FormField label="Icône"><Input value={conv.guarantee.icon} onChange={(e) => setC({ guarantee: { ...conv.guarantee, icon: e.target.value } })} /></FormField>
+              <FormField label="Titre"><Input value={conv.guarantee.title} onChange={(e) => setC({ guarantee: { ...conv.guarantee, title: e.target.value } })} maxLength={80} /></FormField>
+            </div>
+            <FormField label="Texte"><Textarea value={conv.guarantee.text} onChange={(e) => setC({ guarantee: { ...conv.guarantee, text: e.target.value } })} className="min-h-[70px]" maxLength={600} /></FormField>
+          </FormSection>
+
+          <FormSection title="Message d'urgence" description="Affiché sous le prix dans le hero. N'activez que des informations vraies (fin de promotion, offre de lancement…).">
+            <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={conv.urgency.enabled} onChange={(e) => setC({ urgency: { ...conv.urgency, enabled: e.target.checked } })} className="size-4 accent-coral" /> Afficher le message</label>
+            <FormField label="Texte"><Input value={conv.urgency.text} onChange={(e) => setC({ urgency: { ...conv.urgency, text: e.target.value } })} maxLength={160} placeholder="Ex. Prix de lancement jusqu'au 30 novembre" /></FormField>
+          </FormSection>
+
+          <FormSection title="Order bump (panier)" description="Propose un second produit à ajouter en une case à cocher dans le panier.">
+            <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={conv.orderBump.enabled} onChange={(e) => setC({ orderBump: { ...conv.orderBump, enabled: e.target.checked } })} className="size-4 accent-coral" /> Activer l&apos;order bump</label>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField label="Produit proposé" hint="Vide = produit recommandé ou meilleure vente absente du panier.">
+                <NativeSelect value={conv.orderBump.productId ?? ""} onChange={(e) => setC({ orderBump: { ...conv.orderBump, productId: e.target.value || null } })}>
+                  <option value="">Automatique</option>
+                  {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </NativeSelect>
+              </FormField>
+              <FormField label="Titre"><Input value={conv.orderBump.title} onChange={(e) => setC({ orderBump: { ...conv.orderBump, title: e.target.value } })} maxLength={80} /></FormField>
+            </div>
+            <FormField label="Texte"><Input value={conv.orderBump.text} onChange={(e) => setC({ orderBump: { ...conv.orderBump, text: e.target.value } })} maxLength={200} /></FormField>
+          </FormSection>
+
+          <FormSection title="Popup de sortie" description="Affichée une seule fois par visiteur, jamais sur les pages de paiement.">
+            <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={conv.exitPopup.enabled} onChange={(e) => setC({ exitPopup: { ...conv.exitPopup, enabled: e.target.checked } })} className="size-4 accent-coral" /> Activer la popup</label>
+            <div className="grid gap-4 sm:grid-cols-[1fr_200px_140px]">
+              <FormField label="Titre"><Input value={conv.exitPopup.title} onChange={(e) => setC({ exitPopup: { ...conv.exitPopup, title: e.target.value } })} maxLength={80} /></FormField>
+              <FormField label="Code promo (facultatif)" hint="Doit exister dans Codes promo."><Input value={conv.exitPopup.couponCode ?? ""} onChange={(e) => setC({ exitPopup: { ...conv.exitPopup, couponCode: e.target.value.toUpperCase() || null } })} maxLength={40} /></FormField>
+              <FormField label="Délai (s)"><Input type="number" min={5} max={300} value={conv.exitPopup.delaySeconds} onChange={(e) => setC({ exitPopup: { ...conv.exitPopup, delaySeconds: Math.min(300, Math.max(5, Number(e.target.value) || 25)) } })} /></FormField>
+            </div>
+            <FormField label="Texte"><Textarea value={conv.exitPopup.text} onChange={(e) => setC({ exitPopup: { ...conv.exitPopup, text: e.target.value } })} className="min-h-[60px]" maxLength={300} /></FormField>
+          </FormSection>
+
+          <FormSection title="FAQ / objections (accueil)" description="Répond aux freins à l'achat. Les FAQ propres à chaque produit se gèrent dans la fiche produit.">
+            <ListEditor items={conv.faq} onChange={(items) => setC({ faq: items.slice(0, 12) })} create={() => ({ question: "", answer: "" })} addLabel="Ajouter une question"
+              renderItem={(it, u) => <div className="grid gap-2"><Input value={it.question} onChange={(e) => u({ question: e.target.value })} placeholder="Question" className="h-9 text-sm" maxLength={200} /><Textarea value={it.answer} onChange={(e) => u({ answer: e.target.value })} placeholder="Réponse" className="min-h-[60px] text-sm" maxLength={1000} /></div>} />
+          </FormSection>
+
+          <FormSection title="Appel à l'action final">
+            <FormField label="Titre"><Input value={conv.finalCta.title} onChange={(e) => setC({ finalCta: { ...conv.finalCta, title: e.target.value } })} maxLength={120} /></FormField>
+            <FormField label="Texte"><Input value={conv.finalCta.text} onChange={(e) => setC({ finalCta: { ...conv.finalCta, text: e.target.value } })} maxLength={240} /></FormField>
+          </FormSection>
+
+          <div><Button variant="admin" disabled={pending} onClick={() => save("conversion", conv)}>Enregistrer la conversion</Button></div>
         </div>
       </TabsContent>
 

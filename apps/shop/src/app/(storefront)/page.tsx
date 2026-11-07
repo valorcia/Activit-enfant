@@ -1,13 +1,16 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Quote } from "lucide-react";
+import { ArrowRight, Quote, Clock, Users, FileText, Layers } from "lucide-react";
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/db";
 import { env } from "@/lib/env";
 import { getSettings } from "@/lib/settings";
 import { getApprovedReviews, getBestsellers, getCategories, getFeaturedProducts, getNewProducts, getPublishedBundles } from "@/lib/catalog";
 import type { HomepageSection } from "@/lib/schemas/settings";
-import { formatDate } from "@/lib/utils";
+import { formatAgeRange, formatDuration, formatPlayers, formatDate } from "@/lib/utils";
+import { effectivePrice } from "@/lib/pricing";
+import { getFlagshipProduct } from "@/lib/flagship";
+import { parseKitContents, parseSellingPoints } from "@/lib/catalog";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Stars } from "@/components/ui/misc";
@@ -18,6 +21,12 @@ import { NewsletterForm } from "@/components/storefront/newsletter-form";
 import { HeroArt } from "@/components/storefront/hero-art";
 import { JsonLd } from "@/components/storefront/json-ld";
 import { Reveal, Float } from "@/components/storefront/motion";
+import { Price } from "@/components/storefront/price";
+import { PlaceholderArt } from "@/components/storefront/placeholder-art";
+import { BuyNowButton } from "@/components/storefront/buy-now-button";
+import { TrustBadges } from "@/components/storefront/trust-badges";
+import { HomeStickyCta } from "@/components/storefront/home-sticky-cta";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 export const revalidate = 300;
 
@@ -31,8 +40,8 @@ const CATEGORY_TINTS = ["bg-coral-light", "bg-sage-light", "bg-honey-light", "bg
 
 export default async function HomePage() {
   const settings = await getSettings();
-  const { homepage, brand, navigation } = settings;
-  const [categories, bestsellers, featured, newest, bundles, reviews, posts] = await Promise.all([
+  const { homepage, brand, navigation, conversion } = settings;
+  const [categories, bestsellers, featured, newest, bundles, reviews, posts, flagship] = await Promise.all([
     getCategories(),
     getBestsellers(8),
     getFeaturedProducts(homepage.featuredProductIds, 4),
@@ -40,10 +49,73 @@ export default async function HomePage() {
     getPublishedBundles(3),
     getApprovedReviews(6),
     homepage.sectionsOrder.includes("blog") ? getLatestPosts() : Promise.resolve([]),
+    getFlagshipProduct(conversion.flagshipProductId, homepage.featuredProductIds),
   ]);
 
+  const funnel = conversion.heroMode === "funnel" && !!flagship;
+  const price = flagship ? effectivePrice(flagship) : null;
+  const flagshipImg = flagship?.images[0] ?? null;
+  const flagshipHref = flagship ? `/aventures/${flagship.slug}` : "/boutique";
+  const kit = flagship ? parseKitContents(flagship.kitContents) : [];
+  const points = flagship ? parseSellingPoints(flagship.sellingPoints) : [];
+  const buyProps = flagship && price ? { kind: "product" as const, id: flagship.id, name: flagship.name, priceCents: price.priceCents, currency: flagship.currency, label: conversion.buyNowLabel } : null;
+  const faqData = conversion.faq.length ? {
+    "@context": "https://schema.org", "@type": "FAQPage",
+    mainEntity: conversion.faq.map((f) => ({ "@type": "Question", name: f.question, acceptedAnswer: { "@type": "Answer", text: f.answer } })),
+  } : null;
+
   const sections: Record<HomepageSection, React.ReactNode> = {
-    hero: (
+    hero: funnel && flagship && price && buyProps ? (
+      <section key="hero" className="relative overflow-hidden" aria-labelledby="hero-title">
+        <div className="pointer-events-none absolute -left-24 top-10 size-72 rounded-full bg-sky/40 blur-3xl" aria-hidden />
+        <div className="pointer-events-none absolute -right-20 bottom-0 size-80 rounded-full bg-honey/40 blur-3xl" aria-hidden />
+        <div className="container-shell grid items-center gap-10 py-10 sm:py-14 lg:grid-cols-[1.05fr_1fr] lg:py-20">
+          <div className="relative z-10">
+            <p className="mb-4 inline-flex items-center gap-2 rounded-full bg-white px-4 py-1.5 font-heading text-sm font-bold text-ink shadow-card">
+              <Icon name="sparkles" className="size-4 text-honey-dark" /> {flagship.category?.name ?? "Kit d'activités à imprimer"} · {formatAgeRange(flagship.ageMin, flagship.ageMax)}
+            </p>
+            <h1 id="hero-title" className="font-heading text-4xl font-bold leading-[1.05] text-balance sm:text-5xl lg:text-6xl">{homepage.hero.title}</h1>
+            <p className="mt-5 max-w-xl text-lg text-ink-soft text-pretty sm:text-xl">{flagship.tagline ?? homepage.hero.subtitle}</p>
+            {flagship.ratingAvg && flagship.reviewCount > 0 && (
+              <p className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-ink-soft"><Stars rating={flagship.ratingAvg} /> {flagship.ratingAvg.toFixed(1)}/5 · {flagship.reviewCount} avis vérifié{flagship.reviewCount > 1 ? "s" : ""}</p>
+            )}
+            <div className="mt-7 flex flex-wrap items-end gap-x-4 gap-y-2">
+              <Price priceCents={price.priceCents} compareAtCents={price.compareAtCents} currency={flagship.currency} size="xl" />
+              {price.isOnSale && <span className="rounded-full bg-coral px-3 py-1 font-heading text-sm font-bold text-white">-{price.discountPercent} %</span>}
+              <span className="text-sm text-ink-muted">TTC · fichier PDF · téléchargement immédiat</span>
+            </div>
+            {conversion.urgency.enabled && conversion.urgency.text && (
+              <p className="mt-3 inline-flex items-center gap-2 rounded-full bg-honey-light px-3 py-1.5 text-sm font-bold text-honey-dark"><Clock className="size-4" /> {conversion.urgency.text}</p>
+            )}
+            <div id="home-cta" className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+              <BuyNowButton {...buyProps} size="xl" className="w-full sm:w-auto" />
+              <Button asChild size="lg" variant="outline"><Link href={flagshipHref}>Voir le détail <ArrowRight className="size-5" /></Link></Button>
+            </div>
+            <TrustBadges badges={conversion.trustBadges} className="mt-5" />
+          </div>
+          <div className="relative">
+            <Float className="relative z-10">
+              <Link href={flagshipHref} className="card-soft block overflow-hidden p-2 rotate-[1.5deg]" aria-label={flagship.name}>
+                {flagshipImg ? (
+                  <Image src={flagshipImg.url} alt={flagshipImg.alt ?? flagship.name} width={960} height={720} priority className="aspect-[4/3] w-full rounded-[calc(var(--radius-card)-0.5rem)] object-cover" />
+                ) : homepage.hero.imageUrl ? (
+                  <Image src={homepage.hero.imageUrl} alt="" width={960} height={720} priority className="aspect-[4/3] w-full rounded-[calc(var(--radius-card)-0.5rem)] object-cover" />
+                ) : (
+                  <div className="aspect-[4/3] overflow-hidden rounded-[calc(var(--radius-card)-0.5rem)]"><PlaceholderArt universe={flagship.universe} label="Illustration à venir" /></div>
+                )}
+              </Link>
+            </Float>
+            <div className="absolute -bottom-6 -left-4 z-20 hidden rotate-[-6deg] rounded-2xl bg-honey px-4 py-3 font-heading text-sm font-bold shadow-soft sm:block">
+              Prêt à imprimer 🖨️
+            </div>
+            <div className="absolute -right-3 -top-4 z-20 hidden rotate-[5deg] rounded-2xl bg-coral px-4 py-3 font-heading text-sm font-bold text-white shadow-soft sm:block">
+              PDF immédiat 📩
+            </div>
+          </div>
+        </div>
+        <HomeStickyCta product={{ id: flagship.id, name: flagship.name, priceCents: price.priceCents, currency: flagship.currency }} label={conversion.buyNowLabel} />
+      </section>
+    ) : (
       <section key="hero" className="relative overflow-hidden" aria-labelledby="hero-title">
         <div className="pointer-events-none absolute -left-24 top-10 size-72 rounded-full bg-sky/40 blur-3xl" aria-hidden />
         <div className="pointer-events-none absolute -right-20 bottom-0 size-80 rounded-full bg-lavender/40 blur-3xl" aria-hidden />
@@ -85,6 +157,113 @@ export default async function HomePage() {
             </div>
           </div>
         </div>
+      </section>
+    ),
+
+    "funnel-offer": flagship && price && buyProps ? (
+      <section key="offer" className="bg-white/70 py-14 sm:py-20" aria-labelledby="offer-title">
+        <div className="container-shell grid gap-10 lg:grid-cols-[1.2fr_1fr] lg:items-start">
+          <div>
+            <Reveal><SectionHeading eyebrow="Ce que vous recevez" title={kit.length ? "Tout est inclus dans votre kit" : "Pourquoi les familles l'adorent"} description={flagship.shortDescription ?? undefined} /></Reveal>
+            <ul className="grid gap-3 sm:grid-cols-2">
+              {(kit.length ? kit.map((k) => ({ title: k.title, description: k.description, icon: k.icon ?? "file-text", quantity: k.quantity })) : (points.length ? points : [
+                { title: "Simple à organiser", description: "Imprimez, cachez les indices, lancez l'aventure.", icon: "list-checks" },
+                { title: "Une activité originale", description: "Une histoire immersive pensée pour captiver les enfants.", icon: "sparkles" },
+                { title: "Des moments partagés", description: "Une aventure à vivre ensemble, en famille ou entre amis.", icon: "heart" },
+                { title: "Impression à domicile", description: "Format PDF, compatible avec toutes les imprimantes.", icon: "printer" },
+              ]).map((p) => ({ ...p, quantity: undefined as number | undefined }))).map((it, i) => (
+                <Reveal as="li" key={`${it.title}-${i}`} delay={i * 0.05} className="card-soft flex gap-3 p-4">
+                  <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-coral-light text-coral-dark"><Icon name={it.icon ?? "file-text"} className="size-5" /></span>
+                  <div>
+                    <p className="font-heading font-bold leading-tight">{it.title}{it.quantity ? <span className="ml-2 rounded-full bg-honey-light px-2 py-0.5 text-xs font-bold text-honey-dark">× {it.quantity}</span> : null}</p>
+                    {it.description && <p className="mt-1 text-sm text-ink-soft">{it.description}</p>}
+                  </div>
+                </Reveal>
+              ))}
+            </ul>
+          </div>
+          <Reveal className="lg:sticky lg:top-24">
+            <div className="card-soft overflow-hidden">
+              <div className="relative aspect-[16/10] bg-cream-dark/30">
+                {flagshipImg ? <Image src={flagshipImg.url} alt="" fill sizes="(max-width: 1024px) 100vw, 40vw" className="object-cover" /> : <PlaceholderArt universe={flagship.universe} />}
+              </div>
+              <div className="p-6">
+                <h3 className="font-heading text-2xl font-bold leading-tight">{flagship.name}</h3>
+                <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                  <div className="flex items-center gap-2 text-ink-soft"><Users className="size-4 text-sage-dark" /><dt className="sr-only">Âge</dt><dd className="font-semibold">{formatAgeRange(flagship.ageMin, flagship.ageMax)}</dd></div>
+                  {flagship.durationMinutes ? <div className="flex items-center gap-2 text-ink-soft"><Clock className="size-4 text-sage-dark" /><dt className="sr-only">Durée</dt><dd className="font-semibold">{formatDuration(flagship.durationMinutes)}</dd></div> : null}
+                  {flagship.playersMin || flagship.playersMax ? <div className="flex items-center gap-2 text-ink-soft"><Layers className="size-4 text-sage-dark" /><dt className="sr-only">Joueurs</dt><dd className="font-semibold">{formatPlayers(flagship.playersMin, flagship.playersMax)}</dd></div> : null}
+                  {flagship.pageCount ? <div className="flex items-center gap-2 text-ink-soft"><FileText className="size-4 text-sage-dark" /><dt className="sr-only">Pages</dt><dd className="font-semibold">{flagship.pageCount} pages · {flagship.fileFormat}</dd></div> : <div className="flex items-center gap-2 text-ink-soft"><FileText className="size-4 text-sage-dark" /><dd className="font-semibold">Fichier {flagship.fileFormat}</dd></div>}
+                </dl>
+                <div className="mt-5 flex items-end justify-between gap-3">
+                  <Price priceCents={price.priceCents} compareAtCents={price.compareAtCents} currency={flagship.currency} size="lg" />
+                  {price.isOnSale && <span className="rounded-full bg-coral px-3 py-1 font-heading text-xs font-bold text-white">-{price.discountPercent} %</span>}
+                </div>
+                <BuyNowButton {...buyProps} size="lg" className="mt-4 w-full" />
+                <Link href={flagshipHref} className="mt-3 block text-center text-sm font-bold text-coral-dark underline-offset-4 hover:underline">Voir la fiche complète</Link>
+                <TrustBadges badges={conversion.trustBadges.slice(0, 2)} compact className="mt-4 justify-center" />
+              </div>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+    ) : null,
+
+    guarantee: conversion.guarantee.enabled ? (
+      <section key="guarantee" className="container-shell py-10 sm:py-14" aria-labelledby="guarantee-title">
+        <Reveal>
+          <div className="flex flex-col items-center gap-5 rounded-[2rem] border-2 border-sage bg-sage-light px-6 py-8 text-center sm:flex-row sm:text-left sm:px-10">
+            <span className="grid size-20 shrink-0 place-items-center rounded-full bg-white text-sage-dark shadow-card"><Icon name={conversion.guarantee.icon} className="size-10" /></span>
+            <div>
+              <h2 id="guarantee-title" className="font-heading text-2xl font-bold sm:text-3xl">{conversion.guarantee.title}</h2>
+              <p className="mt-2 text-ink-soft text-pretty">{conversion.guarantee.text}</p>
+            </div>
+          </div>
+        </Reveal>
+      </section>
+    ) : null,
+
+    faq: conversion.faq.length > 0 ? (
+      <section key="faq" className="container-shell py-14 sm:py-20" aria-labelledby="home-faq-title">
+        {faqData && <JsonLd data={faqData} />}
+        <div className="mx-auto max-w-3xl">
+          <Reveal><SectionHeading align="center" eyebrow="Vos questions" title="Tout ce qu'il faut savoir avant de commander" /></Reveal>
+          <Accordion type="single" collapsible className="card-soft px-6">
+            {conversion.faq.map((f, i) => (
+              <AccordionItem key={i} value={`home-q-${i}`}>
+                <AccordionTrigger>{f.question}</AccordionTrigger>
+                <AccordionContent className="whitespace-pre-line">{f.answer}</AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        </div>
+      </section>
+    ) : null,
+
+    "final-cta": (
+      <section key="final-cta" className="container-shell py-14 sm:py-20" aria-labelledby="final-cta-title">
+        <Reveal>
+          <div className="relative overflow-hidden rounded-[2rem] bg-coral px-6 py-12 text-center text-white sm:px-12 lg:py-16">
+            <div className="pointer-events-none absolute -left-16 -top-16 size-64 rounded-full bg-honey/40 blur-3xl" aria-hidden />
+            <div className="pointer-events-none absolute -bottom-20 -right-10 size-64 rounded-full bg-white/20 blur-3xl" aria-hidden />
+            <div className="relative mx-auto max-w-2xl">
+              <h2 id="final-cta-title" className="font-heading text-3xl font-bold leading-tight text-balance sm:text-5xl">{conversion.finalCta.title}</h2>
+              <p className="mt-4 text-lg text-white/90 text-pretty">{conversion.finalCta.text}</p>
+              {flagship && price && buyProps ? (
+                <>
+                  <p className="mt-6 font-heading text-lg">{flagship.name} · <span className="text-2xl font-bold">{(price.priceCents / 100).toLocaleString("fr-FR", { style: "currency", currency: flagship.currency })}</span>{price.compareAtCents ? <span className="ml-2 text-base text-white/70 line-through">{(price.compareAtCents / 100).toLocaleString("fr-FR", { style: "currency", currency: flagship.currency })}</span> : null}</p>
+                  <div className="mt-5 flex flex-col items-center justify-center gap-3 sm:flex-row">
+                    <BuyNowButton {...buyProps} size="xl" variant="secondary" className="w-full sm:w-auto" />
+                    <Button asChild size="lg" variant="outline" className="border-white/60 bg-white/10 text-white hover:bg-white hover:text-ink"><Link href="/boutique">Voir toutes les aventures</Link></Button>
+                  </div>
+                </>
+              ) : (
+                <div className="mt-6"><Button asChild size="xl" variant="secondary"><Link href="/boutique">Découvrir la boutique <ArrowRight className="size-5" /></Link></Button></div>
+              )}
+              <TrustBadges badges={conversion.trustBadges} compact className="mt-6 justify-center [&_li]:text-white/90 [&_span]:bg-white/20 [&_span]:text-white" />
+            </div>
+          </div>
+        </Reveal>
       </section>
     ),
 
