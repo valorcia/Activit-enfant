@@ -1,8 +1,11 @@
 import Image from "next/image";
-import { Lock, Download, ShieldCheck } from "lucide-react";
+import { Mail, Printer, Flame } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Stars } from "@/components/ui/misc";
 import { AddToCartButton } from "@/components/storefront/add-to-cart-button";
+import { BuyNowButton } from "@/components/storefront/buy-now-button";
+import { TrustBadges } from "@/components/storefront/trust-badges";
+import { getSetting } from "@/lib/settings";
 import { PlaceholderArt } from "@/components/storefront/placeholder-art";
 import { Price } from "@/components/storefront/price";
 import { effectivePrice } from "@/lib/pricing";
@@ -16,7 +19,8 @@ export function heroImage(product: ProductPageData) {
   return product.images.find((i) => i.role === "MAIN") ?? product.images.find((i) => i.role === "ILLUSTRATION") ?? null;
 }
 
-export function ProductHero({ product }: { product: ProductPageData }) {
+export async function ProductHero({ product }: { product: ProductPageData }) {
+  const conversion = await getSetting("conversion");
   const theme = TEMPLATE_THEMES[product.template];
   const price = effectivePrice(product);
   const img = heroImage(product);
@@ -56,31 +60,42 @@ export function ProductHero({ product }: { product: ProductPageData }) {
             </a>
           )}
 
-          <div className="mt-7 flex flex-col gap-4 rounded-3xl bg-white/80 p-5 shadow-card backdrop-blur sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <Price priceCents={price.priceCents} compareAtCents={price.compareAtCents} currency={product.currency} size="xl" />
+          {conversion.urgency.enabled && conversion.urgency.text && (
+            <p className="mt-5 inline-flex items-center gap-2 rounded-full bg-coral-light px-4 py-2 text-sm font-bold text-coral-dark" role="status">
+              <Flame className="size-4" aria-hidden /> {conversion.urgency.text}
+            </p>
+          )}
+
+          <div className="mt-6 rounded-3xl bg-white/85 p-5 shadow-card backdrop-blur sm:p-6">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <Price priceCents={price.priceCents} compareAtCents={price.compareAtCents} currency={product.currency} size="xl" />
+                <p className="text-xs text-ink-muted">TVA incluse · {product.fileFormat} à télécharger</p>
+              </div>
               {price.isOnSale && (
-                <p className="mt-1 text-sm font-bold text-coral-dark">
+                <span className="rounded-full bg-coral px-3 py-1.5 text-sm font-bold text-white">
                   -{price.discountPercent} %{product.saleEndsAt ? ` jusqu'au ${formatDate(product.saleEndsAt)}` : ""}
-                </p>
+                </span>
               )}
-              <p className="text-xs text-ink-muted">TVA incluse · {product.fileFormat} à télécharger</p>
             </div>
-            <div id="hero-cta">
+            <div id="hero-cta" className="mt-4 flex flex-col gap-2">
+              <BuyNowButton kind="product" id={product.id} name={product.name} priceCents={price.priceCents} currency={product.currency} label={conversion.buyNowLabel} size="xl" className="w-full" />
               <AddToCartButton
-                size="lg"
-                className="w-full sm:w-auto"
-                label={theme.cta}
+                size="md"
+                variant="outline"
+                className="w-full"
+                label="Ajouter au panier"
                 item={{ kind: "product", id: product.id, slug: product.slug, name: product.name, imageUrl: img?.url ?? null, unitPriceCents: price.priceCents, compareAtCents: price.compareAtCents, currency: product.currency }}
               />
             </div>
+            <p className="mt-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs font-semibold text-ink-soft">
+              <span className="inline-flex items-center gap-1"><Mail className="size-3.5" aria-hidden /> Livraison immédiate par email</span>
+              <span aria-hidden>·</span>
+              <span className="inline-flex items-center gap-1"><Printer className="size-3.5" aria-hidden /> {product.fileFormat} à imprimer</span>
+            </p>
           </div>
 
-          <ul className="mt-4 flex flex-wrap gap-x-5 gap-y-1 text-xs font-semibold text-ink-soft">
-            <li className="inline-flex items-center gap-1"><Lock className="size-3.5" aria-hidden /> Paiement sécurisé Stripe</li>
-            <li className="inline-flex items-center gap-1"><Download className="size-3.5" aria-hidden /> Téléchargement immédiat</li>
-            <li className="inline-flex items-center gap-1"><ShieldCheck className="size-3.5" aria-hidden /> Fichiers accessibles à vie par email</li>
-          </ul>
+          <TrustBadges badges={conversion.trustBadges} compact className="mt-4" />
         </div>
       </div>
     </section>

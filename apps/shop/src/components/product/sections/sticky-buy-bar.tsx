@@ -1,11 +1,11 @@
 "use client";
 import { useEffect, useState } from "react";
-import { AddToCartButton } from "@/components/storefront/add-to-cart-button";
+import { BuyNowButton } from "@/components/storefront/buy-now-button";
 import type { CartItem } from "@/lib/orders/cart-types";
 import { formatPrice } from "@/lib/utils";
 
-/** Barre d'achat fixe (mobile) : visible quand le bouton du hero sort de l'écran. */
-export function StickyBuyBar({ item, label }: { item: Omit<CartItem, "quantity">; label: string }) {
+/** Barre d'achat fixe (mobile) : visible quand le bouton du hero sort de l'écran. Achat en un clic. */
+export function StickyBuyBar({ item, label }: { item: Omit<CartItem, "quantity">; label?: string }) {
   const [visible, setVisible] = useState(false);
   useEffect(() => {
     const target = document.getElementById("hero-cta");
@@ -22,9 +22,9 @@ export function StickyBuyBar({ item, label }: { item: Omit<CartItem, "quantity">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate font-heading text-sm font-semibold">{item.name}</p>
-          <p className="font-heading text-lg font-bold text-coral-dark">{formatPrice(item.unitPriceCents, item.currency)}</p>
+          <p className="text-[11px] text-ink-muted">Téléchargement immédiat · TVA incluse</p>
         </div>
-        <AddToCartButton item={item} label={label} size="md" className="shrink-0" tabIndex={visible ? 0 : -1} />
+        <BuyNowButton kind={item.kind} id={item.id} name={item.name} priceCents={item.unitPriceCents} currency={item.currency} label={label ?? `Acheter · ${formatPrice(item.unitPriceCents, item.currency)}`} size="md" className="shrink-0" tabIndex={visible ? 0 : -1} showLock={false} />
       </div>
     </div>
   );

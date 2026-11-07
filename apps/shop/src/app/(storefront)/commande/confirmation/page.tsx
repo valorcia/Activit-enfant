@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/misc";
 import { OrderSummary, orderSummaryInclude } from "@/components/storefront/order-summary";
 import { OrderConfirmationClient } from "@/components/storefront/order-confirmation-client";
+import { PostPurchase } from "@/components/storefront/post-purchase";
 
 export const metadata: Metadata = { title: "Confirmation de commande", robots: { index: false, follow: false } };
 export const dynamic = "force-dynamic";
@@ -47,6 +48,7 @@ export default async function ConfirmationPage({ searchParams }: { searchParams:
         <Alert variant="info" className="mb-6">Conservez ce lien pour retrouver vos fichiers à tout moment : <Link href={accessPath} className="font-bold underline">page de ma commande</Link>. Vous pourrez aussi recevoir un nouveau lien depuis « Retrouver mes achats ».</Alert>
       )}
       <OrderSummary order={order} invoiceHref={paid ? `${accessPath}/facture` : undefined} />
+      {paid && <PostPurchase purchasedProductIds={order.entitlements.map((e) => e.productId)} email={order.email} />}
     </div>
   );
 }

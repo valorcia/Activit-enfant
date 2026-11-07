@@ -41,7 +41,6 @@ export function TemplateStickyBar({ product }: { product: ProductPageData }) {
   const img = heroImage(product);
   return (
     <StickyBuyBar
-      label="Acheter"
       item={{ kind: "product", id: product.id, slug: product.slug, name: product.name, imageUrl: img?.url ?? null, unitPriceCents: price.priceCents, compareAtCents: price.compareAtCents, currency: product.currency }}
     />
   );

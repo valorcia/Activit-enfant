@@ -21,12 +21,26 @@ async function loadAllSettings(): Promise<SettingsMap> {
   return result;
 }
 
-/** Paramètres du site, mis en cache et invalidés à chaque modification dans l'admin. */
-export const getSettings = unstable_cache(loadAllSettings, ["site-settings"], { tags: [SETTINGS_TAG], revalidate: 300 });
+const getCachedSettings = unstable_cache(loadAllSettings, ["site-settings"], { tags: [SETTINGS_TAG], revalidate: 300 });
+
+/**
+ * Paramètres du site, mis en cache et invalidés à chaque modification dans l'admin.
+ * Les clés absentes d'une entrée de cache antérieure (nouveau groupe de réglages
+ * ajouté par une mise à jour) sont complétées par leurs valeurs par défaut.
+ */
+export async function getSettings(): Promise<SettingsMap> {
+  const cached = await getCachedSettings();
+  const result = { ...cached } as SettingsMap;
+  for (const key of Object.keys(settingsSchemas) as SettingsKey[]) {
+    if (!(key in cached) || cached[key] == null) (result as Record<string, unknown>)[key] = defaultSettings(key);
+  }
+  return result;
+}
 
 export async function getSetting<K extends SettingsKey>(key: K): Promise<SettingsMap[K]> {
   const all = await getSettings();
-  return all[key];
+  // Une clé ajoutée après la mise en cache peut manquer : repli sur les valeurs par défaut
+  return all[key] ?? defaultSettings(key);
 }
 
 export async function saveSetting<K extends SettingsKey>(key: K, value: unknown): Promise<SettingsMap[K]> {

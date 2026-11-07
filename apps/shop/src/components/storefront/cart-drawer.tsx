@@ -11,6 +11,7 @@ import { formatPrice } from "@/lib/utils";
 import { PlaceholderArt } from "./placeholder-art";
 import { startCheckoutAction } from "@/app/actions/checkout";
 import { trackEvent } from "@/lib/analytics/client";
+import { CartTrust, EmptyCartSuggestion, OrderBump, useCartBump } from "./order-bump";
 
 export function CartDrawer({ withdrawalNotice }: { withdrawalNotice: string }) {
   const { items, isOpen, close, remove, setQuantity, couponCode, setCoupon, hydrated } = useCart();
@@ -19,6 +20,8 @@ export function CartDrawer({ withdrawalNotice }: { withdrawalNotice: string }) {
   const [consent, setConsent] = useState(false);
   const [coupon, setCouponInput] = useState(couponCode ?? "");
   const subtotal = cartSubtotal(items);
+  const bump = useCartBump();
+  const [showEmail, setShowEmail] = useState(false);
 
   useEffect(() => {
     document.body.style.overflow = isOpen ? "hidden" : "";
@@ -64,15 +67,17 @@ export function CartDrawer({ withdrawalNotice }: { withdrawalNotice: string }) {
         </div>
 
         {items.length === 0 ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
-            <ShoppingBag className="size-12 text-ink-muted" />
+          <div className="flex flex-1 flex-col items-center justify-center gap-4 overflow-y-auto p-6 text-center">
+            <ShoppingBag className="size-10 text-ink-muted" />
             <p className="font-heading text-xl font-semibold">Votre panier est vide</p>
             <p className="text-sm text-ink-soft">Choisissez une aventure et elle apparaîtra ici.</p>
-            <Button asChild onClick={close}><Link href="/boutique">Découvrir la boutique</Link></Button>
+            <EmptyCartSuggestion data={bump} />
+            <Button asChild variant="outline" onClick={close}><Link href="/boutique">Voir toute la boutique</Link></Button>
           </div>
         ) : (
           <>
-            <ul className="flex-1 space-y-3 overflow-y-auto px-5 py-4">
+            <div className="flex-1 overflow-y-auto px-5 py-4">
+            <ul className="space-y-3">
               {items.map((i) => (
                 <li key={`${i.kind}-${i.id}`} className="flex gap-3 rounded-2xl bg-white p-3 shadow-card">
                   <div className="relative size-20 shrink-0 overflow-hidden rounded-xl bg-cream-dark/30">
@@ -94,25 +99,33 @@ export function CartDrawer({ withdrawalNotice }: { withdrawalNotice: string }) {
                 </li>
               ))}
             </ul>
+            <OrderBump data={bump} className="mt-4" />
+            </div>
 
             <div className="space-y-3 border-t border-line bg-white px-5 py-4">
-              <div className="flex gap-2">
-                <Input placeholder="Code promo" value={coupon} onChange={(e) => setCouponInput(e.target.value.toUpperCase())} aria-label="Code promo" className="h-10" />
-              </div>
-              <Input type="email" placeholder="Votre email (pour recevoir vos fichiers)" value={email} onChange={(e) => setEmail(e.target.value)} aria-label="Email" className="h-10" autoComplete="email" />
-              <label className="flex items-start gap-2 text-xs text-ink-soft">
-                <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-0.5 size-4 accent-coral" />
-                <span>J&apos;accepte de recevoir les nouvelles aventures et offres par email (facultatif).</span>
-              </label>
-              <div className="flex items-center justify-between font-heading text-lg">
-                <span>Sous-total</span>
+              <div className="flex items-center justify-between font-heading text-xl">
+                <span>Total <span className="text-xs font-semibold text-ink-muted">TTC</span></span>
                 <span className="font-bold">{formatPrice(subtotal)}</span>
               </div>
-              <p className="text-[11px] leading-snug text-ink-muted">{withdrawalNotice}</p>
               <Button size="lg" className="w-full" onClick={checkout} disabled={pending}>
-                <Lock className="size-4" /> {pending ? "Redirection…" : "Payer en toute sécurité"}
+                <Lock className="size-4" /> {pending ? "Redirection sécurisée…" : "Payer en toute sécurité"}
               </Button>
-              <p className="text-center text-[11px] text-ink-muted">Paiement sécurisé Stripe · CB, Apple Pay, Google Pay</p>
+              <p className="text-center text-[11px] text-ink-muted">Stripe · Carte bancaire, Apple Pay, Google Pay · Fichiers envoyés par email dès le paiement</p>
+              <CartTrust data={bump} className="flex flex-wrap justify-center gap-x-3 gap-y-1" />
+              <details className="group text-xs" open={showEmail}>
+                <summary className="cursor-pointer list-none font-semibold text-ink-soft underline-offset-4 hover:underline" onClick={(e) => { e.preventDefault(); setShowEmail((v) => !v); }}>
+                  Code promo ou email de livraison ?
+                </summary>
+                <div className="mt-2 space-y-2">
+                  <Input placeholder="Code promo" value={coupon} onChange={(e) => setCouponInput(e.target.value.toUpperCase())} aria-label="Code promo" className="h-10" />
+                  <Input type="email" placeholder="Email de livraison (facultatif, demandé au paiement)" value={email} onChange={(e) => setEmail(e.target.value)} aria-label="Email" className="h-10" autoComplete="email" />
+                  <label className="flex items-start gap-2 text-xs text-ink-soft">
+                    <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-0.5 size-4 accent-coral" />
+                    <span>J&apos;accepte de recevoir les nouvelles aventures et offres par email (facultatif).</span>
+                  </label>
+                </div>
+              </details>
+              <p className="text-[11px] leading-snug text-ink-muted">{withdrawalNotice}</p>
             </div>
           </>
         )}

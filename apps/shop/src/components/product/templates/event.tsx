@@ -6,6 +6,9 @@ import { PracticalInfo } from "../sections/practical-info";
 import { SellingPoints } from "../sections/selling-points";
 import { LongDescription } from "../sections/long-description";
 import { ProductFaq } from "../sections/faq";
+import { WhatYouGet } from "../sections/what-you-get";
+import { GuaranteeBlock } from "../sections/guarantee";
+import { OfferRecap } from "../sections/offer-recap";
 import { ProductReviews } from "../sections/reviews";
 import { RelatedProducts } from "../sections/related";
 
@@ -14,12 +17,15 @@ export function EventTemplate({ product }: { product: ProductPageData }) {
   return (
     <>
       <TemplateHead product={product} />
+      <WhatYouGet product={product} />
       <KitContents product={product} />
+      <GuaranteeBlock />
       <TemplateGallery product={product} />
       <ProductStory product={product} />
       <PracticalInfo product={product} />
       <SellingPoints product={product} />
       <LongDescription product={product} title="Organiser la fête" />
+      <OfferRecap product={product} />
       <ProductFaq product={product} />
       <ProductReviews product={product} />
       <RelatedProducts product={product} />

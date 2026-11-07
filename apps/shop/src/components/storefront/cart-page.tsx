@@ -13,6 +13,7 @@ import { trackEvent } from "@/lib/analytics/client";
 import { cartSubtotal, useCart } from "@/lib/cart/store";
 import { formatPrice } from "@/lib/utils";
 import { PlaceholderArt } from "./placeholder-art";
+import { CartTrust, EmptyCartSuggestion, OrderBump, useCartBump } from "./order-bump";
 
 export function CartPage({ cancelled, withdrawalNotice }: { cancelled: boolean; withdrawalNotice: string }) {
   const { items, remove, setQuantity, couponCode, setCoupon, hydrated } = useCart();
@@ -21,6 +22,8 @@ export function CartPage({ cancelled, withdrawalNotice }: { cancelled: boolean; 
   const [consent, setConsent] = useState(false);
   const [coupon, setCouponInput] = useState(couponCode ?? "");
   const subtotal = cartSubtotal(items);
+  const bump = useCartBump();
+  const [showOptions, setShowOptions] = useState(false);
 
   function checkout() {
     start(async () => {
@@ -43,7 +46,8 @@ export function CartPage({ cancelled, withdrawalNotice }: { cancelled: boolean; 
         <ShoppingBag className="size-14 text-ink-muted" />
         <p className="font-heading text-2xl font-bold">Votre panier est vide</p>
         <p className="max-w-sm text-ink-soft">Explorez nos chasses au trésor, cahiers d&apos;activités et kits de fête à imprimer.</p>
-        <Button asChild size="lg"><Link href="/boutique">Découvrir la boutique</Link></Button>
+        <EmptyCartSuggestion data={bump} />
+        <Button asChild size="lg" variant="outline"><Link href="/boutique">Découvrir toute la boutique</Link></Button>
       </div>
     );
   }
@@ -81,26 +85,37 @@ export function CartPage({ cancelled, withdrawalNotice }: { cancelled: boolean; 
             </li>
           ))}
         </ul>
+        <OrderBump data={bump} />
         <Button asChild variant="ghost"><Link href="/boutique">← Continuer mes achats</Link></Button>
       </div>
 
       <aside className="card-soft sticky top-24 space-y-4 p-5 sm:p-6" aria-label="Récapitulatif">
         <h2 className="font-heading text-2xl font-bold">Récapitulatif</h2>
-        <Field label="Code promo" htmlFor="coupon"><Input id="coupon" value={coupon} onChange={(e) => setCouponInput(e.target.value.toUpperCase())} placeholder="Ex. BIENVENUE" /></Field>
-        <Field label="Votre email" htmlFor="email" hint="Vous recevrez vos fichiers à cette adresse. Aucun compte à créer."><Input id="email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="prenom@exemple.fr" /></Field>
-        <label className="flex items-start gap-2 text-xs text-ink-soft">
-          <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-0.5 size-4 accent-coral" />
-          <span>J&apos;accepte de recevoir les nouvelles aventures et offres par email (facultatif).</span>
-        </label>
-        <dl className="space-y-1 border-t border-line pt-4 text-sm">
+        <dl className="space-y-1 text-sm">
           <div className="flex justify-between"><dt>Sous-total</dt><dd className="font-bold">{formatPrice(subtotal)}</dd></div>
           <div className="flex justify-between text-ink-soft"><dt>TVA</dt><dd>incluse</dd></div>
-          <div className="flex justify-between font-heading text-xl font-bold"><dt>Total</dt><dd>{formatPrice(subtotal)}</dd></div>
+          <div className="flex justify-between border-t border-line pt-2 font-heading text-2xl font-bold"><dt>Total <span className="text-xs font-semibold text-ink-muted">TTC</span></dt><dd>{formatPrice(subtotal)}</dd></div>
           {coupon && <p className="text-xs text-ink-muted">La remise sera appliquée à l&apos;étape de paiement.</p>}
         </dl>
+        <Button size="xl" className="w-full" onClick={checkout} disabled={pending}><Lock className="size-5" /> {pending ? "Redirection sécurisée…" : "Payer en toute sécurité"}</Button>
+        <p className="text-center text-[11px] text-ink-muted">Stripe · Carte bancaire, Apple Pay, Google Pay · Fichiers envoyés par email dès le paiement</p>
+        <CartTrust data={bump} className="flex flex-wrap justify-center gap-x-3 gap-y-1" />
+        <div className="border-t border-line pt-3">
+          <button type="button" className="text-xs font-semibold text-ink-soft underline-offset-4 hover:underline" onClick={() => setShowOptions((v) => !v)} aria-expanded={showOptions}>
+            {showOptions ? "Masquer les options" : "Code promo ou email de livraison ?"}
+          </button>
+          {showOptions && (
+            <div className="mt-3 space-y-3">
+              <Field label="Code promo" htmlFor="coupon"><Input id="coupon" value={coupon} onChange={(e) => setCouponInput(e.target.value.toUpperCase())} placeholder="Ex. BIENVENUE" /></Field>
+              <Field label="Email de livraison (facultatif)" htmlFor="email" hint="Demandé de toute façon au paiement. Aucun compte à créer."><Input id="email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="prenom@exemple.fr" /></Field>
+              <label className="flex items-start gap-2 text-xs text-ink-soft">
+                <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-0.5 size-4 accent-coral" />
+                <span>J&apos;accepte de recevoir les nouvelles aventures et offres par email (facultatif).</span>
+              </label>
+            </div>
+          )}
+        </div>
         <p className="text-[11px] leading-snug text-ink-muted">{withdrawalNotice}</p>
-        <Button size="lg" className="w-full" onClick={checkout} disabled={pending}><Lock className="size-4" /> {pending ? "Redirection…" : "Payer en toute sécurité"}</Button>
-        <p className="text-center text-[11px] text-ink-muted">Paiement sécurisé Stripe · CB, Apple Pay, Google Pay</p>
       </aside>
     </div>
   );
