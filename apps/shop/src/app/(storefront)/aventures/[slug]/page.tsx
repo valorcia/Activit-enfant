@@ -32,8 +32,9 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
     description,
     keywords: product.keywords.length ? product.keywords : undefined,
     alternates: { canonical: url },
-    openGraph: { type: "website", url, title: product.seoTitle ?? product.name, description, images: img ? [{ url: img, alt: product.name }] : undefined },
-    twitter: { card: img ? "summary_large_image" : "summary", title: product.seoTitle ?? product.name, description, images: img ? [img] : undefined },
+    // Sans image définie, Next.js utilise automatiquement opengraph-image.tsx (image générée) : ne pas passer `images`
+    openGraph: { type: "website", url, title: product.seoTitle ?? product.name, description, ...(img ? { images: [{ url: img, alt: product.name }] } : {}) },
+    twitter: { card: "summary_large_image", title: product.seoTitle ?? product.name, description, ...(img ? { images: [img] } : {}) },
   };
 }
 

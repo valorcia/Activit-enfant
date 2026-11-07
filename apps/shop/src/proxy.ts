@@ -14,7 +14,8 @@ export async function proxy(req: NextRequest) {
   const token = await getToken({
     req,
     secret: process.env.AUTH_SECRET,
-    secureCookie: process.env.NODE_ENV === "production",
+    // Nom du cookie (__Secure- ou non) déduit du protocole réel de la requête (https derrière Vercel, http en local)
+    secureCookie: req.nextUrl.protocol === "https:" || req.headers.get("x-forwarded-proto") === "https",
   });
 
   if (!token) {
