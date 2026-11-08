@@ -21,8 +21,11 @@ import { markWaitingInput } from "../manual/requests";
 import { getTextProvider, effectiveTextModel } from "../ai/registry";
 import { generateStructured, contextBlock } from "../ai/structured";
 import { createKitFromPlan, resolveBrief } from "../kits/create";
-import { KitCustomizationSchema } from "../kits/schemas";
-import { isStructuredKit, kitType } from "../kits/types";
+import { KitCustomizationSchema, type KitContentFormat } from "../kits/schemas";
+import { mainCount } from "../kits/content";
+import { isAdultAge, isStructuredKit, kitType } from "../kits/types";
+import { activeSites } from "../universes";
+import { siteBySlug } from "../universes/sites";
 import { MARKETING_SLOTS, generateKitContent, generateKitIllustration, isCharacterSheetSlot, kitIllustrationPlan, readKitContent } from "../kits/generate";
 import { rebuildBookPages } from "../layout/book";
 import { createExport } from "../export";
@@ -51,6 +54,8 @@ export interface RunState {
   adsCopy?: Record<string, unknown> | null;
   campaign?: { campaignId: string; campaignSlug: string; landingUrl: string; adminUrl: string; posts: number; generatedBy: string };
   contentSource?: string;
+  /** Univers de la boutique choisi au lancement (sinon proposé par le plan) */
+  siteSlug?: string | null;
 }
 
 type RunRow = NonNullable<Awaited<ReturnType<typeof loadRun>>>;
@@ -86,9 +91,9 @@ export async function scheduleRun(runId: string, jobId: string, delaySeconds = 0
 }
 
 /** Crée un run et lance son traitement. */
-export async function startRun(input: { brief: string; config: AutopilotSettings; title?: string | null; stages: Stage[] }) {
+export async function startRun(input: { brief: string; config: AutopilotSettings; title?: string | null; stages: Stage[]; siteSlug?: string | null }) {
   const run = await prisma.autopilotRun.create({
-    data: { brief: input.brief, title: input.title ?? null, config: input.config as unknown as Prisma.InputJsonValue, stages: input.stages as unknown as Prisma.InputJsonValue, maxCostUsd: input.config.maxCostUsd, status: "RUNNING" },
+    data: { brief: input.brief, title: input.title ?? null, config: input.config as unknown as Prisma.InputJsonValue, stages: input.stages as unknown as Prisma.InputJsonValue, maxCostUsd: input.config.maxCostUsd, status: "RUNNING", ...(input.siteSlug ? { state: { siteSlug: input.siteSlug } as Prisma.InputJsonValue } : {}) },
   });
   const job = await enqueue(QUEUES.autopilotRun, { runId: run.id });
   await prisma.autopilotRun.update({ where: { id: run.id }, data: { jobId: job.id } });
@@ -180,7 +185,7 @@ async function patchState(runId: string, patch: Partial<RunState>) {
 async function estimateStage(run: RunRow, key: AutopilotStageKey, cfg: AutopilotSettings): Promise<number> {
   const ai = await getAiSettings();
   const video = await getVideoSettings();
-  let format: "treasure_hunt" | "pranks" = "treasure_hunt";
+  let format: KitContentFormat = "treasure_hunt";
   let count = 10;
   let contentProvided = false;
   if (run.bookId) {
@@ -227,16 +232,19 @@ async function stagePlan(run: RunRow, jobId: string): Promise<StageOutcome> {
     const book = await prisma.book.findUnique({ where: { id: run.bookId }, select: { title: true } });
     if (book) return { type: "done", detail: `Kit « ${book.title} » déjà créé` };
   }
-  const resolved = await resolveBrief(run.brief ?? "", { jobId });
+  const resolved = await resolveBrief(run.brief ?? "", { jobId, siteSlug: stateOf(run).siteSlug ?? null });
   const def = kitType(resolved.plan.kitType);
   if (!isStructuredKit(def.key)) {
-    return { type: "failed", error: `Le pilote automatique produit les kits structurés (chasse au trésor, mission, anniversaire, Pâques, Halloween, lutins, Noël). Type détecté : « ${def.label} ». Utilisez « Créer depuis un brief » pour ce type.` };
+    return { type: "failed", error: `Le pilote automatique produit les contenus structurés (kits enfants, guides pratiques, recettes, fiches d'expériences). Type détecté : « ${def.label} ». Utilisez « Créer depuis un brief » pour ce type.` };
   }
+  await patchState(run.id, { siteSlug: resolved.plan.siteSlug ?? null });
   const { bookId, contentImported } = await createKitFromPlan({ plan: resolved.plan, brief: run.brief ?? undefined, contentJson: resolved.contentJson });
   await prisma.autopilotRun.update({ where: { id: run.id }, data: { bookId, title: resolved.plan.title } });
   await patchState(run.id, { contentSource: resolved.source });
   const source = resolved.source === "contenu" ? "contenu complet importé tel quel" : resolved.source === "json" ? "plan JSON importé" : "plan proposé par l'IA";
-  return { type: "done", detail: `${def.label} « ${resolved.plan.title} » · ${resolved.plan.count} ${def.countLabel} · ${resolved.plan.ageRange.replace("-", " à ")} ans (${source}${contentImported ? "" : ""})` };
+  const site = siteBySlug(await activeSites(), resolved.plan.siteSlug);
+  const audience = isAdultAge(resolved.plan.ageRange) ? "adultes" : `${resolved.plan.ageRange.replace("-", " à ")} ans`;
+  return { type: "done", detail: `${def.label} « ${resolved.plan.title} » · ${resolved.plan.count} ${def.countLabel} · ${audience}${site ? ` · univers ${site.name}` : ""} (${source}${contentImported ? "" : ""})` };
 }
 
 async function stageContent(run: RunRow, jobId: string): Promise<StageOutcome> {
@@ -244,9 +252,9 @@ async function stageContent(run: RunRow, jobId: string): Promise<StageOutcome> {
   const book = await prisma.book.findUniqueOrThrow({ where: { id: bookId } });
   const existing = readKitContent(book);
   const def = kitType(book.kitType);
-  if (existing) return { type: "done", detail: `Contenu déjà présent : ${"enigmes" in existing ? existing.enigmes.length : existing.idees.length} ${def.countLabel}` };
+  if (existing) return { type: "done", detail: `Contenu déjà présent : ${mainCount(existing)} ${def.countLabel}` };
   const r = await generateKitContent(bookId, { jobId });
-  const n = "enigmes" in r.content ? r.content.enigmes.length : r.content.idees.length;
+  const n = mainCount(r.content);
   return { type: "done", detail: `Contenu rédigé : ${n} ${def.countLabel}` };
 }
 
@@ -259,7 +267,7 @@ async function stageQuality(run: RunRow): Promise<StageOutcome> {
   const c = KitCustomizationSchema.safeParse(book.customization ?? {}).data;
   const report = checkKitContent(content, { expectedCount: c?.count ?? book.targetCount ?? def.defaultCount, companion: c?.companion });
   if (report.fixes.length) {
-    const n = "enigmes" in report.content ? report.content.enigmes.length : report.content.idees.length;
+    const n = mainCount(report.content);
     await prisma.book.update({ where: { id: bookId }, data: { kitContent: report.content as unknown as Prisma.InputJsonValue, targetCount: n } });
   }
   if (!report.ok) return { type: "failed", error: report.issues.filter((i) => i.level === "error").map((i) => i.message).join(" ") + " Corrigez le contenu (onglet Kit → importer un JSON corrigé) puis « Relancer l'étape »." };
@@ -452,8 +460,11 @@ const AdsCopySchema = z.record(z.string(), z.unknown());
 
 async function stageAds(run: RunRow, cfg: AutopilotSettings, jobId: string): Promise<StageOutcome> {
   const bookId = requireBook(run);
-  const book = await prisma.book.findUniqueOrThrow({ where: { id: bookId }, select: { title: true, shopProductId: true } });
+  const book = await prisma.book.findUniqueOrThrow({ where: { id: bookId }, select: { title: true, shopProductId: true, siteSlug: true, kitType: true } });
   if (!book.shopProductId) return { type: "failed", error: "Le kit n'est pas encore dans la boutique : l'étape « Boutique » doit réussir avant les publicités." };
+  const adsSite = siteBySlug(await activeSites(), book.siteSlug);
+  const adsBrand = adsSite?.name ?? "La Malle à Jeux";
+  const adsWhat = isAdultAge(kitType(book.kitType).defaultAge) ? `${kitType(book.kitType).label.toLowerCase()} au format PDF` : "kits d'activités à imprimer pour enfants";
   const shop = await getShopSettings();
   const state = stateOf(run);
   const videos = state.videoIds?.length ? await prisma.adVideo.findMany({ where: { id: { in: state.videoIds }, status: "READY", shopVideoUrl: { not: null } }, select: { shopVideoUrl: true } }) : [];
@@ -470,7 +481,7 @@ async function stageAds(run: RunRow, cfg: AutopilotSettings, jobId: string): Pro
       provider,
       model: effectiveTextModel(ai),
       schema: AdsCopySchema,
-      system: "Tu es rédacteur publicitaire pour La Malle à Jeux (kits d'activités à imprimer pour enfants). Tu écris en français, sans jamais inventer d'avis, de chiffres de vente ni de garanties absents des données fournies.",
+      system: `Tu es rédacteur publicitaire pour ${adsBrand} (${adsWhat}). Tu écris en français, sans jamais inventer d'avis, de chiffres de vente, de résultats ni de garanties absents des données fournies.`,
       prompt: `${outcome.prompt}\n\n${contextBlock("ads_copy", { title: book.title })}`,
       purpose: "ads_copy",
       bookId,

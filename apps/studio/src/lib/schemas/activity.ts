@@ -168,6 +168,7 @@ export type CoverData = z.infer<typeof CoverDataSchema>;
 
 export function ageRangeLabel(range: string) {
   const [a, b] = range.split("-");
+  if (Number(a) >= 16) return "Adultes";
   return `${a} à ${b} ans`;
 }
 

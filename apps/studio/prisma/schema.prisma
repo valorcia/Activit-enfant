@@ -137,6 +137,8 @@ model Book {
   shopLastSyncAt  DateTime?
   shopSyncError   String?
   shopListing     Json?     // ShopListing : fiche commerciale éditable (prix, textes, catégorie, FAQ, autoPublish)
+  siteSlug        String?   // univers de la boutique ciblé (multi-univers) — préréglage, charte et catégories en découlent
+  shopPublicUrl   String?   // URL publique de la fiche renvoyée par la boutique (domaine de l'univers)
 
   // Kits (chasse au trésor, lutins farceurs…) — voir src/lib/kits/types.ts
   kitType        String    @default("activites") // « activites » = livre d'activités historique (fiches + étapes)

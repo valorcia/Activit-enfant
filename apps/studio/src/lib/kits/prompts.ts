@@ -3,11 +3,130 @@
  * personnalisation du livre (univers, personnage, compagnon, lieu, ton, nombre d'éléments).
  */
 import { ageRangeLabel } from "../schemas/activity";
-import type { KitCustomization } from "./schemas";
-import { KIT_TYPES, type KitTypeDef } from "./types";
+import type { KitContentFormat, KitCustomization } from "./schemas";
+import { KIT_TYPES, isAdultAge, typesForPreset, type KitTypeDef } from "./types";
+import { PRESETS, type PresetDef } from "../universes/presets";
+import type { Site } from "../universes/sites";
 
-export const SYSTEM_KIT_EDITOR =
-  "Tu es auteur de jeux pour enfants et directeur éditorial de La Malle à Jeux, une marque de kits d'activités à imprimer (PDF A4). Tu écris en français, pour des parents qui organisent l'activité à la maison ou au jardin, sans achat spécial. Ton chaleureux, vocabulaire simple, humour gentil, jamais effrayant. Aucune marque ni personnage sous licence. Aucune invention commerciale (pas de chiffres de ventes, pas d'avis). Tu réponds uniquement avec un JSON strictement conforme au schéma demandé.";
+export const SYSTEM_KIT_EDITOR = PRESETS["kit-enfants"].system;
+
+/** Prompt système : persona de l'auteur selon le préréglage de l'univers (plan : éditeur multi-univers). */
+export function systemPromptFor(p: PresetDef | null): string {
+  if (!p) {
+    return "Tu es directeur éditorial d'une plateforme d'e-books à imprimer (PDF A4) organisée en univers : kits et jeux pour enfants, guides pratiques experts pour adultes, livres de recettes, fiches de sciences pour enfants. Tu écris en français. Tu n'inventes ni avis, ni chiffres de vente, ni promesses irréalistes, et tu ne cites aucune marque ni personnage sous licence. Tu réponds uniquement avec un JSON strictement conforme au schéma demandé.";
+  }
+  return p.system;
+}
+
+export interface ContentPromptArgs {
+  def: KitTypeDef;
+  title: string;
+  ageRange: string;
+  count: number;
+  c: KitCustomization;
+  brief?: string | null;
+  tone?: string;
+}
+
+/** Prompt de rédaction du contenu complet selon le format du kit. */
+export function contentPromptFor(format: KitContentFormat, a: ContentPromptArgs): string {
+  switch (format) {
+    case "treasure_hunt": return treasureHuntPrompt(a);
+    case "pranks": return pranksPrompt(a);
+    case "guide": return guidePrompt(a);
+    case "recipes": return recipesPrompt(a);
+    case "science": return sciencePrompt(a);
+  }
+}
+
+const audienceLabel = (ageRange: string) => (isAdultAge(ageRange) ? "des adultes" : `enfants de ${ageRangeLabel(ageRange)}`);
+
+const BOUTIQUE_JSON = `"boutique": { "name": "…", "tagline": "…", "shortDescription": "… (≤ 400 caractères)", "longDescription": "markdown 150 à 250 mots", "tags": ["…"], "heroBadges": ["…"], "faq": [ { "question": "…", "answer": "…" } ], "sellingPoints": [ { "title": "…", "description": "…", "icon": "check" } ], "seoTitle": "≤ 70 caractères", "seoDescription": "≤ 160 caractères", "keywords": ["…"] }`;
+
+export function guidePrompt(o: ContentPromptArgs) {
+  return `MISSION : écrire le contenu complet du guide pratique « ${o.title} » pour ${audienceLabel(o.ageRange)}, à imprimer (PDF A4).
+Ton : ${o.tone || o.c.tone || "clair, rassurant et précis"}.
+${o.c.universe ? `Domaine : ${o.c.universe}.` : ""}
+Structure attendue :
+1. Introduction (120 à 200 mots) : à qui s'adresse le guide, ce que le lecteur saura faire à la fin.
+2. Le problème : description concrète des symptômes (ce que le lecteur observe).
+3. Les causes principales (3 à 8), chacune expliquée simplement.
+4. Un diagnostic pas à pas sous forme de questions (si oui → …, si non → …).
+5. ${o.count} chapitres de méthode, chacun avec : numero, titre, resume (une phrase), contenu (150 à 350 mots, paragraphes courts), etapes (3 à 8 actions concrètes), conseil (astuce de pro), attention (mise en garde ou chaîne vide), tableau facultatif (ex. dosages indicatifs, fréquences : colonnes + lignes ; sinon null), illustration_description (schéma pédagogique à dessiner, sans texte).
+6. Erreurs fréquentes (5 à 10) avec la bonne pratique.
+7. Une checklist imprimable (8 à 15 cases), un calendrier d'entretien (par période), une FAQ (5 à 8 questions) et un glossaire (6 à 15 termes).
+8. Consignes de sécurité générales.
+RÈGLES : aucune promesse irréaliste (pas de « garanti », pas de résultat chiffré invérifiable) ; aucune statistique ni norme inventée ; aucune marque commerciale ; quand des produits chimiques ou des outils dangereux sont évoqués : porter des gants et des lunettes, ne jamais mélanger les produits, respecter les doses et l'étiquette du fabricant, stocker hors de portée des enfants, demander l'avis d'un professionnel en cas de doute ; les valeurs indicatives sont présentées comme telles.
+${o.c.extraInstructions ? `Consignes supplémentaires : ${o.c.extraInstructions}` : ""}
+${o.brief ? `Demande initiale : ${o.brief}` : ""}
+
+FORMAT : uniquement un objet JSON :
+{
+  "titre": "${o.title}", "sous_titre": "…",
+  "auteur": { "nom": "", "expertise": "" },
+  "introduction": "…",
+  "probleme": { "titre": "…", "texte": "…" },
+  "causes": [ { "titre": "…", "explication": "…" } ],
+  "diagnostic": [ { "question": "…", "si_oui": "…", "si_non": "…" } ],
+  "chapitres": [ { "numero": 1, "titre": "…", "resume": "…", "contenu": "…", "etapes": ["…"], "conseil": "…", "attention": "…", "tableau": { "titre": "…", "colonnes": ["…"], "lignes": [["…"]] }, "illustration_description": "…" } ],
+  "erreurs": [ { "erreur": "…", "solution": "…" } ],
+  "checklist": { "titre": "…", "items": ["…"] },
+  "calendrier": [ { "periode": "…", "actions": ["…"] } ],
+  "faq": [ { "question": "…", "reponse": "…" } ],
+  "glossaire": [ { "terme": "…", "definition": "…" } ],
+  "securite": ["…"],
+  "illustrations": [ { "page": "couverture", "prompt": "…" }, { "page": "chapitre-1", "prompt": "…" } ],
+  ${BOUTIQUE_JSON}
+}
+"chapitres" contient exactement ${o.count} éléments et "illustrations" une entrée "chapitre-N" par chapitre. Les prompts d'illustration décrivent un schéma ou une scène pédagogique, sans texte ni chiffre.`;
+}
+
+export function recipesPrompt(o: ContentPromptArgs) {
+  return `MISSION : écrire le contenu complet du livre de recettes « ${o.title} » pour ${audienceLabel(o.ageRange)}, à imprimer (PDF A4) : ${o.count} recettes.
+Ton : ${o.tone || o.c.tone || "gourmand, simple et encourageant"}.
+${o.c.universe ? `Thème : ${o.c.universe}.` : ""}
+Chaque recette : numero, titre, resume (une phrase gourmande), portions, temps_preparation_minutes, temps_cuisson_minutes, difficulte (1 à 3), ingredients (quantités précises), etapes (courtes et numérotables), astuce, allergenes (parmi les 14 allergènes réglementaires présents), illustration_description (le plat à dessiner, sans texte).
+Ajoute une introduction (100 à 180 mots) et des conseils généraux (organisation, conservation, hygiène).
+RÈGLES : temps et quantités réalistes ; cuisson à cœur des viandes et des œufs pour les publics fragiles ; aucune allégation santé non prouvée ; aucune marque commerciale.
+${o.c.extraInstructions ? `Consignes supplémentaires : ${o.c.extraInstructions}` : ""}
+${o.brief ? `Demande initiale : ${o.brief}` : ""}
+
+FORMAT : uniquement un objet JSON :
+{
+  "titre": "${o.title}", "sous_titre": "…",
+  "introduction": "…",
+  "recettes": [ { "numero": 1, "titre": "…", "resume": "…", "portions": 4, "temps_preparation_minutes": 15, "temps_cuisson_minutes": 20, "difficulte": 1, "ingredients": ["…"], "etapes": ["…"], "astuce": "…", "allergenes": ["…"], "illustration_description": "…" } ],
+  "conseils": ["…"],
+  "illustrations": [ { "page": "couverture", "prompt": "…" }, { "page": "recette-1", "prompt": "…" } ],
+  ${BOUTIQUE_JSON}
+}
+"recettes" contient exactement ${o.count} éléments et "illustrations" une entrée "recette-N" par recette.`;
+}
+
+export function sciencePrompt(o: ContentPromptArgs) {
+  return `MISSION : écrire le contenu complet des fiches d'expériences « ${o.title} » pour enfants de ${ageRangeLabel(o.ageRange)}, à imprimer (PDF A4) : ${o.count} expériences réalisables à la maison avec du matériel courant.
+Ton : ${o.tone || o.c.tone || "curieux, enthousiaste et clair"}.
+${o.c.universe ? `Thème : ${o.c.universe}.` : ""}
+${o.c.heroName ? `Personnage guide : ${o.c.heroName}${o.c.heroDescription ? ` (${o.c.heroDescription})` : ""}.` : "Invente un personnage guide scientifique attachant (nom, apparence courte)."}
+Chaque expérience : numero, titre, question (ce que l'on cherche à découvrir), materiel, etapes (3 à 8), explication (juste et simple), pour_aller_plus_loin, securite (consignes adaptées), duree_minutes, difficulte (1 à 3), age_conseille, illustration_description (scène à dessiner, sans texte).
+Ajoute une introduction (80 à 150 mots), des règles de sécurité générales et un diplôme de petit scientifique.
+RÈGLES : présence d'un adulte pour toute chaleur, tout outil coupant ou tout produit ménager ; aucun produit dangereux ; aucune marque ni personnage sous licence.
+${o.c.extraInstructions ? `Consignes supplémentaires : ${o.c.extraInstructions}` : ""}
+${o.brief ? `Demande initiale : ${o.brief}` : ""}
+
+FORMAT : uniquement un objet JSON :
+{
+  "titre": "${o.title}", "sous_titre": "…",
+  "personnage": { "nom": "…", "description": "…" },
+  "introduction": "…",
+  "experiences": [ { "numero": 1, "titre": "…", "question": "…", "materiel": ["…"], "etapes": ["…"], "explication": "…", "pour_aller_plus_loin": "…", "securite": ["…"], "duree_minutes": 20, "difficulte": 1, "age_conseille": "6+", "illustration_description": "…" } ],
+  "diplome": { "titre": "…", "texte": "…" },
+  "securite_generale": ["…"],
+  "illustrations": [ { "page": "couverture", "prompt": "…" }, { "page": "experience-1", "prompt": "…" } ],
+  ${BOUTIQUE_JSON}
+}
+"experiences" contient exactement ${o.count} éléments et "illustrations" une entrée "experience-N" par expérience.`;
+}
 
 const HIDING_PLACES = ["frigo", "canapé", "lave-linge", "chaussures de l'entrée", "pot de plante", "baignoire", "étagère à livres", "boîte aux lettres", "oreiller", "coffre à jouets", "tiroir à couverts", "panier à linge"];
 
@@ -21,7 +140,7 @@ function persona(c: KitCustomization, def: KitTypeDef) {
   ].filter(Boolean).join("\n");
 }
 
-export function treasureHuntPrompt(o: { def: KitTypeDef; title: string; ageRange: string; count: number; c: KitCustomization; brief?: string | null }) {
+export function treasureHuntPrompt(o: ContentPromptArgs) {
   const places = HIDING_PLACES.slice(0, o.count).join(", ");
   return `MISSION : écrire le contenu complet d'un kit « ${o.title} » (${o.def.label.toLowerCase()}) pour enfants de ${ageRangeLabel(o.ageRange)}, sur la mécanique de « Le trésor de la Capitaine Coquelicot » :
 - PDF A4 à imprimer.
@@ -54,7 +173,7 @@ FORMAT : uniquement un objet JSON :
 "enigmes" contient exactement ${o.count} éléments et "illustrations" une entrée "enigme-image-N" par énigme. Les prompts d'illustration décrivent la scène, le cadrage et l'absence de texte.`;
 }
 
-export function pranksPrompt(o: { def: KitTypeDef; title: string; ageRange: string; count: number; c: KitCustomization; brief?: string | null }) {
+export function pranksPrompt(o: ContentPromptArgs) {
   return `MISSION : écrire le contenu complet de l'e-book « ${o.title} » (${o.def.label.toLowerCase()}) pour enfants de ${ageRangeLabel(o.ageRange)} : ${o.count} idées rapides (5 minutes maximum la veille au soir, matériel courant) à mettre en œuvre au fil des jours.
 ${persona(o.c, o.def)}
 Contenu attendu :
@@ -81,34 +200,42 @@ FORMAT : uniquement un objet JSON :
 "idees" contient exactement ${o.count} éléments et "illustrations" une entrée "idee-N" par idée.`;
 }
 
-/** Prompt « brief libre → plan de kit » (JSON KitPlan). */
-export function briefToPlanPrompt(brief: string) {
-  const types = KIT_TYPES.map((k) => `- ${k.key} : ${k.label} — ${k.description}`).join("\n");
-  return `Voici une demande libre d'un éditeur de La Malle à Jeux (kits d'activités à imprimer pour les 3–10 ans). Transforme-la en plan de production.
+/** Prompt « brief libre → plan de kit » (JSON KitPlan), avec choix de l'univers parmi ceux de la boutique. */
+export function briefToPlanPrompt(brief: string, sites: Array<Pick<Site, "slug" | "name" | "preset" | "audience" | "categories">> = []) {
+  const universes = sites.length
+    ? sites
+        .map((s) => {
+          const types = typesForPreset(s.preset).filter((k) => k.family === "kit").map((k) => k.key).join(", ");
+          return `- ${s.slug} : « ${s.name} » (${PRESETS[s.preset].label} — audience : ${s.audience.name}) · types possibles : ${types} · catégories : ${s.categories.map((c) => c.slug).join(", ") || "—"}`;
+        })
+        .join("\n")
+    : "";
+  const types = KIT_TYPES.filter((k) => k.family === "kit" || !universes).map((k) => `- ${k.key} : ${k.label} — ${k.description}`).join("\n");
+  return `Voici une demande libre d'un éditeur d'e-books à imprimer. Transforme-la en plan de production.
 
 DEMANDE :
 """
 ${brief.trim().slice(0, 12000)}
 """
-
-Types de kits disponibles (choisis le plus adapté) :
+${universes ? `\nUnivers de la boutique (choisis celui qui correspond le mieux au sujet et au public ; le type d'e-book doit être compatible avec l'univers) :\n${universes}\n` : ""}
+Types d'e-books disponibles (choisis le plus adapté) :
 ${types}
 
 Réponds uniquement avec un objet JSON :
 {
-  "kitType": "clé du type ci-dessus",
-  "title": "titre commercial du kit",
+  ${universes ? '"siteSlug": "slug de l\'univers choisi ci-dessus",\n  ' : ""}"kitType": "clé du type ci-dessus",
+  "title": "titre commercial",
   "subtitle": "sous-titre (bénéfice principal)",
-  "ageRange": "3-5 | 5-8 | 8-10 | 3-10",
-  "universe": "univers (pirates, dinosaures, espace, Noël…)",
-  "heroName": "nom du personnage guide",
+  "ageRange": "3-5 | 5-8 | 8-10 | 3-10 (enfants) ou 18-99 (adultes)",
+  "universe": "univers ou domaine (pirates, dinosaures, piscine, cuisine du quotidien…)",
+  "heroName": "nom du personnage guide (chaîne vide pour un guide ou un livre de recettes)",
   "heroDescription": "apparence en une phrase",
-  "companion": "compagnon (animal, robot…)",
-  "place": "lieu ou véhicule",
+  "companion": "compagnon (animal, robot…) ou chaîne vide",
+  "place": "lieu ou véhicule, ou chaîne vide",
   "tone": "ton",
   "count": 10,
   "priceCents": 990,
-  "shopCategorySlug": "chasses-au-tresor | activites-educatives | evenements | histoires-et-aventures",
+  "shopCategorySlug": "slug d'une catégorie de l'univers choisi",
   "notes": "toutes les consignes utiles de la demande à transmettre à l'auteur"
 }
 N'invente rien qui contredise la demande ; laisse une chaîne vide si une information manque.`;

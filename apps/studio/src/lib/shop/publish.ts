@@ -14,7 +14,8 @@ import { ShopListingSchema, type ShopListing, type ShopSettings } from "../schem
 import { ageRangeLabel, BOOK_TYPES } from "../schemas/activity";
 import { ShopApiError, ShopClient, type ShopProduct } from "./client";
 import { isStructuredKit, kitContentsFor, kitType, LEGACY_ACTIVITY_TYPE } from "../kits/types";
-import { KitCustomizationSchema, PranksKitSchema, TreasureHuntSchema } from "../kits/schemas";
+import { KIT_CONTENT_SCHEMAS, KitCustomizationSchema } from "../kits/schemas";
+import { heroOf, introOf, mainCount, mainItems, materialsOf, type KitContent } from "../kits/content";
 
 export type BookForListing = Book & {
   activities: Array<{ activity: { title: string; concept: Prisma.JsonValue | null; currentVersion: { content: Prisma.JsonValue } | null; durationMinutes: number; difficulty: number; category: string } }>;
@@ -104,6 +105,7 @@ export function buildListingFromBook(book: BookForListing, settings: ShopSetting
     seoTitle: (o.seoTitle ?? `${book.title} — e-book d'activités à imprimer`).slice(0, 70),
     seoDescription: (o.seoDescription ?? shortDescription).slice(0, 170),
     keywords: o.keywords ?? keywords,
+    ...(book.siteSlug ? { siteSlug: book.siteSlug } : {}),
   };
 }
 
@@ -112,25 +114,25 @@ export function buildListingFromKit(book: BookForListing, settings: ShopSettings
   const def = kitType(book.kitType);
   const o: ShopListing = ShopListingSchema.safeParse(book.shopListing ?? {}).data ?? {};
   const c = KitCustomizationSchema.safeParse(book.customization ?? {}).data;
-  const hunt = def.format === "treasure_hunt" ? TreasureHuntSchema.safeParse(book.kitContent).data : undefined;
-  const pranks = def.format === "pranks" ? PranksKitSchema.safeParse(book.kitContent).data : undefined;
-  const content = hunt ?? pranks;
+  const parsed = def.format ? KIT_CONTENT_SCHEMAS[def.format].safeParse(book.kitContent) : null;
+  const content = parsed?.success ? (parsed.data as KitContent) : undefined;
   const b = content?.boutique ?? {};
-  const count = hunt ? hunt.enigmes.length : pranks?.idees.length ?? book.targetCount;
+  const count = content ? mainCount(content) : book.targetCount;
+  const adult = def.format === "guide" || def.format === "recipes";
   const latestExport = book.exports.find((e) => e.kind === "BOOK_DIGITAL") ?? book.exports[0];
   const ages = parseAgeRange(book.ageRange);
   const universe = o.universe ?? (c?.universe || b.universe || def.defaultUniverse || def.label);
-  const hero = hunt?.personnage?.nom ?? pranks?.personnages?.[0]?.nom;
-  const shortDescription = (o.shortDescription ?? b.shortDescription ?? `${def.label} à imprimer pour les ${ageRangeLabel(book.ageRange)} : ${count} ${def.countLabel}${hero ? ` avec ${hero}` : ""}. Téléchargement immédiat.`).slice(0, 400);
-  const story = o.story ?? b.story ?? (hunt ? hunt.lettre : pranks?.lettre_arrivee);
-  const heroBadges = b.heroBadges?.length ? b.heroBadges : ["PDF A4 immédiat", ageRangeLabel(book.ageRange), `${count} ${def.countLabel}`];
+  const hero = content ? heroOf(content) : null;
+  const shortDescription = (o.shortDescription ?? b.shortDescription ?? (adult ? `${def.label} au format PDF : ${count} ${def.countLabel} clairs et concrets. Téléchargement immédiat.` : `${def.label} à imprimer pour les ${ageRangeLabel(book.ageRange)} : ${count} ${def.countLabel}${hero ? ` avec ${hero}` : ""}. Téléchargement immédiat.`)).slice(0, 400);
+  const story = o.story ?? b.story ?? (content ? introOf(content) : undefined);
+  const heroBadges = b.heroBadges?.length ? b.heroBadges : adult ? ["PDF immédiat", `${count} ${def.countLabel}`, "Pas à pas"] : ["PDF A4 immédiat", ageRangeLabel(book.ageRange), `${count} ${def.countLabel}`];
   const tags = o.tags ?? b.tags ?? [def.label.toLowerCase(), universe.toLowerCase(), "à imprimer"];
   return {
     name: o.name ?? book.title,
     slug: o.slug ?? book.shopProductSlug ?? stableSlug(book),
     tagline: (o.tagline ?? b.tagline ?? book.subtitle ?? content?.sous_titre ?? "").slice(0, 200) || undefined,
     shortDescription,
-    longDescription: o.longDescription ?? b.longDescription ?? undefined,
+    longDescription: o.longDescription ?? b.longDescription ?? (content && adult ? `## Au sommaire\n\n${mainItems(content).map((i) => `- ${i.title}`).join("\n")}` : undefined),
     story: story ?? undefined,
     template: o.template ?? c?.shopTemplate ?? def.template,
     categorySlug: o.categorySlug ?? c?.shopCategorySlug ?? def.shopCategory ?? settings.defaultCategorySlug,
@@ -139,15 +141,15 @@ export function buildListingFromKit(book: BookForListing, settings: ShopSettings
     tags,
     badges: ["Nouveau"],
     heroBadges,
-    ageMin: o.ageMin ?? b.ageMin ?? ages.ageMin,
-    ageMax: o.ageMax ?? b.ageMax ?? ages.ageMax,
+    ageMin: o.ageMin ?? b.ageMin ?? (adult ? undefined : ages.ageMin),
+    ageMax: o.ageMax ?? b.ageMax ?? (adult ? undefined : ages.ageMax),
     playersMin: b.playersMin,
     playersMax: b.playersMax,
     durationMinutes: o.durationMinutes === null ? undefined : o.durationMinutes ?? b.durationMinutes,
     difficulty: b.difficulty,
     pageCount: latestExport?.pageCount ?? b.pageCount ?? undefined,
     fileFormat: "PDF A4",
-    materials: (b.materials ?? hunt?.guide?.materiel ?? []).slice(0, 12),
+    materials: (b.materials ?? (content ? materialsOf(content) : [])).slice(0, 12),
     priceCents: o.priceCents ?? c?.priceCents ?? b.priceCents ?? def.defaultPriceCents ?? settings.defaultPriceCents,
     salePriceCents: o.salePriceCents ?? undefined,
     currency: "EUR",
@@ -157,6 +159,7 @@ export function buildListingFromKit(book: BookForListing, settings: ShopSettings
     seoTitle: (o.seoTitle ?? b.seoTitle ?? `${book.title} — ${def.label.toLowerCase()} à imprimer`).slice(0, 70),
     seoDescription: (o.seoDescription ?? b.seoDescription ?? shortDescription).slice(0, 170),
     keywords: o.keywords ?? b.keywords ?? tags,
+    ...(book.siteSlug ? { siteSlug: book.siteSlug } : {}),
   };
 }
 
@@ -266,6 +269,8 @@ export async function publishBookToShop(bookId: string, opts: PublishOptions = {
       data: {
         shopProductId: product.id,
         shopProductSlug: product.slug,
+        shopPublicUrl: product.publicUrl ?? null,
+        ...(product.site?.slug && !book.siteSlug ? { siteSlug: product.site.slug } : {}),
         shopLastSyncAt: new Date(),
         shopPublishedAt: product.status === "PUBLISHED" ? (book.shopPublishedAt ?? new Date()) : book.shopPublishedAt,
         shopSyncError: warnings.length ? warnings.join(" | ") : null,

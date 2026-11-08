@@ -11,9 +11,12 @@ import { extractJson } from "@/lib/ai/structured";
 import { defaultThemeForBook } from "@/lib/layout/themes";
 import { KIT_CONTENT_SCHEMAS, KitCustomizationSchema, KitPlanSchema, detectKitContentFormat, type KitPlan } from "@/lib/kits/schemas";
 import { KIT_TYPES, isStructuredKit, kitType, kitTypeFromShop } from "@/lib/kits/types";
-import { SYSTEM_KIT_EDITOR, briefToPlanPrompt } from "@/lib/kits/prompts";
+import { briefToPlanPrompt, systemPromptFor } from "@/lib/kits/prompts";
+import { activeSites } from "@/lib/universes";
+import { siteBySlug } from "@/lib/universes/sites";
 import { applyKitContent, generateKitPlan, type KitContent } from "@/lib/kits/generate";
-import { CreateKitSchema, createKitBookRaw, createKitFromPlan, planFromContent, type CreateKitInput } from "@/lib/kits/create";
+import { mainCount } from "@/lib/kits/content";
+import { CreateKitSchema, createKitBookRaw, createKitFromPlan, planFromContent, withSite, type CreateKitInput } from "@/lib/kits/create";
 
 
 
@@ -49,7 +52,7 @@ export type BriefAnalysis =
  * 2. JSON de plan → plan ;
  * 3. brief libre → plan via l'IA (mode API) ou prompt à copier dans Claude / ChatGPT (mode copier-coller).
  */
-export async function analyzeBriefAction(text: string): Promise<BriefAnalysis> {
+export async function analyzeBriefAction(text: string, siteSlug?: string | null): Promise<BriefAnalysis> {
   const t = text.trim();
   if (t.length < 10) return { kind: "error", error: "Collez un brief ou un JSON (au moins quelques mots)." };
   const json = t.includes("{") ? extractJson(cleanPastedJson(t)) : null;
@@ -58,22 +61,26 @@ export async function analyzeBriefAction(text: string): Promise<BriefAnalysis> {
     if (format) {
       const parsed = KIT_CONTENT_SCHEMAS[format].safeParse(json);
       if (!parsed.success) return { kind: "error", error: `JSON de kit reconnu mais incomplet : ${parsed.error.issues.slice(0, 5).map((i) => `${i.path.join(".")} : ${i.message}`).join(" ; ")}` };
-      return { kind: "plan", plan: planFromContent(format, parsed.data as KitContent), contentJson: JSON.stringify(parsed.data), source: "contenu" };
+      return { kind: "plan", plan: await withSite(planFromContent(format, parsed.data as KitContent), siteSlug), contentJson: JSON.stringify(parsed.data), source: "contenu" };
     }
     const plan = KitPlanSchema.safeParse(json);
-    if (plan.success) return { kind: "plan", plan: { ...plan.data, kitType: KIT_TYPES.some((k) => k.key === plan.data.kitType) ? plan.data.kitType : "chasse-au-tresor" }, source: "json" };
+    if (plan.success) return { kind: "plan", plan: await withSite({ ...plan.data, kitType: KIT_TYPES.some((k) => k.key === plan.data.kitType) ? plan.data.kitType : "chasse-au-tresor" }, siteSlug), source: "json" };
   }
   const settings = await getAiSettings();
   if (manualText(settings)) {
     return {
       kind: "prompt",
-      prompt: buildTextPrompt(SYSTEM_KIT_EDITOR, briefToPlanPrompt(t)),
+      prompt: await (async () => {
+        const sites = await activeSites();
+        const forced = siteBySlug(sites, siteSlug);
+        return buildTextPrompt(systemPromptFor(null), briefToPlanPrompt(t, forced ? [forced] : sites));
+      })(),
       message: "Mode copier-coller : copiez ce prompt dans Claude ou ChatGPT, puis collez le JSON obtenu à la place du brief et relancez l'analyse.",
     };
   }
   try {
-    const plan = await generateKitPlan(t);
-    return { kind: "plan", plan: { ...plan, kitType: KIT_TYPES.some((k) => k.key === plan.kitType) ? plan.kitType : "chasse-au-tresor" }, source: "ia" };
+    const plan = await generateKitPlan(t, { siteSlug: siteSlug ?? undefined });
+    return { kind: "plan", plan: await withSite({ ...plan, kitType: KIT_TYPES.some((k) => k.key === plan.kitType) ? plan.kitType : "chasse-au-tresor" }, siteSlug), source: "ia" };
   } catch (e) {
     return { kind: "error", error: e instanceof Error ? e.message : String(e) };
   }
@@ -109,7 +116,7 @@ export async function importKitJsonAction(bookId: string, text: string): Promise
   await applyKitContent(bookId, parsed.data as KitContent, { keepTitle: true });
   revalidatePath(`/books/${bookId}`);
   const c = parsed.data as KitContent;
-  return { ok: true, count: "enigmes" in c ? c.enigmes.length : c.idees.length };
+  return { ok: true, count: mainCount(c) };
 }
 
 export async function regenerateKitContentAction(bookId: string) {

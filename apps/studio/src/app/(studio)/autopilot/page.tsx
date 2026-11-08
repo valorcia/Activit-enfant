@@ -4,13 +4,16 @@ import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { RunBadge } from "@/components/autopilot/run-badge";
+import { loadSites } from "@/lib/universes";
 import { currentStage, parseStages } from "@/lib/autopilot/stages";
 import { formatDate, formatUsd } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
 export default async function AutopilotPage() {
-  const runs = await prisma.autopilotRun.findMany({ orderBy: { createdAt: "desc" }, take: 100, include: { book: { select: { id: true, title: true } } } });
+  const runs = await prisma.autopilotRun.findMany({ orderBy: { createdAt: "desc" }, take: 100, include: { book: { select: { id: true, title: true, siteSlug: true } } } });
+  const { sites } = await loadSites();
+  const siteName = (slug: string | null | undefined) => (slug ? sites.find((x) => x.slug === slug)?.name ?? slug : null);
   return (
     <div className="p-8 max-w-6xl">
       <PageHeader
@@ -26,7 +29,7 @@ export default async function AutopilotPage() {
       ) : (
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500"><tr><th className="p-3">E-book</th><th className="p-3">Statut</th><th className="p-3">Étape</th><th className="p-3">Coût</th><th className="p-3">Lancé le</th></tr></thead>
+            <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500"><tr><th className="p-3">E-book</th><th className="p-3">Univers</th><th className="p-3">Statut</th><th className="p-3">Étape</th><th className="p-3">Coût</th><th className="p-3">Lancé le</th></tr></thead>
             <tbody>
               {runs.map((r) => {
                 const stages = parseStages(r.stages);
@@ -35,6 +38,7 @@ export default async function AutopilotPage() {
                 return (
                   <tr key={r.id} className="border-t border-slate-100 hover:bg-slate-50">
                     <td className="p-3"><Link href={`/autopilot/${r.id}`} className="font-semibold text-blue-700 hover:underline">{r.book?.title ?? r.title ?? "Sans titre"}</Link></td>
+                    <td className="p-3 text-slate-600">{siteName(r.book?.siteSlug ?? (r.state as { siteSlug?: string } | null)?.siteSlug) ?? "—"}</td>
                     <td className="p-3"><RunBadge status={r.status} /></td>
                     <td className="p-3 text-slate-600">{r.status === "COMPLETED" ? `${done}/${stages.length} étapes` : cur ? `${cur.label}${cur.detail ? ` — ${cur.detail}` : ""}` : "—"}</td>
                     <td className="p-3">{formatUsd(Number(r.costUsd))}</td>

@@ -7,25 +7,33 @@ import { Button } from "@/components/ui/button";
 import { JobProgress } from "@/components/job-progress";
 import { createKitBook } from "@/app/actions/kits";
 import { ART_STYLES, PAGE_FORMATS, ageRangeLabel } from "@/lib/schemas/activity";
-import { KIT_TYPES, kitType } from "@/lib/kits/types";
+import { KIT_TYPES, defaultTypeForPreset, kitType, typesForPreset } from "@/lib/kits/types";
+import { PRESETS } from "@/lib/universes/presets";
+import { siteBySlug, type Site } from "@/lib/universes/sites";
+import { UniverseSelect } from "@/components/universes/universe-select";
 import { KitPlanSchema, type KitPlan } from "@/lib/kits/schemas";
 import { cn } from "@/lib/utils";
 import { KitIcon } from "./kit-icon";
 import { KitPlanForm } from "./plan-form";
 
-const STEPS = ["Type de kit", "Personnalisation", "Style et format", "Récapitulatif"];
+const STEPS = ["Univers et type", "Personnalisation", "Style et format", "Récapitulatif"];
 
-function planFor(key: string, prices: Record<string, number>): KitPlan {
+function planFor(key: string, prices: Record<string, number>, site?: Site): KitPlan {
   const d = kitType(key);
-  return KitPlanSchema.parse({ kitType: d.key, title: "", ageRange: d.defaultAge, universe: d.defaultUniverse ?? "", count: d.defaultCount, priceCents: prices[d.key] ?? d.defaultPriceCents, shopCategorySlug: d.shopCategory, tone: "Joyeux et complice" });
+  const cats = site?.categories ?? [];
+  const category = !cats.length || cats.some((c) => c.slug === d.shopCategory) ? d.shopCategory : cats[0].slug;
+  const tone = site ? PRESETS[site.preset].tone : "Joyeux et complice";
+  return KitPlanSchema.parse({ kitType: d.key, title: "", ageRange: d.defaultAge, universe: d.defaultUniverse ?? "", count: d.defaultCount, priceCents: prices[d.key] ?? d.defaultPriceCents, shopCategorySlug: category, tone: tone.slice(0, 120), siteSlug: site?.slug });
 }
 
 /** Assistant de création : type de kit, personnalisation, style et format, puis production. */
-export function KitWizard({ categories, prices = {} }: { categories?: Array<{ slug: string; name: string }>; prices?: Record<string, number> }) {
+export function KitWizard({ categories, prices = {}, sites = [], defaultSiteSlug }: { categories?: Array<{ slug: string; name: string }>; prices?: Record<string, number>; sites?: Site[]; defaultSiteSlug?: string }) {
   const router = useRouter();
   const [step, setStep] = useState(0);
-  const [plan, setPlan] = useState<KitPlan>(planFor("chasse-au-tresor", prices));
-  const [artStyle, setArtStyle] = useState("aquarelle");
+  const initialSite = siteBySlug(sites, defaultSiteSlug) ?? sites[0];
+  const [plan, setPlan] = useState<KitPlan>(planFor(defaultTypeForPreset(initialSite?.preset), prices, initialSite));
+  const [artStyle, setArtStyle] = useState(initialSite ? PRESETS[initialSite.preset].artStyle : "aquarelle");
+  const site = siteBySlug(sites, plan.siteSlug);
   const [pageFormat, setPageFormat] = useState("A4_PORTRAIT");
   const [startNow, setStartNow] = useState(true);
   const [jobId, setJobId] = useState<string | null>(null);
@@ -33,8 +41,16 @@ export function KitWizard({ categories, prices = {} }: { categories?: Array<{ sl
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const def = kitType(plan.kitType);
-  const kits = KIT_TYPES.filter((k) => k.family === "kit" || ["cahier-activites", "jeux-logique", "activites-montessori", "histoire-illustree", "histoire-du-soir", "livre-personnalisable"].includes(k.key));
-  const legacy = KIT_TYPES.filter((k) => !kits.includes(k));
+  const allowed = typesForPreset(site?.preset);
+  const kits = allowed.filter((k) => k.family === "kit" || ["cahier-activites", "jeux-logique", "activites-montessori", "histoire-illustree", "histoire-du-soir", "livre-personnalisable"].includes(k.key));
+  const legacy = allowed.filter((k) => !kits.includes(k));
+  const chooseSite = (slug: string | null) => {
+    const s = siteBySlug(sites, slug);
+    if (!s) return;
+    const keep = typesForPreset(s.preset).some((k) => k.key === plan.kitType);
+    setPlan({ ...planFor(keep ? plan.kitType : defaultTypeForPreset(s.preset), prices, s), title: plan.title });
+    setArtStyle(PRESETS[s.preset].artStyle);
+  };
 
   const create = () =>
     start(async () => {
@@ -48,6 +64,7 @@ export function KitWizard({ categories, prices = {} }: { categories?: Array<{ sl
             ageRange: plan.ageRange,
             artStyle,
             pageFormat,
+            siteSlug: plan.siteSlug ?? null,
             brief: plan.notes || undefined,
             customization: { universe: plan.universe, heroName: plan.heroName, heroDescription: plan.heroDescription, companion: plan.companion, place: plan.place, tone: plan.tone, count: plan.count, priceCents: plan.priceCents, shopCategorySlug: plan.shopCategorySlug, extraInstructions: plan.notes },
           },
@@ -61,7 +78,7 @@ export function KitWizard({ categories, prices = {} }: { categories?: Array<{ sl
     });
 
   const Card = ({ k }: { k: (typeof KIT_TYPES)[number] }) => (
-    <button type="button" onClick={() => setPlan({ ...planFor(k.key, prices), title: plan.title, heroName: plan.heroName, companion: plan.companion })} className={cn("text-left rounded-xl border p-4 transition-colors hover:border-blue-400", plan.kitType === k.key ? "border-blue-600 bg-blue-50 ring-2 ring-blue-200" : "border-slate-200 bg-white")}>
+    <button type="button" onClick={() => setPlan({ ...planFor(k.key, prices, site), title: plan.title, heroName: plan.heroName, companion: plan.companion })} className={cn("text-left rounded-xl border p-4 transition-colors hover:border-blue-400", plan.kitType === k.key ? "border-blue-600 bg-blue-50 ring-2 ring-blue-200" : "border-slate-200 bg-white")}>
       <div className="flex items-center gap-2 font-bold"><KitIcon name={k.icon} className="h-5 w-5 text-blue-700" /> {k.label}</div>
       <div className="mt-1 text-xs text-slate-500">{k.description}</div>
       <div className="mt-2 text-[11px] text-slate-400">{ageRangeLabel(k.defaultAge)} · {k.defaultCount} {k.countLabel} · {(k.defaultPriceCents / 100).toFixed(2).replace(".", ",")} €</div>
@@ -80,14 +97,21 @@ export function KitWizard({ categories, prices = {} }: { categories?: Array<{ sl
       <div className="min-h-[320px] rounded-xl border border-slate-200 bg-white p-6">
         {step === 0 && (
           <div className="space-y-5">
+            {sites.length > 0 && (
+              <div className="flex flex-wrap items-center gap-3 rounded-lg bg-slate-50 p-3">
+                <label htmlFor="wizard-site" className="text-sm font-semibold">Univers de la boutique</label>
+                <div className="min-w-72"><UniverseSelect id="wizard-site" sites={sites} value={plan.siteSlug} onChange={chooseSite} /></div>
+                {site && <span className="text-xs text-slate-500">{PRESETS[site.preset].description}</span>}
+              </div>
+            )}
             <div className="grid gap-3 md:grid-cols-3">{kits.map((k) => <Card key={k.key} k={k} />)}</div>
-            <details className="text-sm">
+            {legacy.length > 0 && <details className="text-sm">
               <summary className="cursor-pointer font-semibold text-slate-600">Livres d&apos;activités historiques (inventions, sciences…)</summary>
               <div className="mt-3 grid gap-3 md:grid-cols-3">{legacy.map((k) => <Card key={k.key} k={k} />)}</div>
-            </details>
+            </details>}
           </div>
         )}
-        {step === 1 && <KitPlanForm plan={plan} onChange={setPlan} categories={categories} />}
+        {step === 1 && <KitPlanForm plan={plan} onChange={setPlan} categories={categories} sites={sites} />}
         {step === 2 && (
           <div className="space-y-5">
             <div className="grid gap-3 md:grid-cols-3">
@@ -105,13 +129,14 @@ export function KitWizard({ categories, prices = {} }: { categories?: Array<{ sl
                 </button>
               ))}
             </div>
-            <p className="text-xs text-slate-500">La charte d&apos;illustration (Paramètres → Studio) est ajoutée à tous les prompts d&apos;images.</p>
+            <p className="text-xs text-slate-500">La charte d&apos;illustration de l&apos;univers{site ? ` « ${PRESETS[site.preset].label} »` : ""} (Paramètres → Univers) est ajoutée à tous les prompts d&apos;images.</p>
           </div>
         )}
         {step === 3 && (
           <div className="space-y-4">
             <div className="rounded-lg bg-slate-50 p-4 text-sm leading-relaxed">
               <div className="mb-1 font-bold">{plan.title || def.label}</div>
+              {site && <div className="mb-1 text-xs text-slate-500">Univers : {site.name} ({site.audience.name})</div>}
               {def.label} · {ageRangeLabel(plan.ageRange)} · {plan.count} {def.countLabel} · {plan.universe || "univers libre"}
               {plan.heroName ? ` · personnage : ${plan.heroName}` : ""}{plan.companion ? ` · compagnon : ${plan.companion}` : ""}
               <br />Prix : {((plan.priceCents ?? def.defaultPriceCents) / 100).toFixed(2).replace(".", ",")} € · {ART_STYLES.find((s) => s.key === artStyle)?.label} · {PAGE_FORMATS[pageFormat as keyof typeof PAGE_FORMATS].label}

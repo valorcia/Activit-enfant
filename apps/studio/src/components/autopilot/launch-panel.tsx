@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Rocket } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,16 +10,17 @@ import { STAGE_LABELS } from "@/lib/autopilot/stages";
 const usd = (n: number) => `${n.toFixed(2).replace(".", ",")} $`;
 
 /** Bouton « Tout lancer en automatique » : récapitulatif des réglages et estimation de coût, puis lancement. */
-export function AutopilotLaunch({ text, disabled }: { text: string; disabled?: boolean }) {
+export function AutopilotLaunch({ text, disabled, siteSlug }: { text: string; disabled?: boolean; siteSlug?: string | null }) {
   const router = useRouter();
   const [preview, setPreview] = useState<AutopilotPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  useEffect(() => setPreview(null), [siteSlug]);
 
   const open = () =>
     start(async () => {
       setError(null);
-      const r = await previewAutopilotAction(text);
+      const r = await previewAutopilotAction(text, siteSlug);
       if (r.ok) setPreview(r.data);
       else setError(r.error);
     });
@@ -27,7 +28,7 @@ export function AutopilotLaunch({ text, disabled }: { text: string; disabled?: b
   const launch = () =>
     start(async () => {
       setError(null);
-      const r = await startAutopilotAction(text);
+      const r = await startAutopilotAction(text, siteSlug);
       if (r.ok) router.push(`/autopilot/${r.data.runId}`);
       else setError(r.error);
     });
@@ -41,7 +42,7 @@ export function AutopilotLaunch({ text, disabled }: { text: string; disabled?: b
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 space-y-3">
           <div className="flex flex-wrap items-baseline gap-2">
             <h3 className="font-black text-emerald-950">Pilote automatique</h3>
-            <span className="text-sm text-emerald-900">{preview.title ? `« ${preview.title} » · ` : ""}{preview.kitLabel} · {preview.count} {preview.countLabel}</span>
+            <span className="text-sm text-emerald-900">{preview.title ? `« ${preview.title} » · ` : ""}{preview.siteName ? `${preview.siteName} · ` : ""}{preview.kitLabel} · {preview.count} {preview.countLabel}</span>
           </div>
           <ul className="list-disc space-y-1 pl-5 text-sm text-emerald-950">
             {preview.summary.map((s) => <li key={s}>{s}</li>)}

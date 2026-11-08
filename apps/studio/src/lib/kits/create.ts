@@ -2,10 +2,14 @@ import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../db";
 import { getStudioSettings } from "../settings";
-import { defaultThemeForBook } from "../layout/themes";
-import { KIT_CONTENT_SCHEMAS, KitCustomizationSchema, KitPlanSchema, detectKitContentFormat, type KitPlan } from "./schemas";
-import { KIT_TYPES, kitType, kitTypeFromShop } from "./types";
+import { defaultThemeForBook, themeForPreset } from "../layout/themes";
+import { KIT_CONTENT_SCHEMAS, KitCustomizationSchema, KitPlanSchema, detectKitContentFormat, type KitContentFormat, type KitPlan } from "./schemas";
+import { KIT_TYPES, defaultTypeForPreset, kitType, kitTypeFromShop, typeAllowedForPreset } from "./types";
 import { applyKitContent, type KitContent } from "./generate";
+import { companionOf, heroOf, mainCount } from "./content";
+import { activeSites, defaultSiteSlug } from "../universes";
+import { preset } from "../universes/presets";
+import { siteBySlug } from "../universes/sites";
 
 /**
  * Création d'un kit (utilisée par les actions serveur et par le pilote automatique du worker).
@@ -18,26 +22,33 @@ export const CreateKitSchema = z.object({
   title: z.string().min(1).max(140),
   subtitle: z.string().max(240).optional(),
   ageRange: z.string().regex(/^\d+-\d+$/),
-  artStyle: z.string().default("aquarelle"),
+  /** Style d'illustration ; défaut : celui du préréglage de l'univers */
+  artStyle: z.string().optional(),
   pageFormat: z.string().default("A4_PORTRAIT"),
   brief: z.string().max(20000).optional(),
+  /** Univers de la boutique ciblé (slug) ; défaut : univers par défaut du studio */
+  siteSlug: z.string().max(120).nullable().optional(),
   customization: KitCustomizationSchema,
 });
 export type CreateKitInput = z.input<typeof CreateKitSchema>;
 
-export function kitTypeForContent(format: "treasure_hunt" | "pranks", content: Record<string, unknown>): string {
+export function kitTypeForContent(format: KitContentFormat, content: Record<string, unknown>): string {
   const b = (content.boutique ?? {}) as { categorySlug?: string; template?: string; name?: string; universe?: string };
   const title = String(content.titre ?? b.name ?? "");
+  if (format === "guide") return "guide-pratique";
+  if (format === "recipes") return "livre-recettes";
+  if (format === "science") return "fiches-sciences";
   if (format === "pranks") return /lutin/i.test(title) ? "lutins-farceurs" : "kit-noel";
   return kitTypeFromShop({ categorySlug: b.categorySlug ?? "chasses-au-tresor", template: b.template, name: title, universe: b.universe });
 }
 
-export function planFromContent(format: "treasure_hunt" | "pranks", content: KitContent): KitPlan {
+export function planFromContent(format: KitContentFormat, content: KitContent): KitPlan {
   const raw = content as unknown as Record<string, unknown>;
   const key = kitTypeForContent(format, raw);
   const def = kitType(key);
   const b = content.boutique ?? {};
   const hunt = "enigmes" in content ? content : null;
+  const sci = "experiences" in content ? content : null;
   const pranks = "idees" in content ? content : null;
   return KitPlanSchema.parse({
     kitType: key,
@@ -45,29 +56,44 @@ export function planFromContent(format: "treasure_hunt" | "pranks", content: Kit
     subtitle: content.sous_titre ?? "",
     ageRange: b.ageMin != null && b.ageMax != null ? `${b.ageMin}-${b.ageMax}` : def.defaultAge,
     universe: b.universe ?? def.defaultUniverse ?? "",
-    heroName: hunt?.personnage?.nom ?? pranks?.personnages?.[0]?.nom ?? "",
-    heroDescription: hunt?.personnage?.description ?? pranks?.personnages?.[0]?.description ?? "",
-    companion: hunt?.personnage?.compagnon ?? pranks?.personnages?.[1]?.nom ?? "",
+    heroName: heroOf(content) ?? "",
+    heroDescription: hunt?.personnage?.description ?? pranks?.personnages?.[0]?.description ?? sci?.personnage?.description ?? "",
+    companion: companionOf(content) ?? "",
     place: hunt?.personnage?.vehicule ?? "",
     tone: "",
-    count: hunt ? hunt.enigmes.length : pranks!.idees.length,
+    count: mainCount(content),
     priceCents: b.priceCents,
     shopCategorySlug: b.categorySlug ?? def.shopCategory,
+    siteSlug: typeof b.siteSlug === "string" ? b.siteSlug : undefined,
     notes: "Contenu complet importé tel quel (aucun appel IA pour le texte).",
   });
+}
+
+/** Univers retenu pour un plan : celui du plan s'il existe, sinon le premier univers compatible avec le type, sinon l'univers par défaut. */
+export async function resolvePlanSite(plan: Pick<KitPlan, "siteSlug" | "kitType">): Promise<string> {
+  const sites = await activeSites();
+  const chosen = siteBySlug(sites, plan.siteSlug);
+  if (chosen) return chosen.slug;
+  const compatible = sites.find((s) => typeAllowedForPreset(plan.kitType, s.preset));
+  return compatible?.slug ?? (await defaultSiteSlug());
 }
 
 export async function createKitBookRaw(input: CreateKitInput) {
   const data = CreateKitSchema.parse(input);
   const def = kitType(data.kitType);
   const studio = await getStudioSettings();
+  const sites = await activeSites();
+  const siteSlug = siteBySlug(sites, data.siteSlug)?.slug ?? (await resolvePlanSite({ siteSlug: undefined, kitType: def.key }));
+  const site = siteBySlug(sites, siteSlug);
+  const p = preset(site?.preset ?? def.presets[0]);
   const count = data.customization.count ?? def.defaultCount;
   const priceCents = data.customization.priceCents ?? studio.priceByKitType[def.key] ?? def.defaultPriceCents;
   const book = await prisma.book.create({
     data: {
-      title: data.title, subtitle: data.subtitle || null, collection: studio.defaultAuthor || "La Malle à Jeux",
-      bookType: def.key, kitType: def.key, ageRange: data.ageRange, targetCount: count, artStyle: data.artStyle, pageFormat: data.pageFormat,
-      brief: data.brief || null, theme: defaultThemeForBook(def.family === "kit" ? "kit" : def.key, data.ageRange), status: "DRAFT", cover: { introduction: "" },
+      title: data.title, subtitle: data.subtitle || null, collection: site?.name || studio.defaultAuthor || "La Malle à Jeux",
+      bookType: def.key, kitType: def.key, ageRange: data.ageRange, targetCount: count, artStyle: data.artStyle || p.artStyle, pageFormat: data.pageFormat,
+      siteSlug,
+      brief: data.brief || null, theme: p.key === "kit-enfants" ? defaultThemeForBook(def.family === "kit" ? "kit" : def.key, data.ageRange) : themeForPreset(p.key), status: "DRAFT", cover: { introduction: "" },
       customization: { ...data.customization, count, priceCents } as Prisma.InputJsonValue,
       shopListing: { priceCents, categorySlug: data.customization.shopCategorySlug ?? def.shopCategory, template: data.customization.shopTemplate ?? def.template, universe: data.customization.universe || def.defaultUniverse } as Prisma.InputJsonValue,
     },
@@ -82,6 +108,7 @@ export async function createKitFromPlan(input: { plan: KitPlan; brief?: string; 
   const def = kitType(plan.kitType);
   const { bookId } = await createKitBookRaw({
     kitType: def.key,
+    siteSlug: await resolvePlanSite(plan),
     title: plan.title,
     subtitle: plan.subtitle,
     ageRange: plan.ageRange,
@@ -107,7 +134,7 @@ export { KIT_TYPES };
  * JSON complet des prompts → import direct ; JSON de plan → plan ; texte libre → plan par l'IA
  * (en mode copier-coller, lève ManualInputRequiredError : la demande apparaît dans « À coller »).
  */
-export async function resolveBrief(text: string, opts: { jobId?: string } = {}): Promise<{ plan: KitPlan; contentJson?: string; source: "ia" | "json" | "contenu" }> {
+export async function resolveBrief(text: string, opts: { jobId?: string; siteSlug?: string | null } = {}): Promise<{ plan: KitPlan; contentJson?: string; source: "ia" | "json" | "contenu" }> {
   const { extractJson } = await import("../ai/structured");
   const { cleanPastedJson } = await import("../ai/manual-core");
   const { generateKitPlan } = await import("./generate");
@@ -119,12 +146,27 @@ export async function resolveBrief(text: string, opts: { jobId?: string } = {}):
     if (format) {
       const parsed = KIT_CONTENT_SCHEMAS[format].safeParse(json);
       if (!parsed.success) throw new Error(`JSON de kit reconnu mais incomplet : ${parsed.error.issues.slice(0, 5).map((i) => `${i.path.join(".")} : ${i.message}`).join(" ; ")}`);
-      return { plan: planFromContent(format, parsed.data as KitContent), contentJson: JSON.stringify(parsed.data), source: "contenu" };
+      return { plan: await withSite(planFromContent(format, parsed.data as KitContent), opts.siteSlug), contentJson: JSON.stringify(parsed.data), source: "contenu" };
     }
     const plan = KitPlanSchema.safeParse(json);
-    if (plan.success) return { plan: normalizePlan(plan.data), source: "json" };
+    if (plan.success) return { plan: await withSite(normalizePlan(plan.data), opts.siteSlug), source: "json" };
   }
-  return { plan: normalizePlan(await generateKitPlan(t, opts)), source: "ia" };
+  return { plan: await withSite(normalizePlan(await generateKitPlan(t, opts)), opts.siteSlug), source: "ia" };
+}
+
+/** Applique l'univers imposé (sinon celui du plan, validé) et garantit un type compatible avec son préréglage. */
+export async function withSite(plan: KitPlan, forcedSlug?: string | null): Promise<KitPlan> {
+  const sites = await activeSites();
+  const forced = siteBySlug(sites, forcedSlug);
+  const siteSlug = forced?.slug ?? (await resolvePlanSite(plan));
+  const site = siteBySlug(sites, siteSlug);
+  let kitTypeKey = plan.kitType;
+  if (site && !typeAllowedForPreset(kitTypeKey, site.preset)) kitTypeKey = defaultTypeForPreset(site.preset);
+  const def = kitType(kitTypeKey);
+  const categories = site?.categories ?? [];
+  const shopCategorySlug = plan.shopCategorySlug && (!categories.length || categories.some((c) => c.slug === plan.shopCategorySlug)) ? plan.shopCategorySlug : categories.find((c) => c.slug === def.shopCategory)?.slug ?? categories[0]?.slug ?? def.shopCategory;
+  const changedType = kitTypeKey !== plan.kitType;
+  return { ...plan, siteSlug, kitType: kitTypeKey, shopCategorySlug, ...(changedType ? { count: def.defaultCount, ageRange: def.defaultAge } : {}) };
 }
 
 function normalizePlan(plan: KitPlan): KitPlan {

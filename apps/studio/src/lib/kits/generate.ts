@@ -1,30 +1,49 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../db";
-import { getAiSettings, getStudioSettings } from "../settings";
+import { getAiSettings } from "../settings";
 import { getImageProvider, getTextProvider, effectiveImageModel, effectiveTextModel } from "../ai/registry";
 import { generateStructured, contextBlock } from "../ai/structured";
 import { isManualInputRequired } from "../ai/manual-core";
 import { storeAsset } from "../storage";
 import { ShopListingSchema, type ShopListing } from "../schemas/settings";
 import { CoverDataSchema, ageRangeLabel } from "../schemas/activity";
-import { KIT_CONTENT_SCHEMAS, KitCustomizationSchema, KitPlanSchema, PranksKitSchema, TreasureHuntSchema, type KitCustomization, type KitPlan, type PranksKit, type ShopListingImport, type TreasureHunt } from "./schemas";
-import { kitContentsFor, kitType, type KitTypeDef } from "./types";
-import { SYSTEM_KIT_EDITOR, briefToPlanPrompt, kitImagePrompt, pranksPrompt, treasureHuntPrompt } from "./prompts";
+import { KIT_CONTENT_SCHEMAS, KitCustomizationSchema, KitPlanSchema, type KitContentFormat, type KitCustomization, type KitPlan, type ShopListingImport } from "./schemas";
+import { kitContentsFor, kitType, isAdultAge, type KitTypeDef } from "./types";
+import { briefToPlanPrompt, contentPromptFor, kitImagePrompt, systemPromptFor } from "./prompts";
+import { companionOf, heroOf, introOf, mainCount, type KitContent } from "./content";
+import { activeSites, charterForBook, defaultSiteSlug, presetForBook } from "../universes";
 
-export type KitContent = TreasureHunt | PranksKit;
+export type { KitContent };
+
+/** Finalité (purpose) de la rédaction du contenu, par format. */
+export const CONTENT_PURPOSE: Record<KitContentFormat, "kit_hunt" | "kit_pranks" | "kit_guide" | "kit_recipes" | "kit_science"> = {
+  treasure_hunt: "kit_hunt",
+  pranks: "kit_pranks",
+  guide: "kit_guide",
+  recipes: "kit_recipes",
+  science: "kit_science",
+};
 
 function customizationOf(raw: unknown): KitCustomization {
   const p = KitCustomizationSchema.safeParse(raw ?? {});
   return p.success ? p.data : KitCustomizationSchema.parse({});
 }
 
-/** Brief libre → plan de kit (IA du registry, ou demande à coller en mode copier-coller). */
-export async function generateKitPlan(brief: string, opts: { jobId?: string } = {}): Promise<KitPlan> {
+/** Brief libre → plan de kit (IA du registry, ou demande à coller en mode copier-coller). Le plan propose aussi l'univers le plus adapté. */
+export async function generateKitPlan(brief: string, opts: { jobId?: string; siteSlug?: string | null } = {}): Promise<KitPlan> {
   const settings = await getAiSettings();
   const provider = getTextProvider(settings, { jobId: opts.jobId });
-  const prompt = briefToPlanPrompt(brief) + "\n\n" + contextBlock("kit_plan", { title: brief.split("\n")[0].slice(0, 60), brief: brief.slice(0, 2000) });
-  const res = await generateStructured({ provider, model: effectiveTextModel(settings), schema: KitPlanSchema, system: SYSTEM_KIT_EDITOR, prompt, purpose: "kit_plan", jobId: opts.jobId, maxTokens: 4000 });
-  return res.data;
+  const sites = await activeSites();
+  const forced = opts.siteSlug ? sites.find((s) => s.slug === opts.siteSlug) : undefined;
+  const prompt =
+    briefToPlanPrompt(brief, forced ? [forced] : sites) +
+    "\n\n" +
+    contextBlock("kit_plan", { title: brief.split("\n")[0].slice(0, 60), brief: brief.slice(0, 2000), sites: (forced ? [forced] : sites).map((s) => `${s.slug}:${s.preset}`).join(",") });
+  const res = await generateStructured({ provider, model: effectiveTextModel(settings), schema: KitPlanSchema, system: systemPromptFor(null), prompt, purpose: "kit_plan", jobId: opts.jobId, maxTokens: 4000 });
+  const plan = res.data;
+  if (forced) plan.siteSlug = forced.slug;
+  if (!plan.siteSlug || !sites.some((s) => s.slug === plan.siteSlug)) plan.siteSlug = await defaultSiteSlug();
+  return plan;
 }
 
 /** Génère le contenu complet du kit (énigmes, idées, lettres, guide, fiche boutique). */
@@ -36,10 +55,11 @@ export async function generateKitContent(bookId: string, opts: { jobId?: string 
   const count = c.count ?? book.targetCount ?? def.defaultCount;
   const settings = await getAiSettings();
   const provider = getTextProvider(settings, { bookId, jobId: opts.jobId });
-  const args = { def, title: book.title, ageRange: book.ageRange, count, c, brief: book.brief };
-  const purpose = def.format === "treasure_hunt" ? "kit_hunt" : "kit_pranks";
-  const prompt = (def.format === "treasure_hunt" ? treasureHuntPrompt(args) : pranksPrompt(args)) + "\n\n" + contextBlock(purpose, { title: book.title, count, heroName: c.heroName, companion: c.companion, universe: c.universe, place: c.place });
-  const res = await generateStructured({ provider, model: effectiveTextModel(settings), schema: KIT_CONTENT_SCHEMAS[def.format] as never, system: SYSTEM_KIT_EDITOR, prompt, purpose, bookId, jobId: opts.jobId, maxTokens: 32000 });
+  const p = await presetForBook(book);
+  const args = { def, title: book.title, ageRange: book.ageRange, count, c, brief: book.brief, tone: c.tone || p.tone };
+  const purpose = CONTENT_PURPOSE[def.format];
+  const prompt = contentPromptFor(def.format, args) + "\n\n" + contextBlock(purpose, { title: book.title, count, heroName: c.heroName, companion: c.companion, universe: c.universe, place: c.place });
+  const res = await generateStructured({ provider, model: effectiveTextModel(settings), schema: KIT_CONTENT_SCHEMAS[def.format] as never, system: systemPromptFor(p), prompt, purpose, bookId, jobId: opts.jobId, maxTokens: 32000 });
   await applyKitContent(bookId, res.data as KitContent, { keepTitle: true });
   return { content: res.data as KitContent, usage: res.usage };
 }
@@ -49,8 +69,8 @@ export async function applyKitContent(bookId: string, content: KitContent, opts:
   const book = await prisma.book.findUniqueOrThrow({ where: { id: bookId } });
   const def = kitType(book.kitType);
   const c = customizationOf(book.customization);
-  const isHunt = "enigmes" in content;
-  const hero = isHunt ? (content as TreasureHunt).personnage?.nom : (content as PranksKit).personnages?.[0]?.nom;
+  const hero = heroOf(content) ?? undefined;
+  const count = mainCount(content);
   const coverPrompt = content.illustrations.find((i) => i.page === "couverture")?.prompt;
   const boutique = (content.boutique ?? {}) as ShopListingImport;
   const title = opts.keepTitle && book.title && book.title !== "Nouveau livre" ? book.title : content.titre;
@@ -59,16 +79,16 @@ export async function applyKitContent(bookId: string, content: KitContent, opts:
     title,
     subtitle: content.sous_titre || book.subtitle || "",
     collection: book.collection ?? "La Malle à Jeux",
-    ageLabel: ageRangeLabel(book.ageRange),
+    ageLabel: isAdultAge(book.ageRange) ? "Guide pratique" : ageRangeLabel(book.ageRange),
     tagline: boutique.tagline ?? content.sous_titre ?? "",
     backText: boutique.shortDescription ?? "",
     illustrationBrief: coverPrompt ?? `${title}${hero ? ` — ${hero}` : ""}`,
   });
-  const listing = mergeListing(book.shopListing, boutique, def, c, isHunt ? (content as TreasureHunt).enigmes.length : (content as PranksKit).idees.length);
+  const listing = mergeListing(book.shopListing, boutique, def, c, count);
   const customization: KitCustomization = {
     ...c,
     heroName: c.heroName || hero || "",
-    companion: c.companion || (isHunt ? (content as TreasureHunt).personnage?.compagnon ?? "" : (content as PranksKit).personnages?.[1]?.nom ?? ""),
+    companion: c.companion || companionOf(content) || "",
   };
   await prisma.book.update({
     where: { id: bookId },
@@ -77,10 +97,10 @@ export async function applyKitContent(bookId: string, content: KitContent, opts:
       title,
       subtitle: content.sous_titre || book.subtitle,
       status: "PLANNED",
-      cover: { ...cover, introduction: isHunt ? (content as TreasureHunt).lettre : (content as PranksKit).lettre_arrivee },
+      cover: { ...cover, introduction: introOf(content) },
       shopListing: listing as Prisma.InputJsonValue,
       customization: customization as Prisma.InputJsonValue,
-      targetCount: isHunt ? (content as TreasureHunt).enigmes.length : (content as PranksKit).idees.length,
+      targetCount: count,
     },
   });
 }
@@ -130,7 +150,7 @@ export function kitIllustrationPlan(content: KitContent): Array<{ slot: string; 
     add("invitation", `${hero} invite les enfants à l'aventure, décor de l'univers.`, "Invitation");
     for (const e of content.enigmes) add(`enigme-image-${e.numero}`, e.image_description || `Cachette : ${e.cachette}, un petit parchemin roulé bien visible.`, `Énigme ${e.numero} (image)`);
     addMarketing(hero, content.personnage?.compagnon ?? "");
-  } else {
+  } else if ("idees" in content) {
     const hero = content.personnages?.[0]?.nom ?? "le lutin";
     add("planche-personnages", `Planche de personnages : ${content.personnages.map((p) => `${p.nom} (${p.description})`).join(", ")} ; vues de face, profil, trois expressions, fond crème.`, "Planche de personnages");
     add("lettre-arrivee", `${hero} arrive du pôle Nord avec sa petite valise, dans un salon décoré pour Noël.`, "Lettre d'arrivée");
@@ -138,6 +158,20 @@ export function kitIllustrationPlan(content: KitContent): Array<{ slot: string; 
     add("certificat", `${hero} et ses amis applaudissent, guirlandes et étoiles.`, "Certificat");
     for (const i of content.idees) add(`idee-${i.numero}`, i.illustration_description || `${hero} prépare la farce « ${i.titre} ».`, `Idée ${i.numero}`);
     addMarketing(hero, content.personnages?.[1]?.nom ?? "");
+  } else if ("chapitres" in content) {
+    // Guide expert : pas de personnage récurrent, une illustration pédagogique par chapitre
+    add("guide-probleme", content.probleme?.texte ? `Illustration pédagogique du problème : ${content.probleme.titre || content.titre}. ${content.probleme.texte.slice(0, 300)}` : `Illustration pédagogique du sujet du guide « ${content.titre} ».`, "Le problème");
+    for (const ch of content.chapitres) add(`chapitre-${ch.numero}`, ch.illustration_description || `Schéma pédagogique illustrant « ${ch.titre} » : ${ch.resume}`, `Chapitre ${ch.numero}`);
+    addMarketingGuide(content.titre);
+  } else if ("recettes" in content) {
+    for (const r of content.recettes) add(`recette-${r.numero}`, r.illustration_description || `Le plat « ${r.titre} » joliment présenté, vu de trois quarts.`, `Recette ${r.numero}`);
+    addMarketingGuide(content.titre);
+  } else {
+    const hero = content.personnage?.nom || "";
+    if (hero) add("planche-personnage", `Planche de personnage (model sheet) : ${hero}, ${content.personnage?.description ?? ""} ; vues de face, profil et dos, trois expressions, fond clair.`, "Planche de personnage");
+    for (const e of content.experiences) add(`experience-${e.numero}`, e.illustration_description || `Des enfants réalisent l'expérience « ${e.titre} » avec le matériel posé sur la table.`, `Expérience ${e.numero}`);
+    add("diplome", hero ? `${hero} félicite un petit scientifique, décor de laboratoire joyeux.` : "Décor de laboratoire joyeux pour un diplôme de petit scientifique.", "Diplôme");
+    addMarketing(hero || "des enfants curieux", "");
   }
   return plan;
 
@@ -146,6 +180,12 @@ export function kitIllustrationPlan(content: KitContent): Array<{ slot: string; 
     const duo = [hero, companion].filter(Boolean).join(" et ") || "les personnages du kit";
     add(MARKETING_SLOTS.hero, `Scène carrée pleine de joie pour la boutique et la publicité : des enfants de l'âge du kit vivent l'aventure avec ${duo}, au moment le plus magique (découverte, éclat de rire), décor de l'univers du kit. Aucun texte.`, "Visuel boutique (carré)");
     add(MARKETING_SLOTS.story, `Visuel publicitaire vertical : ${duo}, très expressifs, au cœur de l'univers du kit ; tiers supérieur et tiers inférieur en fond clair et uni (zones réservées au texte de la publicité). Aucun texte.`, "Visuel publicitaire (vertical)");
+  }
+
+  /** Visuels marketing des guides et livres de recettes (sans personnage). */
+  function addMarketingGuide(title: string) {
+    add(MARKETING_SLOTS.hero, `Visuel carré pour la boutique et la publicité illustrant le résultat obtenu grâce à « ${title} » (situation réussie, ambiance sereine et lumineuse). Aucun texte.`, "Visuel boutique (carré)");
+    add(MARKETING_SLOTS.story, `Visuel publicitaire vertical illustrant le sujet de « ${title} » ; tiers supérieur et tiers inférieur en fond clair et uni (zones réservées au texte de la publicité). Aucun texte.`, "Visuel publicitaire (vertical)");
   }
 }
 
@@ -176,27 +216,27 @@ export async function characterSheetReference(bookId: string): Promise<Buffer | 
 export function readKitContent(book: { kitType: string; kitContent: unknown }): KitContent | null {
   const def = kitType(book.kitType);
   if (!def.format || !book.kitContent) return null;
-  const parsed = (def.format === "treasure_hunt" ? TreasureHuntSchema : PranksKitSchema).safeParse(book.kitContent);
-  return parsed.success ? parsed.data : null;
+  const parsed = KIT_CONTENT_SCHEMAS[def.format].safeParse(book.kitContent);
+  return parsed.success ? (parsed.data as KitContent) : null;
 }
 
 /** Génère (ou régénère) une illustration de kit pour un emplacement. Lève ManualInputRequiredError en mode copier-coller. */
 export async function generateKitIllustration(opts: { bookId: string; slot: string; prompt: string; label: string; jobId?: string }) {
   const settings = await getAiSettings();
-  const studio = await getStudioSettings();
   const provider = getImageProvider(settings, { bookId: opts.bookId, jobId: opts.jobId });
   const model = effectiveImageModel(settings);
   const book = await prisma.book.findUniqueOrThrow({ where: { id: opts.bookId } });
   const c = customizationOf(book.customization);
+  const { charter, preset: p } = await charterForBook(book);
   const characterNote = [c.heroName, c.heroDescription, c.companion].filter(Boolean).join(", ");
-  const prompt = kitImagePrompt(studio.illustrationCharter, opts.prompt, characterNote || undefined);
-  const negative = "texte, lettres, logo, filigrane, photo-réalisme, 3D, éléments effrayants";
+  const prompt = kitImagePrompt(charter, opts.prompt, characterNote || undefined);
+  const negative = p.negative;
   const previous = await prisma.illustration.findFirst({ where: { bookId: opts.bookId, kind: "KIT", slot: opts.slot, isCurrent: true }, orderBy: { version: "desc" } });
   const record = await prisma.illustration.create({ data: { bookId: opts.bookId, kind: "KIT", slot: opts.slot, version: (previous?.version ?? 0) + 1, parentId: previous?.id, status: "GENERATING", prompt, negative, provider: provider.name, model, isCurrent: true } });
   if (previous) await prisma.illustration.update({ where: { id: previous.id }, data: { isCurrent: false } });
   const started = Date.now();
   try {
-    const size = opts.slot === MARKETING_SLOTS.story || opts.slot === "carte" ? "1024x1536" : /^enigme-image|^idee-|^planche/.test(opts.slot) || opts.slot === MARKETING_SLOTS.hero ? "1024x1024" : settings.imageSize;
+    const size = opts.slot === MARKETING_SLOTS.story || opts.slot === "carte" ? "1024x1536" : /^enigme-image|^idee-|^planche|^recette-|^experience-|^chapitre-/.test(opts.slot) || opts.slot === MARKETING_SLOTS.hero ? "1024x1024" : settings.imageSize;
     // Cohérence des personnages : la planche validée sert de référence à toutes les autres illustrations
     const sheet = isCharacterSheetSlot(opts.slot) ? null : await characterSheetReference(opts.bookId);
     const r = await provider.generate({ prompt, negativePrompt: negative, size, quality: settings.imageQuality, model, references: sheet ? [sheet] : undefined, label: `${opts.label} — ${book.title}` });

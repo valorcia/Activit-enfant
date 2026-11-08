@@ -18,6 +18,7 @@ import { isManualInputRequired } from "@/lib/ai/manual-core";
 import { markWaitingInput } from "@/lib/manual/requests";
 import { isStructuredKit } from "@/lib/kits/types";
 import { generateKitContent, generateKitIllustration, kitIllustrationPlan, readKitContent } from "@/lib/kits/generate";
+import { mainCount } from "@/lib/kits/content";
 import { runClipStep, runRenderStep } from "@/lib/video/worker";
 import { processAutopilotRun } from "@/lib/autopilot/runner";
 
@@ -61,7 +62,7 @@ export const handlers: Record<string, Handler> = {
       await setJob(jobId, { status: "RUNNING", step: "Rédaction du contenu du kit", progress: 10 });
       try {
         const r = await generateKitContent(bookId!, { jobId });
-        const n = "enigmes" in r.content ? r.content.enigmes.length : r.content.idees.length;
+        const n = mainCount(r.content);
         await setJob(jobId, { status: "COMPLETED", progress: 100, step: `Contenu du kit rédigé (${n} éléments)`, costUsd: r.usage.costUsd, result: { count: n } });
       } catch (err) {
         if (isManualInputRequired(err)) {

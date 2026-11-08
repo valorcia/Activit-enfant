@@ -29,12 +29,16 @@ const TOKENS = {
   plan: [2500, 1200],
   treasure_hunt: [6000, 14000],
   pranks: [8000, 24000],
+  guide: [7000, 22000],
+  recipes: [6000, 20000],
+  science: [6000, 16000],
   ads: [3000, 3500],
 } as const;
 
 /** Nombre d'illustrations d'un kit hors planche : emplacements fixes + éléments + 2 visuels marketing + couverture. */
 export function illustrationCount(format: KitContentFormat, count: number): number {
-  const fixed = format === "treasure_hunt" ? 4 : 3; // lettre, carte, diplôme, invitation | arrivée, départ, certificat
+  // Emplacements fixes : lettre, carte, diplôme, invitation | arrivée, départ, certificat | problème (guide) | aucun (recettes) | diplôme (sciences)
+  const fixed = { treasure_hunt: 4, pranks: 3, guide: 1, recipes: 0, science: 1 }[format];
   return fixed + count + 2 + 1;
 }
 

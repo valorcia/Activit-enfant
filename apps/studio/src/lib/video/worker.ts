@@ -15,6 +15,8 @@ import { enqueue, setJob, jobLog } from "../queue/jobs";
 import { getBoss, QUEUES } from "../queue/boss";
 import { getShopSettings, getStudioSettings, getVideoSettings } from "../settings";
 import { buildListingFromBook, loadBookForListing } from "../shop/publish";
+import { activeSites } from "../universes";
+import { DEFAULT_SITE_SLUG, siteBySlug } from "../universes/sites";
 import { markWaitingInput } from "../manual/requests";
 import { buildAdProps, clipRatioFor, type ListingLike } from "./props";
 import { afterClipAvailable, afterManualRequest, afterProviderState, afterRenderDone, afterRenderFailed, afterRenderStart, CLIP_POLL_SECONDS } from "./state";
@@ -234,16 +236,18 @@ export async function runRenderStep(adVideoId: string, jobId: string) {
     for (const [i, id] of images.others.filter((x) => x !== heroId).slice(0, 4).entries()) kitImages.push(await stageAsset(id, `${prefix}kit${i}`));
     const clip = ad.clipAssetId ? await stageAsset(ad.clipAssetId, `${prefix}clip`) : undefined;
     const music = options.musicAssetId ? await stageAsset(options.musicAssetId, `${prefix}music`).catch(() => undefined) : undefined;
-    const logo = shop.shopApiUrl.startsWith("https://") ? await stageUrl(`${shop.shopApiUrl}/images/brand/logo-la-malle-a-jeux.webp`, `${prefix}logo`) : undefined;
-    let host = "";
+    // Univers du livre : nom de marque et domaine affichés dans la vidéo
+    const site = siteBySlug(await activeSites(), bookForListing.siteSlug);
+    const logo = (!site || site.slug === DEFAULT_SITE_SLUG) && shop.shopApiUrl.startsWith("https://") ? await stageUrl(`${shop.shopApiUrl}/images/brand/logo-la-malle-a-jeux.webp`, `${prefix}logo`) : undefined;
+    let host = site?.primaryDomain ?? "";
     try {
-      host = shop.shopApiUrl ? new URL(shop.shopApiUrl).host : "";
+      host = host || (site?.url ? new URL(site.url).host : shop.shopApiUrl ? new URL(shop.shopApiUrl).host : "");
     } catch {
       host = "";
     }
 
     const format = ad.format as AdFormat;
-    const props = buildAdProps(listing, options, { hero, cover, kitImages, clip, logo, music, musicVolume: video.musicVolume }, { format, brandName: studio.defaultAuthor || "La Malle à Jeux", url: host });
+    const props = buildAdProps(listing, options, { hero, cover, kitImages, clip, logo, music, musicVolume: video.musicVolume }, { format, brandName: site?.name || studio.defaultAuthor || "La Malle à Jeux", url: host });
     await setJob(jobId, { step: "Montage Remotion en cours", progress: 15 });
     const outMp4 = path.join(tmpDir, `${ad.id}.mp4`);
     let lastPct = 0;

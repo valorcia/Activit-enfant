@@ -17,8 +17,9 @@ export const ShopListingImportSchema = z
     shortDescription: z.string().max(400).optional(),
     longDescription: z.string().max(20000).optional(),
     story: z.string().max(20000).optional(),
-    template: z.enum(["ADVENTURE", "ACTIVITY", "STORY", "EVENT", "CLASSIC"]).optional(),
+    template: z.enum(["ADVENTURE", "ACTIVITY", "STORY", "EVENT", "CLASSIC", "GUIDE", "RECIPES"]).optional(),
     categorySlug: z.string().optional(),
+    siteSlug: z.string().optional(),
     universe: z.string().max(80).optional(),
     tags: z.array(z.string()).optional(),
     heroBadges: z.array(z.string()).optional(),
@@ -122,11 +123,123 @@ export const PranksKitSchema = z.object({
 });
 export type PranksKit = z.infer<typeof PranksKitSchema>;
 
-export type KitContentFormat = "treasure_hunt" | "pranks";
+// ---------------------------------------------------------------------------
+// Guide pratique expert (adultes) : problème, causes, diagnostic, méthode, checklists
+// ---------------------------------------------------------------------------
+
+const strList = (max = 600) => z.array(z.string().max(max)).default([]);
+
+export const GuideSchema = z.object({
+  titre: z.string().min(2).max(160),
+  sous_titre: str(240),
+  auteur: z.object({ nom: str(120), expertise: str(300) }).partial().default({}),
+  introduction: z.string().min(20).max(4000),
+  probleme: z.object({ titre: str(160), texte: str(3000) }).partial().default({}),
+  causes: z.array(z.object({ titre: z.string().min(1).max(160), explication: str(1200) })).max(20).default([]),
+  diagnostic: z.array(z.object({ question: z.string().min(1).max(300), si_oui: str(600), si_non: str(600) })).max(20).default([]),
+  chapitres: z
+    .array(
+      z.object({
+        numero: z.number().int().min(1),
+        titre: z.string().min(2).max(160),
+        resume: str(500),
+        contenu: z.string().max(6000).default(""),
+        etapes: strList(500),
+        conseil: str(600),
+        attention: str(600),
+        tableau: z.object({ titre: str(160), colonnes: z.array(z.string().max(80)).max(6).default([]), lignes: z.array(z.array(z.string().max(160)).max(6)).max(14).default([]) }).nullable().optional(),
+        illustration_description: str(800),
+      }),
+    )
+    .min(1)
+    .max(24),
+  erreurs: z.array(z.object({ erreur: z.string().min(1).max(300), solution: str(600) })).max(20).default([]),
+  checklist: z.object({ titre: str(160), items: strList(300) }).partial().default({}),
+  calendrier: z.array(z.object({ periode: z.string().min(1).max(80), actions: strList(300) })).max(16).default([]),
+  faq: z.array(z.object({ question: z.string().min(1).max(300), reponse: z.string().min(1).max(1500) })).max(20).default([]),
+  glossaire: z.array(z.object({ terme: z.string().min(1).max(80), definition: z.string().min(1).max(500) })).max(40).default([]),
+  securite: strList(500),
+  illustrations: illus,
+  boutique: ShopListingImportSchema.optional(),
+});
+export type Guide = z.infer<typeof GuideSchema>;
+
+// ---------------------------------------------------------------------------
+// Livre de recettes
+// ---------------------------------------------------------------------------
+
+export const RecipesSchema = z.object({
+  titre: z.string().min(2).max(160),
+  sous_titre: str(240),
+  introduction: z.string().min(20).max(4000),
+  recettes: z
+    .array(
+      z.object({
+        numero: z.number().int().min(1),
+        titre: z.string().min(2).max(140),
+        resume: str(400),
+        portions: z.number().int().min(1).max(40).default(4),
+        temps_preparation_minutes: z.number().int().min(0).max(1440).default(15),
+        temps_cuisson_minutes: z.number().int().min(0).max(1440).default(0),
+        difficulte: z.number().int().min(1).max(3).default(1),
+        ingredients: z.array(z.string().max(160)).min(1).max(30),
+        etapes: z.array(z.string().max(600)).min(1).max(20),
+        astuce: str(500),
+        allergenes: strList(60),
+        illustration_description: str(800),
+      }),
+    )
+    .min(1)
+    .max(60),
+  conseils: strList(500),
+  illustrations: illus,
+  boutique: ShopListingImportSchema.optional(),
+});
+export type Recipes = z.infer<typeof RecipesSchema>;
+
+// ---------------------------------------------------------------------------
+// Fiches d'expériences scientifiques (enfants)
+// ---------------------------------------------------------------------------
+
+export const ScienceSchema = z.object({
+  titre: z.string().min(2).max(160),
+  sous_titre: str(240),
+  personnage: z.object({ nom: str(80), description: str(600) }).partial().default({}),
+  introduction: z.string().min(20).max(3000),
+  experiences: z
+    .array(
+      z.object({
+        numero: z.number().int().min(1),
+        titre: z.string().min(2).max(140),
+        question: str(300),
+        materiel: z.array(z.string().max(160)).max(20).default([]),
+        etapes: z.array(z.string().max(500)).min(1).max(15),
+        explication: z.string().min(5).max(1500),
+        pour_aller_plus_loin: str(600),
+        securite: strList(300),
+        duree_minutes: z.number().int().min(1).max(240).default(20),
+        difficulte: z.number().int().min(1).max(3).default(1),
+        age_conseille: str(20),
+        illustration_description: str(800),
+      }),
+    )
+    .min(1)
+    .max(40),
+  diplome: z.object({ titre: str(120), texte: str(600) }).partial().default({}),
+  securite_generale: strList(400),
+  illustrations: illus,
+  boutique: ShopListingImportSchema.optional(),
+});
+export type Science = z.infer<typeof ScienceSchema>;
+
+export type KitContentFormat = "treasure_hunt" | "pranks" | "guide" | "recipes" | "science";
 
 export const KIT_CONTENT_SCHEMAS = {
   treasure_hunt: TreasureHuntSchema,
   pranks: PranksKitSchema,
+  guide: GuideSchema,
+  recipes: RecipesSchema,
+  science: ScienceSchema,
 } as const;
 
 /** Reconnaît un JSON de kit complet (sortie des prompts docs/prompts) et indique son format. */
@@ -135,6 +248,9 @@ export function detectKitContentFormat(data: unknown): KitContentFormat | null {
   const o = data as Record<string, unknown>;
   if (Array.isArray(o.enigmes)) return "treasure_hunt";
   if (Array.isArray(o.idees)) return "pranks";
+  if (Array.isArray(o.chapitres)) return "guide";
+  if (Array.isArray(o.recettes)) return "recipes";
+  if (Array.isArray(o.experiences)) return "science";
   return null;
 }
 
@@ -152,7 +268,7 @@ export const KitCustomizationSchema = z.object({
   count: z.number().int().min(1).max(60).optional(),
   priceCents: z.number().int().min(0).optional(),
   shopCategorySlug: z.string().max(80).optional(),
-  shopTemplate: z.enum(["ADVENTURE", "ACTIVITY", "STORY", "EVENT", "CLASSIC"]).optional(),
+  shopTemplate: z.enum(["ADVENTURE", "ACTIVITY", "STORY", "EVENT", "CLASSIC", "GUIDE", "RECIPES"]).optional(),
   extraInstructions: z.string().max(4000).default(""),
 });
 export type KitCustomization = z.infer<typeof KitCustomizationSchema>;
@@ -172,6 +288,8 @@ export const KitPlanSchema = z.object({
   count: z.number().int().min(1).max(60).default(10),
   priceCents: z.number().int().min(0).max(100000).optional(),
   shopCategorySlug: z.string().max(80).optional(),
+  /** Univers de la boutique ciblé (slug) */
+  siteSlug: z.string().max(120).optional(),
   notes: z.string().max(4000).default(""),
 });
 export type KitPlan = z.infer<typeof KitPlanSchema>;

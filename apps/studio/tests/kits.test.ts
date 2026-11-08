@@ -11,7 +11,7 @@ import { PageLayoutSchema } from "@/lib/schemas/layout";
 import { BUILTIN_TEMPLATES } from "@/lib/layout/themes";
 import type { ShopProduct } from "@/lib/shop/client";
 
-const CATEGORIES = ["chasses-au-tresor", "activites-educatives", "evenements", "histoires-et-aventures"];
+const CATEGORIES = ["chasses-au-tresor", "activites-educatives", "evenements", "histoires-et-aventures", "guides-pratiques", "recettes"];
 const ctx = { widthMm: 210, heightMm: 297, theme: BUILTIN_TEMPLATES[0].theme };
 
 describe("référentiel des types de kits", () => {
@@ -20,7 +20,8 @@ describe("référentiel des types de kits", () => {
     expect(new Set(keys).size).toBe(keys.length);
     for (const k of KIT_TYPES) {
       expect(CATEGORIES).toContain(k.shopCategory);
-      expect(["ADVENTURE", "ACTIVITY", "STORY", "EVENT", "CLASSIC"]).toContain(k.template);
+      expect(["ADVENTURE", "ACTIVITY", "STORY", "EVENT", "CLASSIC", "GUIDE", "RECIPES"]).toContain(k.template);
+      expect(k.presets.length).toBeGreaterThan(0);
       expect(k.defaultAge).toMatch(/^\d+-\d+$/);
       if (k.family === "kit") expect(k.format).toBeDefined();
       if (k.shopCategory === "chasses-au-tresor") expect(k.template).toBe("ADVENTURE");

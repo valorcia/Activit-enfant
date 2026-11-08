@@ -15,6 +15,10 @@ export interface ShopSyncView {
   shopUrl: string | null;
   productId: string | null;
   productSlug: string | null;
+  /** URL publique renvoyée par la boutique (domaine de l'univers) */
+  publicUrl?: string | null;
+  /** Univers ciblé (nom affiché) */
+  siteName?: string | null;
   publishedAt: string | null;
   lastSyncAt: string | null;
   syncError: string | null;
@@ -23,7 +27,7 @@ export interface ShopSyncView {
   hasExport: boolean;
 }
 
-const TEMPLATE_LABELS: Record<string, string> = { ADVENTURE: "Aventure / chasse au trésor", ACTIVITY: "Cahier d'activités", STORY: "Histoire / e-book", EVENT: "Kit événement", CLASSIC: "Fiche classique" };
+const TEMPLATE_LABELS: Record<string, string> = { ADVENTURE: "Aventure / chasse au trésor", ACTIVITY: "Cahier d'activités", STORY: "Histoire / e-book", EVENT: "Kit événement", CLASSIC: "Fiche classique", GUIDE: "Guide pratique", RECIPES: "Livre de recettes" };
 
 export function ShopTab({ bookId, sync }: { bookId: string; sync: ShopSyncView }) {
   const router = useRouter();
@@ -39,7 +43,7 @@ export function ShopTab({ bookId, sync }: { bookId: string; sync: ShopSyncView }
   }, [sync.configured]);
 
   const set = <K extends keyof ShopListing>(k: K, v: ShopListing[K]) => setListing((l) => ({ ...l, [k]: v }));
-  const publicUrl = sync.productSlug && sync.publishedAt && sync.shopUrl ? `${sync.shopUrl}/aventures/${sync.productSlug}` : null;
+  const publicUrl = sync.publishedAt ? (sync.publicUrl ?? (sync.productSlug && sync.shopUrl ? `${sync.shopUrl}/aventures/${sync.productSlug}` : null)) : null;
   const adminUrl = sync.productId && sync.shopUrl ? `${sync.shopUrl}/admin/produits/${sync.productId}` : null;
   const state = !sync.productId ? "never" : sync.publishedAt ? "published" : "draft";
 
@@ -73,6 +77,7 @@ export function ShopTab({ bookId, sync }: { bookId: string; sync: ShopSyncView }
               {state === "never" && <Badge variant="secondary">Jamais publié</Badge>}
               {state === "draft" && <Badge variant="warning">Brouillon — validation dans la boutique</Badge>}
               {state === "published" && <Badge variant="success">Publié</Badge>}
+              {sync.siteName && <Badge variant="secondary">Univers : {sync.siteName}</Badge>}
               {sync.lastSyncAt && <span className="text-slate-500">Dernière synchronisation : {formatDate(sync.lastSyncAt)}</span>}
             </div>
             {sync.syncError && <p className="mt-2 text-xs text-amber-800 bg-amber-50 rounded-md px-2 py-1">{sync.syncError}</p>}

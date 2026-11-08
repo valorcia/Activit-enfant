@@ -9,7 +9,9 @@ import { AUTOPILOT_STAGE_KEYS, type AutopilotStageKey } from "@/lib/schemas/sett
 import { extractJson } from "@/lib/ai/structured";
 import { cleanPastedJson } from "@/lib/ai/manual-core";
 import { detectKitContentFormat } from "@/lib/kits/schemas";
-import { kitType } from "@/lib/kits/types";
+import { defaultTypeForPreset, kitType, typeAllowedForPreset } from "@/lib/kits/types";
+import { activeSites } from "@/lib/universes";
+import { SITE_STATUS_LABELS, siteBySlug } from "@/lib/universes/sites";
 import { estimateRun, type CostEstimate } from "@/lib/autopilot/estimate";
 import { approveCurrent, initStages, parseStages, resetStage, resumeStages } from "@/lib/autopilot/stages";
 import { scheduleRun, startRun, type RunState } from "@/lib/autopilot/runner";
@@ -19,6 +21,8 @@ const fail = (e: unknown): { ok: false; error: string } => ({ ok: false, error: 
 
 export interface AutopilotPreview {
   kitLabel: string;
+  /** Univers ciblé (choisi ou proposé), si connu avant l'analyse */
+  siteName: string | null;
   count: number;
   countLabel: string;
   contentProvided: boolean;
@@ -29,7 +33,7 @@ export interface AutopilotPreview {
 }
 
 /** Ce que le pilote automatique va faire, avec l'estimation de coût, avant de lancer. */
-export async function previewAutopilotAction(text: string): Promise<Result<AutopilotPreview>> {
+export async function previewAutopilotAction(text: string, siteSlug?: string | null): Promise<Result<AutopilotPreview>> {
   try {
     const t = text.trim();
     if (t.length < 10) return { ok: false, error: "Collez un brief ou un JSON de kit (au moins quelques mots)." };
@@ -37,8 +41,12 @@ export async function previewAutopilotAction(text: string): Promise<Result<Autop
     const json = t.includes("{") ? extractJson(cleanPastedJson(t)) : null;
     const format = json ? detectKitContentFormat(json) : null;
     const content = format ? (json as Record<string, unknown>) : null;
-    const items = content ? ((content.enigmes ?? content.idees) as unknown[]) : null;
-    const guessKey = format === "pranks" ? "lutins-farceurs" : /lutin|farce|noël|noel/i.test(t) ? "lutins-farceurs" : "chasse-au-tresor";
+    const items = content ? ((content.enigmes ?? content.idees ?? content.chapitres ?? content.recettes ?? content.experiences) as unknown[]) : null;
+    const sites = await activeSites();
+    const site = siteBySlug(sites, siteSlug);
+    const byFormat: Record<string, string> = { pranks: "lutins-farceurs", guide: "guide-pratique", recipes: "livre-recettes", science: "fiches-sciences", treasure_hunt: "chasse-au-tresor" };
+    let guessKey = format ? byFormat[format] : /piscine|guide pratique|eau verte/i.test(t) ? "guide-pratique" : /recette|cuisine/i.test(t) ? "livre-recettes" : /expérience|science/i.test(t) ? "fiches-sciences" : /lutin|farce|noël|noel/i.test(t) ? "lutins-farceurs" : "chasse-au-tresor";
+    if (site && !typeAllowedForPreset(guessKey, site.preset)) guessKey = defaultTypeForPreset(site.preset);
     const def = kitType(guessKey);
     const count = items?.length ?? def.defaultCount;
     const estimate = estimateRun({ format: def.format ?? "treasure_hunt", count, contentProvided: Boolean(content), ai, autopilot: cfg, runwayUsdPerSecond: video.usdPerSecond });
@@ -52,23 +60,25 @@ export async function previewAutopilotAction(text: string): Promise<Result<Autop
       on("ads") && on("publish") ? `Publicités : ${cfg.channels.join(", ")} · ${cfg.variantsPerChannel} variante(s) par canal · ${cfg.postsMode === "auto" ? "programmation automatique" : "brouillons"}.` : "Publicités : désactivées.",
     ];
     const gates = [cfg.approvals.afterContent && "après la rédaction", cfg.approvals.afterIllustrations && "après les illustrations", cfg.approvals.beforePublish && "avant la boutique", (cfg.approvals.beforeAds ?? cfg.postsMode === "auto") && "avant les publicités"].filter(Boolean);
+    summary.unshift(site ? `Univers : ${site.name} (${site.audience.name}${site.status !== "ACTIVE" ? `, ${SITE_STATUS_LABELS[site.status]}` : ""}).` : "Univers : proposé par l'analyse du brief.");
     summary.push(gates.length ? `Points de validation : ${gates.join(", ")}.` : "Aucun point de validation : tout s'enchaîne automatiquement.");
     const title = content && typeof content.titre === "string" ? content.titre : null;
-    return { ok: true, data: { kitLabel: content ? def.label : `${def.label} (type confirmé à l'analyse)`, count, countLabel: def.countLabel, contentProvided: Boolean(content), title, estimate, summary, maxCostUsd: cfg.maxCostUsd } };
+    return { ok: true, data: { siteName: site?.name ?? null, kitLabel: content ? def.label : `${def.label} (type confirmé à l'analyse)`, count, countLabel: def.countLabel, contentProvided: Boolean(content), title, estimate, summary, maxCostUsd: cfg.maxCostUsd } };
   } catch (e) {
     return fail(e);
   }
 }
 
 /** Lance le pilote automatique sur un brief (ou un JSON complet). */
-export async function startAutopilotAction(text: string): Promise<Result<{ runId: string }>> {
+export async function startAutopilotAction(text: string, siteSlug?: string | null): Promise<Result<{ runId: string }>> {
   try {
     const t = text.trim();
     if (t.length < 10) return { ok: false, error: "Collez un brief ou un JSON de kit." };
     const cfg = await getAutopilotSettings();
     const json = t.includes("{") ? extractJson(cleanPastedJson(t)) : null;
     const title = json && typeof (json as Record<string, unknown>).titre === "string" ? String((json as Record<string, unknown>).titre) : t.split("\n")[0].slice(0, 80);
-    const runId = await startRun({ brief: t, config: cfg, title, stages: initStages(cfg) });
+    const site = siteBySlug(await activeSites(), siteSlug);
+    const runId = await startRun({ brief: t, config: cfg, title, stages: initStages(cfg), siteSlug: site?.slug ?? null });
     revalidatePath("/autopilot");
     return { ok: true, data: { runId } };
   } catch (e) {

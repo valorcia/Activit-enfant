@@ -18,12 +18,15 @@ import { getCover } from "@/lib/generation/cover";
 import { assetUrl } from "@/lib/storage";
 import { PageLayoutSchema } from "@/lib/schemas/layout";
 import { formatUsd } from "@/lib/utils";
-import { isStructuredKit, kitLabel, kitType } from "@/lib/kits/types";
+import { isStructuredKit, kitLabel, kitType, MAIN_SECTION_KEYS } from "@/lib/kits/types";
 import { kitIllustrationPlan, readKitContent } from "@/lib/kits/generate";
+import { heroOf, mainItems } from "@/lib/kits/content";
 import { KitCustomizationSchema } from "@/lib/kits/schemas";
 import { shopClient } from "@/lib/shop/catalog";
 import type { KitTabView } from "@/components/kits/kit-tab";
 import { adFormDefaults, listAdVideos } from "@/lib/video/service";
+import { loadSites } from "@/lib/universes";
+import { siteBySlug } from "@/lib/universes/sites";
 
 export const dynamic = "force-dynamic";
 
@@ -64,11 +67,11 @@ export default async function BookPage({ params, searchParams }: { params: Promi
     kit = {
       typeLabel: def.label,
       countLabel: def.countLabel,
-      sections: def.sections.map((s) => ({ label: s.label, count: ["enigmes-texte", "enigmes-images", "idees"].includes(s.key) ? book.targetCount : s.count })),
+      sections: def.sections.map((s) => ({ label: s.label, count: MAIN_SECTION_KEYS.includes(s.key) ? book.targetCount : s.count })),
       customization: custom.success ? custom.data : {},
       hasContent: Boolean(content),
-      heroName: content ? ("enigmes" in content ? content.personnage?.nom ?? null : content.personnages?.[0]?.nom ?? null) : null,
-      elements: content ? ("enigmes" in content ? content.enigmes.map((e) => ({ title: `Cachette : ${e.cachette}`, detail: e.texte })) : content.idees.map((i) => ({ title: i.titre, detail: i.resume }))) : [],
+      heroName: content ? heroOf(content) : null,
+      elements: content ? mainItems(content).map((e) => ({ title: e.title, detail: e.detail })) : [],
       slots: content ? kitIllustrationPlan(content).map((p) => { const i = bySlot.get(p.slot); return { slot: p.slot, label: p.label, status: i?.status ?? null, src: i ? assetUrl(i.assetId) ?? null : null, isDemo: i?.isDemo ?? false, provider: i?.provider ?? null }; }) : [],
     };
   }
@@ -81,13 +84,15 @@ export default async function BookPage({ params, searchParams }: { params: Promi
   }
   const lastRun = await prisma.autopilotRun.findFirst({ where: { bookId: id }, orderBy: { createdAt: "desc" } });
   const lastRunStage = lastRun ? currentStage(parseStages(lastRun.stages)) : null;
+  const { sites } = await loadSites();
+  const site = siteBySlug(sites, book.siteSlug);
   const eur = (c: number, cur = "EUR") => new Intl.NumberFormat("fr-FR", { style: "currency", currency: cur }).format(c / 100);
 
   return (
     <div className="p-8 max-w-7xl">
       <PageHeader
         title={<span className="flex items-center gap-3">{book.title} <StatusBadge kind="book" status={book.status} /></span>}
-        description={`${BOOK_TYPES.find((t) => t.key === book.bookType)?.label ?? kitLabel(book.kitType)} · ${ageRangeLabel(book.ageRange)} · ${ART_STYLES.find((s) => s.key === book.artStyle)?.label} · ${PAGE_FORMATS[book.pageFormat as keyof typeof PAGE_FORMATS]?.label ?? book.pageFormat} · ${kit ? `${book.targetCount} ${kitType(book.kitType).countLabel}` : `${book.activities.length} activités`} · ${book.pages.length} pages · dépensé ${formatUsd(Number(spent._sum.costUsd ?? 0))}`}
+        description={`${site ? `${site.name} · ` : book.siteSlug ? `${book.siteSlug} · ` : ""}${BOOK_TYPES.find((t) => t.key === book.bookType)?.label ?? kitLabel(book.kitType)} · ${ageRangeLabel(book.ageRange)} · ${ART_STYLES.find((s) => s.key === book.artStyle)?.label} · ${PAGE_FORMATS[book.pageFormat as keyof typeof PAGE_FORMATS]?.label ?? book.pageFormat} · ${kit ? `${book.targetCount} ${kitType(book.kitType).countLabel}` : `${book.activities.length} activités`} · ${book.pages.length} pages · dépensé ${formatUsd(Number(spent._sum.costUsd ?? 0))}`}
         actions={
           <>
             <Button asChild variant="secondary"><Link href={`/print/books/${id}`} target="_blank">Aperçu impression</Link></Button>
@@ -144,6 +149,8 @@ export default async function BookPage({ params, searchParams }: { params: Promi
           shopUrl: shopSettings.shopApiUrl || null,
           productId: book.shopProductId,
           productSlug: book.shopProductSlug,
+          publicUrl: book.shopPublicUrl,
+          siteName: site?.name ?? null,
           publishedAt: book.shopPublishedAt?.toISOString() ?? null,
           lastSyncAt: book.shopLastSyncAt?.toISOString() ?? null,
           syncError: book.shopSyncError,

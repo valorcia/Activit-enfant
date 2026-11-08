@@ -24,7 +24,7 @@ export const DEFAULT_AI_SETTINGS: AiSettings = AiSettingsSchema.parse({});
 // Boutique (apps/shop) — publication automatique des e-books
 // ---------------------------------------------------------------------------
 
-export const SHOP_TEMPLATES = ["ADVENTURE", "ACTIVITY", "STORY", "EVENT", "CLASSIC"] as const;
+export const SHOP_TEMPLATES = ["ADVENTURE", "ACTIVITY", "STORY", "EVENT", "CLASSIC", "GUIDE", "RECIPES"] as const;
 
 export const ShopSettingsSchema = z.object({
   shopApiUrl: z.string().default(""),           // ex. https://activite-enfant-shop.vercel.app
@@ -75,7 +75,12 @@ export const DEFAULT_ILLUSTRATION_CHARTER =
 export const StudioSettingsSchema = z.object({
   studioName: z.string().min(1).max(80).default("La Malle à Jeux · Studio"),
   defaultAuthor: z.string().max(80).default("La Malle à Jeux"),
+  /** Charte « kit enfants » historique (conservée pour compatibilité ; voir illustrationCharters) */
   illustrationCharter: z.string().max(4000).default(DEFAULT_ILLUSTRATION_CHARTER),
+  /** Chartes d'illustration par préréglage d'univers (vide = charte par défaut du préréglage) */
+  illustrationCharters: z.record(z.string(), z.string().max(4000)).default({}),
+  /** Univers ciblé par défaut pour les nouveaux e-books (slug de la boutique) */
+  defaultSiteSlug: z.string().max(120).nullable().default(null),
   /** Prix par défaut par type de kit (centimes), surcharge du référentiel */
   priceByKitType: z.record(z.string(), z.number().int().min(0)).default({}),
 });

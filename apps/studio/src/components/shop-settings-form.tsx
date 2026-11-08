@@ -7,7 +7,7 @@ import { saveShopSettingsAction, testShopConnectionAction } from "@/app/actions/
 import { SHOP_TEMPLATES } from "@/lib/schemas/settings";
 import type { ShopSettingsPublic } from "@/lib/settings";
 
-const TEMPLATE_LABELS: Record<(typeof SHOP_TEMPLATES)[number], string> = { ADVENTURE: "Aventure / chasse au trésor", ACTIVITY: "Cahier d'activités", STORY: "Histoire / e-book", EVENT: "Kit événement", CLASSIC: "Fiche classique" };
+const TEMPLATE_LABELS: Record<(typeof SHOP_TEMPLATES)[number], string> = { ADVENTURE: "Aventure / chasse au trésor", ACTIVITY: "Cahier d'activités", STORY: "Histoire / e-book", EVENT: "Kit événement", CLASSIC: "Fiche classique", GUIDE: "Guide pratique", RECIPES: "Livre de recettes" };
 
 export function ShopSettingsForm({ initial }: { initial: ShopSettingsPublic }) {
   const [s, setS] = useState(initial);

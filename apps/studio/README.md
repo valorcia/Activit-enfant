@@ -21,7 +21,7 @@ Le studio produit des **kits** alignés sur le catalogue de la boutique (référ
 
 Les kits structurés (chasse au trésor et dérivés, lutins farceurs, Noël) stockent leur contenu dans `Book.kitContent` (schémas `src/lib/kits/schemas.ts`, même format que les prompts de `docs/prompts`). Leurs pages sont produites par les gabarits de `src/lib/kits/pages.ts` : lettre pleine page, cartes énigmes 4 par page (texte et images), carte au trésor découpée en 10 morceaux, défis, diplômes et invitations 2 par page, idée de farce 1 par page, calendrier 24 cases, petits mots à découper, guide. Les illustrations sont rattachées par emplacement (`Illustration.kind = KIT`, `slot` : `lettre`, `carte`, `enigme-image-3`, `idee-12`…).
 
-**Assistant « Nouveau kit »** : type de kit, univers, personnage, compagnon, lieu ou véhicule, nombre d'éléments, âge (3–5, 5–8, 8–10, 3–10), ton, prix et catégorie boutique, style et format, puis production complète en un clic (contenu → illustrations → couverture → pages). La page du livre affiche un onglet **Kit** : contenu, illustrations par emplacement (refaire une image), réécriture du contenu, réassemblage, et import d'un JSON collé.
+**Assistant « Nouvel e-book »** : univers de la boutique, type d'e-book, univers du récit, personnage, compagnon, lieu ou véhicule, nombre d'éléments, âge (3–5, 5–8, 8–10, 3–10), ton, prix et catégorie boutique, style et format, puis production complète en un clic (contenu → illustrations → couverture → pages). La page du livre affiche un onglet **Kit** : contenu, illustrations par emplacement (refaire une image), réécriture du contenu, réassemblage, et import d'un JSON collé.
 
 ### Créer depuis un brief
 
@@ -38,7 +38,26 @@ Le plan est modifiable, puis « Créer le kit et lancer la production » démarr
 
 ### Paramètres du studio
 
-Paramètres → Studio : nom affiché (« La Malle à Jeux · Studio »), auteur / collection par défaut, **charte d'illustration** ajoutée à tous les prompts d'images des kits, prix par défaut par type de kit.
+Paramètres → Studio : nom affiché (« La Malle à Jeux · Studio »), auteur / collection par défaut, prix par défaut par type d'e-book. Les **chartes d'illustration** se règlent par préréglage d'univers (Paramètres → Univers).
+
+## Multi-univers (Plateforme → Audiences → Univers)
+
+La boutique héberge plusieurs **univers** (sites) regroupés par **audience** ; le studio les lit avec `GET {boutique}/api/v1/sites` (cache 60 s, bouton « Actualiser » dans Paramètres → Univers). Si la boutique n'est pas reliée ou répond 404 sur `/sites`, le studio se replie sur un seul univers « La Malle à Jeux » (`la-malle-a-jeux`, préréglage kit-enfants) avec les catégories actuelles : tout continue de fonctionner comme avant.
+
+Chaque univers porte un **préréglage** (`src/lib/universes/presets.ts`) qui fixe le prompt système et le ton, la charte d'illustration (surchargeable par préréglage), le style d'image, le thème PDF et les types d'e-books autorisés :
+
+| Préréglage | Types autorisés | Thème PDF | Contenu |
+|---|---|---|---|
+| `kit-enfants` | chasses au trésor, missions, lutins, Noël, cahiers… | La Malle à Jeux | kits actuels |
+| `guide-expert` | `guide-pratique` (fiche `GUIDE`) | Guide expert | introduction, sommaire, problème/causes, diagnostic, chapitres (étapes, encadrés Conseil/Attention, tableaux), erreurs, checklist ☐, calendrier, FAQ, glossaire, sécurité |
+| `recettes` | `livre-recettes` (fiche `RECIPES`) | Recettes | une page par recette (portions, temps, ingrédients, étapes, astuce, allergènes) |
+| `sciences-enfants` | `fiches-sciences` (fiche `ACTIVITY`) | Labo des curieux | une page par expérience + règles du labo + diplôme |
+
+- `Book.siteSlug` (migration `20261108220000_universes`, avec `Book.shopPublicUrl`) mémorise l'univers ciblé ; la fiche envoyée à la boutique contient `siteSlug`, et le lien « Voir la fiche » utilise le `publicUrl` renvoyé (domaine de l'univers).
+- **Choix de l'univers** : sélecteur groupé par audience (statut actif / en test affiché) dans `/brief`, l'assistant « Nouvel e-book » (étape 1, préréglage présélectionné, types filtrés), le formulaire de plan (catégories de l'univers) et le pilote automatique. En « automatique », le plan proposé à partir du brief choisit l'univers (`siteSlug`) parmi les univers actifs ; le studio vérifie la compatibilité type ↔ préréglage.
+- `/shop` filtre le catalogue par univers (`?site=`) et affiche l'univers de chaque produit ; l'import reprend l'univers du produit.
+- Contrôle qualité des guides : nombre de chapitres, chapitres vides, section Sécurité obligatoire dès qu'un produit chimique est évoqué, promesses irréalistes (« garanti », « miracle », « infaillible », « sans effort ») bloquantes.
+- Prompt modèle copier-coller : `docs/prompts/guide-pratique-modele.md` (exemple « Fini l'eau verte : retrouver une piscine claire en 72 h »). Le mode démo (`mock`) produit un guide piscine complet de bout en bout.
 
 `pnpm tsx scripts/dev-kit-smoke.ts [chasse-au-tresor|lutins-farceurs]` produit un kit complet en mode démonstration, sans worker, pour vérifier le pipeline.
 

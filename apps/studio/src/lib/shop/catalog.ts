@@ -33,6 +33,8 @@ export interface CatalogEntry {
   editUrl: string;
   linkedBook: { id: string; title: string } | null;
   suggestedKitType: string;
+  /** Univers de la boutique (null si la boutique n'est pas encore multi-univers) */
+  site: { slug: string; name: string; url: string | null } | null;
 }
 
 function absolute(base: string, url: string | null | undefined) {
@@ -51,6 +53,7 @@ export function toCatalogEntry(p: ShopProduct, base: string, linked: Map<string,
     publicUrl: p.publicUrl, editUrl: p.editUrl,
     linkedBook: linked.get(p.id) ?? linked.get(p.slug) ?? null,
     suggestedKitType: kitTypeFromShop({ categorySlug: r.category?.slug, template: r.template, name: p.name, universe: r.universe }),
+    site: p.site?.slug ? { slug: p.site.slug, name: p.site.name, url: p.site.url ?? null } : null,
   };
 }
 
@@ -122,17 +125,19 @@ export async function importShopProduct(idOrSlug: string): Promise<{ bookId: str
   const kt = kitTypeFromShop({ categorySlug: r.category?.slug, template: r.template, name: p.name, universe: r.universe });
   const def = kitType(kt);
   const listing = listingFromProduct(p);
-  const cover = CoverDataSchema.parse({ title: p.name, subtitle: r.tagline ?? "", collection: "La Malle à Jeux", tagline: r.tagline ?? "", backText: (r.shortDescription ?? "").slice(0, 1200) });
+  const collection = p.site?.name || "La Malle à Jeux";
+  const cover = CoverDataSchema.parse({ title: p.name, subtitle: r.tagline ?? "", collection, tagline: r.tagline ?? "", backText: (r.shortDescription ?? "").slice(0, 1200) });
   const book = await prisma.book.create({
     data: {
       title: p.name,
       subtitle: r.tagline ?? null,
-      collection: "La Malle à Jeux",
+      collection,
+      siteSlug: p.site?.slug ?? null,
       bookType: kt,
       kitType: kt,
       ageRange: ageRangeFromProduct(p, def.defaultAge),
       targetCount: def.defaultCount,
-      artStyle: "aquarelle",
+      artStyle: def.presets[0] === "guide-expert" ? "vectoriel" : "aquarelle",
       status: p.status === "PUBLISHED" ? "EXPORTED" : "REVIEW",
       brief: r.shortDescription ?? null,
       cover: { ...cover, introduction: r.story ?? "" } as Prisma.InputJsonValue,
@@ -140,6 +145,7 @@ export async function importShopProduct(idOrSlug: string): Promise<{ bookId: str
       shopListing: listing as Prisma.InputJsonValue,
       shopProductId: p.id,
       shopProductSlug: p.slug,
+      shopPublicUrl: p.publicUrl ?? null,
       shopPublishedAt: p.status === "PUBLISHED" ? new Date() : null,
       shopLastSyncAt: new Date(),
     },

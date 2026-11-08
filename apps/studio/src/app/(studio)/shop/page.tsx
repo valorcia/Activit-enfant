@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { ImportProductButton } from "@/components/shop/import-button";
 import { loadCatalog } from "@/lib/shop/catalog";
 import { kitLabel } from "@/lib/kits/types";
+import { loadSites } from "@/lib/universes";
+import { DEFAULT_SITE_SLUG, SITE_STATUS_LABELS } from "@/lib/universes/sites";
 
 export const dynamic = "force-dynamic";
 
@@ -18,8 +20,12 @@ const STATUS: Record<string, { label: string; variant: "success" | "warning" | "
 
 const euros = (cents: number, currency = "EUR") => new Intl.NumberFormat("fr-FR", { style: "currency", currency }).format(cents / 100);
 
-export default async function ShopCatalogPage() {
-  const { configured, entries, error, baseUrl } = await loadCatalog();
+export default async function ShopCatalogPage({ searchParams }: { searchParams: Promise<{ site?: string }> }) {
+  const [{ configured, entries: all, error, baseUrl }, { sites, source }, sp] = await Promise.all([loadCatalog(), loadSites(), searchParams]);
+  const siteOf = (e: (typeof all)[number]) => e.site?.slug ?? sites[0]?.slug ?? DEFAULT_SITE_SLUG;
+  const siteName = (slug: string) => sites.find((x) => x.slug === slug)?.name ?? all.find((e) => e.site?.slug === slug)?.site?.name ?? slug;
+  const current = sp.site && sites.some((x) => x.slug === sp.site) ? sp.site : null;
+  const entries = current ? all.filter((e) => siteOf(e) === current) : all;
   const published = entries.filter((e) => e.status === "PUBLISHED").length;
   return (
     <div className="p-8 max-w-7xl">
@@ -35,6 +41,18 @@ export default async function ShopCatalogPage() {
       )}
       {error && <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-800">Impossible de lire le catalogue : {error}</div>}
       {configured && !error && entries.length === 0 && <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-slate-500">Aucun produit dans la boutique pour l&apos;instant.</div>}
+      {configured && sites.length > 1 && (
+        <nav className="mb-4 flex flex-wrap items-center gap-2 text-sm" aria-label="Filtrer par univers">
+          <span className="text-slate-500">Univers :</span>
+          <Link href="/shop" className={`rounded-full border px-3 py-1 ${!current ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white hover:bg-slate-50"}`}>Tous ({all.length})</Link>
+          {sites.map((x) => (
+            <Link key={x.slug} href={`/shop?site=${encodeURIComponent(x.slug)}`} className={`rounded-full border px-3 py-1 ${current === x.slug ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white hover:bg-slate-50"}`}>
+              {x.name} ({all.filter((e) => siteOf(e) === x.slug).length}){x.status !== "ACTIVE" ? ` · ${SITE_STATUS_LABELS[x.status]}` : ""}
+            </Link>
+          ))}
+        </nav>
+      )}
+      {configured && source === "fallback" && <p className="mb-4 text-xs text-slate-500">Boutique mono-univers : tous les produits sont rattachés à « {sites[0]?.name} ».</p>}
       {entries.length > 0 && (
         <ul className="grid gap-3">
           {entries.map((e) => (
@@ -52,6 +70,7 @@ export default async function ShopCatalogPage() {
                   <span className="font-bold">{e.name}</span>
                   <Badge variant={STATUS[e.status]?.variant ?? "secondary"}>{STATUS[e.status]?.label ?? e.status}</Badge>
                   {e.needsReview && <Badge variant="warning">À valider</Badge>}
+                  <Badge variant="secondary">{siteName(siteOf(e))}</Badge>
                 </div>
                 <div className="text-xs text-slate-500 mt-0.5">
                   {e.category?.name ?? "Sans catégorie"} · {e.salePriceCents ? <><s>{euros(e.priceCents, e.currency)}</s> {euros(e.salePriceCents, e.currency)}</> : euros(e.priceCents, e.currency)} · {e.salesCount} vente(s)

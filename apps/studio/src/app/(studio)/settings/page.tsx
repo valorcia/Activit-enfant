@@ -2,6 +2,8 @@ import { getAiSettings, getAutopilotSettings, getShopSettings, getStudioSettings
 import { AutopilotSettingsForm } from "@/components/autopilot-settings-form";
 import { VideoSettingsForm } from "@/components/video-settings-form";
 import { StudioSettingsForm } from "@/components/studio-settings-form";
+import { UniverseSettingsForm } from "@/components/universe-settings-form";
+import { loadSites } from "@/lib/universes";
 import { ShopSettingsForm } from "@/components/shop-settings-form";
 import { PageHeader } from "@/components/page-header";
 import { SettingsForm } from "@/components/settings-form";
@@ -17,12 +19,14 @@ export default async function SettingsPage() {
   const studio = await getStudioSettings();
   const video = maskVideoSettings(await getVideoSettings());
   const autopilot = await getAutopilotSettings();
+  const sites = await loadSites();
   const spent = await prisma.generationLog.groupBy({ by: ["provider", "kind"], _sum: { costUsd: true }, _count: { _all: true } });
   return (
     <div className="p-8 max-w-4xl">
       <PageHeader title="Paramètres" description="Fournisseurs, modèles, qualité et budgets. Les clés API sont lues uniquement depuis les variables d'environnement du serveur et ne sont jamais envoyées au navigateur." />
       <div className="mb-8"><AutopilotSettingsForm initial={autopilot} allowMock={process.env.NODE_ENV !== "production"} /></div>
       <div className="mb-8"><StudioSettingsForm initial={studio} /></div>
+      <div className="mb-8"><UniverseSettingsForm initial={sites} defaultSiteSlug={studio.defaultSiteSlug} charters={studio.illustrationCharters} legacyCharter={studio.illustrationCharter} /></div>
       <SettingsForm initial={settings} availability={availability} />
       <div className="mt-8"><ShopSettingsForm initial={shop} /></div>
       <div className="mt-8"><VideoSettingsForm initial={video} /></div>

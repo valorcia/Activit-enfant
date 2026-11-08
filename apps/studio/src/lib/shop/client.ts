@@ -18,6 +18,8 @@ export interface ShopProduct {
   needsReview: boolean;
   publicUrl: string | null;
   editUrl: string;
+  /** Univers du produit (boutique multi-univers) */
+  site?: { slug: string; name: string; url?: string | null } | null;
   images: Array<{ id: string; url: string; role: string }>;
   files: Array<{ id: string; name: string; kind: string }>;
   [key: string]: unknown;
@@ -53,6 +55,10 @@ export class ShopClient {
     return this.request<ShopProduct>(path, { method, body: JSON.stringify(payload), headers: { "Content-Type": "application/json" } });
   }
 
+  /** Univers de la boutique (multi-univers). 404 si la boutique ne les gère pas encore. */
+  async sites(): Promise<unknown[]> {
+    return (await this.request<unknown[]>("/sites")).data ?? [];
+  }
   async categories(): Promise<ShopCategory[]> {
     return (await this.request<ShopCategory[]>("/categories")).data;
   }

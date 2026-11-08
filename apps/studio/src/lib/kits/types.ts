@@ -1,4 +1,5 @@
 import type { KitContentFormat } from "./schemas";
+import type { UniversePreset } from "../universes/presets";
 
 /**
  * Référentiel des types de kits, aligné sur le catalogue de la boutique.
@@ -7,8 +8,9 @@ import type { KitContentFormat } from "./schemas";
  * - family « activites » : livre d'activités historique (fiches, étapes illustrées), conservé tel quel.
  */
 
-export type ShopCategorySlug = "chasses-au-tresor" | "activites-educatives" | "evenements" | "histoires-et-aventures";
-export type ShopTemplate = "ADVENTURE" | "ACTIVITY" | "STORY" | "EVENT" | "CLASSIC";
+/** Slug de catégorie boutique (les catégories dépendent de l'univers ciblé). */
+export type ShopCategorySlug = string;
+export type ShopTemplate = "ADVENTURE" | "ACTIVITY" | "STORY" | "EVENT" | "CLASSIC" | "GUIDE" | "RECIPES";
 
 export interface KitSection {
   key: string;
@@ -38,6 +40,8 @@ export interface KitTypeDef {
   /** Univers suggéré par défaut */
   defaultUniverse?: string;
   sections: KitSection[];
+  /** Préréglages d'univers compatibles (le premier est le préréglage par défaut du type) */
+  presets: UniversePreset[];
 }
 
 const HUNT_SECTIONS = (count = 10): KitSection[] => [
@@ -70,28 +74,60 @@ const ACTIVITY_SECTIONS = (count = 10): KitSection[] => [
   { key: "diplome", label: "Diplôme", pages: 1, icon: "award" },
 ];
 
+const GUIDE_SECTIONS = (count = 8): KitSection[] => [
+  { key: "couverture", label: "Couverture", pages: 1, icon: "image" },
+  { key: "introduction", label: "Introduction et sommaire", pages: 2, icon: "list" },
+  { key: "probleme", label: "Comprendre le problème et ses causes", pages: 2, icon: "circle-help" },
+  { key: "diagnostic", label: "Diagnostic pas à pas", pages: 1, icon: "stethoscope" },
+  { key: "chapitres", label: "Chapitres de méthode", count, pages: count * 2, icon: "book-open" },
+  { key: "erreurs", label: "Erreurs fréquentes", pages: 1, icon: "triangle-alert" },
+  { key: "checklist", label: "Checklist imprimable", pages: 1, icon: "list-checks" },
+  { key: "calendrier", label: "Calendrier d'entretien", pages: 1, icon: "calendar" },
+  { key: "faq", label: "FAQ et glossaire", pages: 2, icon: "message-circle-question" },
+];
+
+const RECIPES_SECTIONS = (count = 20): KitSection[] => [
+  { key: "couverture", label: "Couverture", pages: 1, icon: "image" },
+  { key: "introduction", label: "Introduction", pages: 1, icon: "book-open" },
+  { key: "recettes", label: "Recettes", count, pages: count, icon: "chef-hat" },
+  { key: "conseils", label: "Conseils et astuces", pages: 1, icon: "lightbulb" },
+];
+
+const SCIENCE_SECTIONS = (count = 12): KitSection[] => [
+  { key: "couverture", label: "Couverture", pages: 1, icon: "image" },
+  { key: "introduction", label: "Introduction et règles de sécurité", pages: 1, icon: "shield-check" },
+  { key: "experiences", label: "Fiches d'expériences", count, pages: count, icon: "flask-conical" },
+  { key: "diplome", label: "Diplôme de petit scientifique", pages: 1, icon: "award" },
+];
+
+const KIDS: UniversePreset[] = ["kit-enfants"];
+
 export const KIT_TYPES: KitTypeDef[] = [
-  { key: "chasse-au-tresor", label: "Chasse au trésor", description: "10 énigmes en 2 versions, carte en 10 morceaux, défis, diplômes, invitations et guide.", icon: "map", family: "kit", format: "treasure_hunt", shopCategory: "chasses-au-tresor", template: "ADVENTURE", defaultAge: "5-8", defaultPriceCents: 990, defaultCount: 10, countLabel: "énigmes", defaultUniverse: "Pirates", sections: HUNT_SECTIONS(10) },
-  { key: "mission-enquete", label: "Mission / enquête", description: "Même mécanique que la chasse au trésor, habillée en mission d'agents secrets ou enquête.", icon: "search", family: "kit", format: "treasure_hunt", shopCategory: "chasses-au-tresor", template: "ADVENTURE", defaultAge: "8-10", defaultPriceCents: 990, defaultCount: 10, countLabel: "énigmes", defaultUniverse: "Agents secrets", sections: HUNT_SECTIONS(10) },
-  { key: "kit-anniversaire", label: "Kit d'anniversaire", description: "Chasse au trésor d'anniversaire avec invitations et diplômes assortis.", icon: "cake", family: "kit", format: "treasure_hunt", shopCategory: "evenements", template: "EVENT", defaultAge: "5-8", defaultPriceCents: 1290, defaultCount: 10, countLabel: "énigmes", sections: HUNT_SECTIONS(10) },
-  { key: "kit-paques", label: "Chasse aux œufs de Pâques", description: "Chasse au trésor de Pâques : énigmes, carte et diplômes.", icon: "egg", family: "kit", format: "treasure_hunt", shopCategory: "evenements", template: "EVENT", defaultAge: "3-10", defaultPriceCents: 790, defaultCount: 8, countLabel: "énigmes", defaultUniverse: "Pâques", sections: HUNT_SECTIONS(8) },
-  { key: "kit-halloween", label: "Jeu d'Halloween", description: "Enquête d'Halloween (gentiment frissonnante) : énigmes, carte, défis.", icon: "ghost", family: "kit", format: "treasure_hunt", shopCategory: "evenements", template: "EVENT", defaultAge: "5-8", defaultPriceCents: 790, defaultCount: 8, countLabel: "énigmes", defaultUniverse: "Halloween", sections: HUNT_SECTIONS(8) },
-  { key: "lutins-farceurs", label: "Lutins farceurs", description: "30 farces de lutin rapides pour décembre, calendrier, mots du lutin, lettres et certificat.", icon: "gift", family: "kit", format: "pranks", shopCategory: "evenements", template: "EVENT", defaultAge: "3-10", defaultPriceCents: 790, defaultCount: 30, countLabel: "idées", defaultUniverse: "Noël", sections: PRANKS_SECTIONS(30) },
-  { key: "kit-noel", label: "Activités de Noël", description: "Idées d'activités de Noël au fil des jours, avec calendrier et petits mots.", icon: "tree-pine", family: "kit", format: "pranks", shopCategory: "evenements", template: "EVENT", defaultAge: "3-10", defaultPriceCents: 790, defaultCount: 24, countLabel: "idées", defaultUniverse: "Noël", sections: PRANKS_SECTIONS(24) },
-  { key: "cahier-activites", label: "Cahier d'activités", description: "Activités illustrées pas à pas par tranche d'âge.", icon: "pencil-ruler", family: "activites", shopCategory: "activites-educatives", template: "ACTIVITY", defaultAge: "5-8", defaultPriceCents: 690, defaultCount: 10, countLabel: "activités", sections: ACTIVITY_SECTIONS(10) },
-  { key: "jeux-logique", label: "Jeux de logique", description: "Énigmes, labyrinthes et jeux de raisonnement illustrés.", icon: "puzzle", family: "activites", shopCategory: "activites-educatives", template: "ACTIVITY", defaultAge: "5-8", defaultPriceCents: 690, defaultCount: 20, countLabel: "jeux", sections: ACTIVITY_SECTIONS(20) },
-  { key: "activites-montessori", label: "Activités Montessori", description: "Activités sensorielles et de manipulation inspirées de la pédagogie Montessori.", icon: "shapes", family: "activites", shopCategory: "activites-educatives", template: "ACTIVITY", defaultAge: "3-5", defaultPriceCents: 690, defaultCount: 10, countLabel: "activités", sections: ACTIVITY_SECTIONS(10) },
-  { key: "histoire-illustree", label: "Histoire illustrée", description: "Livre illustré à lire et à imprimer.", icon: "book-open", family: "activites", shopCategory: "histoires-et-aventures", template: "STORY", defaultAge: "3-10", defaultPriceCents: 590, defaultCount: 12, countLabel: "doubles pages", sections: ACTIVITY_SECTIONS(12) },
-  { key: "histoire-du-soir", label: "Histoires du soir", description: "Recueil d'histoires courtes pour le coucher.", icon: "moon", family: "activites", shopCategory: "histoires-et-aventures", template: "STORY", defaultAge: "3-5", defaultPriceCents: 590, defaultCount: 7, countLabel: "histoires", sections: ACTIVITY_SECTIONS(7) },
-  { key: "livre-personnalisable", label: "Livre personnalisable", description: "Histoire dont l'enfant est le héros (prénom à compléter).", icon: "user-round-pen", family: "activites", shopCategory: "histoires-et-aventures", template: "STORY", defaultAge: "3-10", defaultPriceCents: 790, defaultCount: 12, countLabel: "pages", sections: ACTIVITY_SECTIONS(12) },
+  { key: "chasse-au-tresor", label: "Chasse au trésor", description: "10 énigmes en 2 versions, carte en 10 morceaux, défis, diplômes, invitations et guide.", icon: "map", family: "kit", format: "treasure_hunt", shopCategory: "chasses-au-tresor", template: "ADVENTURE", defaultAge: "5-8", defaultPriceCents: 990, defaultCount: 10, countLabel: "énigmes", defaultUniverse: "Pirates", sections: HUNT_SECTIONS(10), presets: KIDS },
+  { key: "mission-enquete", label: "Mission / enquête", description: "Même mécanique que la chasse au trésor, habillée en mission d'agents secrets ou enquête.", icon: "search", family: "kit", format: "treasure_hunt", shopCategory: "chasses-au-tresor", template: "ADVENTURE", defaultAge: "8-10", defaultPriceCents: 990, defaultCount: 10, countLabel: "énigmes", defaultUniverse: "Agents secrets", sections: HUNT_SECTIONS(10), presets: KIDS },
+  { key: "kit-anniversaire", label: "Kit d'anniversaire", description: "Chasse au trésor d'anniversaire avec invitations et diplômes assortis.", icon: "cake", family: "kit", format: "treasure_hunt", shopCategory: "evenements", template: "EVENT", defaultAge: "5-8", defaultPriceCents: 1290, defaultCount: 10, countLabel: "énigmes", sections: HUNT_SECTIONS(10), presets: KIDS },
+  { key: "kit-paques", label: "Chasse aux œufs de Pâques", description: "Chasse au trésor de Pâques : énigmes, carte et diplômes.", icon: "egg", family: "kit", format: "treasure_hunt", shopCategory: "evenements", template: "EVENT", defaultAge: "3-10", defaultPriceCents: 790, defaultCount: 8, countLabel: "énigmes", defaultUniverse: "Pâques", sections: HUNT_SECTIONS(8), presets: KIDS },
+  { key: "kit-halloween", label: "Jeu d'Halloween", description: "Enquête d'Halloween (gentiment frissonnante) : énigmes, carte, défis.", icon: "ghost", family: "kit", format: "treasure_hunt", shopCategory: "evenements", template: "EVENT", defaultAge: "5-8", defaultPriceCents: 790, defaultCount: 8, countLabel: "énigmes", defaultUniverse: "Halloween", sections: HUNT_SECTIONS(8), presets: KIDS },
+  { key: "lutins-farceurs", label: "Lutins farceurs", description: "30 farces de lutin rapides pour décembre, calendrier, mots du lutin, lettres et certificat.", icon: "gift", family: "kit", format: "pranks", shopCategory: "evenements", template: "EVENT", defaultAge: "3-10", defaultPriceCents: 790, defaultCount: 30, countLabel: "idées", defaultUniverse: "Noël", sections: PRANKS_SECTIONS(30), presets: KIDS },
+  { key: "kit-noel", label: "Activités de Noël", description: "Idées d'activités de Noël au fil des jours, avec calendrier et petits mots.", icon: "tree-pine", family: "kit", format: "pranks", shopCategory: "evenements", template: "EVENT", defaultAge: "3-10", defaultPriceCents: 790, defaultCount: 24, countLabel: "idées", defaultUniverse: "Noël", sections: PRANKS_SECTIONS(24), presets: KIDS },
+  { key: "cahier-activites", label: "Cahier d'activités", description: "Activités illustrées pas à pas par tranche d'âge.", icon: "pencil-ruler", family: "activites", shopCategory: "activites-educatives", template: "ACTIVITY", defaultAge: "5-8", defaultPriceCents: 690, defaultCount: 10, countLabel: "activités", sections: ACTIVITY_SECTIONS(10), presets: KIDS },
+  { key: "jeux-logique", label: "Jeux de logique", description: "Énigmes, labyrinthes et jeux de raisonnement illustrés.", icon: "puzzle", family: "activites", shopCategory: "activites-educatives", template: "ACTIVITY", defaultAge: "5-8", defaultPriceCents: 690, defaultCount: 20, countLabel: "jeux", sections: ACTIVITY_SECTIONS(20), presets: KIDS },
+  { key: "activites-montessori", label: "Activités Montessori", description: "Activités sensorielles et de manipulation inspirées de la pédagogie Montessori.", icon: "shapes", family: "activites", shopCategory: "activites-educatives", template: "ACTIVITY", defaultAge: "3-5", defaultPriceCents: 690, defaultCount: 10, countLabel: "activités", sections: ACTIVITY_SECTIONS(10), presets: KIDS },
+  { key: "histoire-illustree", label: "Histoire illustrée", description: "Livre illustré à lire et à imprimer.", icon: "book-open", family: "activites", shopCategory: "histoires-et-aventures", template: "STORY", defaultAge: "3-10", defaultPriceCents: 590, defaultCount: 12, countLabel: "doubles pages", sections: ACTIVITY_SECTIONS(12), presets: KIDS },
+  { key: "histoire-du-soir", label: "Histoires du soir", description: "Recueil d'histoires courtes pour le coucher.", icon: "moon", family: "activites", shopCategory: "histoires-et-aventures", template: "STORY", defaultAge: "3-5", defaultPriceCents: 590, defaultCount: 7, countLabel: "histoires", sections: ACTIVITY_SECTIONS(7), presets: KIDS },
+  { key: "livre-personnalisable", label: "Livre personnalisable", description: "Histoire dont l'enfant est le héros (prénom à compléter).", icon: "user-round-pen", family: "activites", shopCategory: "histoires-et-aventures", template: "STORY", defaultAge: "3-10", defaultPriceCents: 790, defaultCount: 12, countLabel: "pages", sections: ACTIVITY_SECTIONS(12), presets: KIDS },
+  // Guides, recettes, sciences (autres univers de la boutique)
+  { key: "guide-pratique", label: "Guide pratique expert", description: "Guide pour adultes : problème, causes, diagnostic, méthode pas à pas, erreurs fréquentes, checklist, calendrier, FAQ et glossaire.", icon: "book-marked", family: "kit", format: "guide", shopCategory: "guides-pratiques", template: "GUIDE", defaultAge: "18-99", defaultPriceCents: 1490, defaultCount: 8, countLabel: "chapitres", sections: GUIDE_SECTIONS(8), presets: ["guide-expert"] },
+  { key: "livre-recettes", label: "Livre de recettes", description: "Recettes testables : ingrédients, étapes, temps, portions, astuces et allergènes.", icon: "chef-hat", family: "kit", format: "recipes", shopCategory: "recettes", template: "RECIPES", defaultAge: "18-99", defaultPriceCents: 990, defaultCount: 20, countLabel: "recettes", sections: RECIPES_SECTIONS(20), presets: ["recettes"] },
+  { key: "fiches-sciences", label: "Fiches d'expériences scientifiques", description: "Expériences pour enfants : question, matériel, étapes, explication, pour aller plus loin, sécurité.", icon: "flask-conical", family: "kit", format: "science", shopCategory: "activites-educatives", template: "ACTIVITY", defaultAge: "6-10", defaultPriceCents: 790, defaultCount: 12, countLabel: "expériences", defaultUniverse: "Laboratoire", sections: SCIENCE_SECTIONS(12), presets: ["sciences-enfants", "kit-enfants"] },
   // Types historiques (livres d'activités) conservés
-  { key: "inventions", label: "Inventions", description: "Activités d'inventions et de construction.", icon: "lightbulb", family: "activites", shopCategory: "activites-educatives", template: "ACTIVITY", defaultAge: "6-9", defaultPriceCents: 690, defaultCount: 10, countLabel: "activités", sections: ACTIVITY_SECTIONS(10) },
-  { key: "sciences", label: "Sciences", description: "Expériences scientifiques à la maison.", icon: "flask-conical", family: "activites", shopCategory: "activites-educatives", template: "ACTIVITY", defaultAge: "6-9", defaultPriceCents: 690, defaultCount: 10, countLabel: "activités", sections: ACTIVITY_SECTIONS(10) },
-  { key: "bricolages", label: "Bricolages", description: "Bricolages avec du matériel de récupération.", icon: "scissors", family: "activites", shopCategory: "activites-educatives", template: "ACTIVITY", defaultAge: "6-9", defaultPriceCents: 690, defaultCount: 10, countLabel: "activités", sections: ACTIVITY_SECTIONS(10) },
-  { key: "creativite", label: "Créativité", description: "Arts plastiques et créations.", icon: "palette", family: "activites", shopCategory: "activites-educatives", template: "ACTIVITY", defaultAge: "5-8", defaultPriceCents: 690, defaultCount: 10, countLabel: "activités", sections: ACTIVITY_SECTIONS(10) },
-  { key: "nature", label: "Nature", description: "Découvertes et activités nature.", icon: "leaf", family: "activites", shopCategory: "activites-educatives", template: "ACTIVITY", defaultAge: "6-9", defaultPriceCents: 690, defaultCount: 10, countLabel: "activités", sections: ACTIVITY_SECTIONS(10) },
-  { key: "jeux", label: "Jeux éducatifs", description: "Jeux éducatifs à imprimer.", icon: "dice-5", family: "activites", shopCategory: "activites-educatives", template: "ACTIVITY", defaultAge: "5-8", defaultPriceCents: 690, defaultCount: 10, countLabel: "jeux", sections: ACTIVITY_SECTIONS(10) },
-  { key: "prescolaire", label: "Activités préscolaires", description: "Premières activités pour les 3–5 ans.", icon: "baby", family: "activites", shopCategory: "activites-educatives", template: "ACTIVITY", defaultAge: "3-5", defaultPriceCents: 690, defaultCount: 10, countLabel: "activités", sections: ACTIVITY_SECTIONS(10) },
+  { key: "inventions", label: "Inventions", description: "Activités d'inventions et de construction.", icon: "lightbulb", family: "activites", shopCategory: "activites-educatives", template: "ACTIVITY", defaultAge: "6-9", defaultPriceCents: 690, defaultCount: 10, countLabel: "activités", sections: ACTIVITY_SECTIONS(10), presets: KIDS },
+  { key: "sciences", label: "Sciences", description: "Expériences scientifiques à la maison.", icon: "flask-conical", family: "activites", shopCategory: "activites-educatives", template: "ACTIVITY", defaultAge: "6-9", defaultPriceCents: 690, defaultCount: 10, countLabel: "activités", sections: ACTIVITY_SECTIONS(10), presets: ["sciences-enfants", "kit-enfants"] },
+  { key: "bricolages", label: "Bricolages", description: "Bricolages avec du matériel de récupération.", icon: "scissors", family: "activites", shopCategory: "activites-educatives", template: "ACTIVITY", defaultAge: "6-9", defaultPriceCents: 690, defaultCount: 10, countLabel: "activités", sections: ACTIVITY_SECTIONS(10), presets: KIDS },
+  { key: "creativite", label: "Créativité", description: "Arts plastiques et créations.", icon: "palette", family: "activites", shopCategory: "activites-educatives", template: "ACTIVITY", defaultAge: "5-8", defaultPriceCents: 690, defaultCount: 10, countLabel: "activités", sections: ACTIVITY_SECTIONS(10), presets: KIDS },
+  { key: "nature", label: "Nature", description: "Découvertes et activités nature.", icon: "leaf", family: "activites", shopCategory: "activites-educatives", template: "ACTIVITY", defaultAge: "6-9", defaultPriceCents: 690, defaultCount: 10, countLabel: "activités", sections: ACTIVITY_SECTIONS(10), presets: KIDS },
+  { key: "jeux", label: "Jeux éducatifs", description: "Jeux éducatifs à imprimer.", icon: "dice-5", family: "activites", shopCategory: "activites-educatives", template: "ACTIVITY", defaultAge: "5-8", defaultPriceCents: 690, defaultCount: 10, countLabel: "jeux", sections: ACTIVITY_SECTIONS(10), presets: KIDS },
+  { key: "prescolaire", label: "Activités préscolaires", description: "Premières activités pour les 3–5 ans.", icon: "baby", family: "activites", shopCategory: "activites-educatives", template: "ACTIVITY", defaultAge: "3-5", defaultPriceCents: 690, defaultCount: 10, countLabel: "activités", sections: ACTIVITY_SECTIONS(10), presets: KIDS },
 ];
 
 /** Type générique des livres antérieurs à l'introduction des kits. */
@@ -106,6 +142,31 @@ export function isStructuredKit(key: string | null | undefined): boolean {
   return Boolean(def && def.family === "kit" && def.format);
 }
 
+/** Types d'e-books proposés pour un préréglage d'univers (kits structurés d'abord). */
+export function typesForPreset(p: UniversePreset | null | undefined): KitTypeDef[] {
+  if (!p) return KIT_TYPES;
+  return KIT_TYPES.filter((k) => k.presets.includes(p));
+}
+
+/** Le type est-il compatible avec le préréglage de l'univers ? */
+export function typeAllowedForPreset(key: string, p: UniversePreset | null | undefined): boolean {
+  return !p || typesForPreset(p).some((k) => k.key === key);
+}
+
+/** Type d'e-book par défaut d'un préréglage. */
+export function defaultTypeForPreset(p: UniversePreset | null | undefined): string {
+  if (p === "guide-expert") return "guide-pratique";
+  if (p === "recettes") return "livre-recettes";
+  if (p === "sciences-enfants") return "fiches-sciences";
+  return "chasse-au-tresor";
+}
+
+/** Âge affiché : « adultes » pour les e-books destinés aux adultes. */
+export function isAdultAge(range: string | null | undefined): boolean {
+  const m = /^(\d+)-/.exec(range ?? "");
+  return Boolean(m && Number(m[1]) >= 16);
+}
+
 export function kitLabel(key: string | null | undefined): string {
   return KIT_TYPES.find((k) => k.key === key)?.label ?? (key === LEGACY_ACTIVITY_TYPE ? "Livre d'activités" : key ?? "—");
 }
@@ -113,6 +174,8 @@ export function kitLabel(key: string | null | undefined): string {
 /** Type de kit déduit d'une catégorie / d'un univers / d'un nom de produit de la boutique. */
 export function kitTypeFromShop(p: { categorySlug?: string | null; template?: string | null; name?: string | null; universe?: string | null }): string {
   const text = `${p.name ?? ""} ${p.universe ?? ""}`.toLowerCase();
+  if (p.template === "GUIDE") return "guide-pratique";
+  if (p.template === "RECIPES") return "livre-recettes";
   if (/lutin/.test(text)) return "lutins-farceurs";
   if (/no[eë]l/.test(text) && p.categorySlug === "evenements") return "kit-noel";
   if (/p[âa]ques|oeuf|œuf/.test(text)) return "kit-paques";
@@ -136,15 +199,18 @@ export const UNIVERSES = ["Pirates", "Dinosaures", "Espace", "Princesses et chev
 
 export const TONES = ["Joyeux et complice", "Aventure palpitante", "Doux et rassurant", "Drôle et farceur", "Mystérieux (sans faire peur)"] as const;
 
-export const KIT_AGE_RANGES = ["3-5", "5-8", "8-10", "3-10"] as const;
+export const KIT_AGE_RANGES = ["3-5", "5-8", "8-10", "3-10", "6-10", "18-99"] as const;
 
 /** Contenus du kit pour la fiche boutique (kitContents) à partir de la structure du type. */
 export function kitContentsFor(def: KitTypeDef, counts: { main?: number } = {}): Array<{ title: string; description: string; icon: string; quantity?: number }> {
   return def.sections
     .filter((s) => s.key !== "couverture" && s.key !== "sommaire")
     .map((s) => {
-      const count = s.count != null ? (["enigmes-texte", "enigmes-images", "idees", "activites"].includes(s.key) ? counts.main ?? s.count : s.count) : undefined;
-      const label = count && /^(Cartes|Idées|Activités|Défis|Mots)/.test(s.label) ? `${count} ${s.label.charAt(0).toLowerCase()}${s.label.slice(1)}` : s.label;
+      const count = s.count != null ? (MAIN_SECTION_KEYS.includes(s.key) ? counts.main ?? s.count : s.count) : undefined;
+      const label = count && /^(Cartes|Idées|Activités|Défis|Mots|Chapitres|Recettes|Fiches)/.test(s.label) ? `${count} ${s.label.charAt(0).toLowerCase()}${s.label.slice(1)}` : s.label;
       return { title: label, description: "", icon: s.icon, quantity: count ?? undefined };
     });
 }
+
+/** Sections dont la quantité suit le nombre d'éléments principaux du kit. */
+export const MAIN_SECTION_KEYS = ["enigmes-texte", "enigmes-images", "idees", "activites", "chapitres", "recettes", "experiences"];

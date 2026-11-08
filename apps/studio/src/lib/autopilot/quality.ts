@@ -5,7 +5,7 @@
  * font échouer l'étape avec une explication lisible.
  */
 import type { KitContent } from "../kits/generate";
-import type { PranksKit, TreasureHunt } from "../kits/schemas";
+import type { Guide, PranksKit, Recipes, Science, TreasureHunt } from "../kits/schemas";
 
 export interface QualityIssue {
   level: "error" | "warning";
@@ -66,6 +66,9 @@ export function checkKitContent(input: KitContent, opts: { expectedCount: number
   const expected = Math.max(1, opts.expectedCount);
 
   if ("enigmes" in content) checkHunt(content, expected, opts.companion, fixes, issues);
+  else if ("chapitres" in content) checkGuide(content, expected, fixes, issues);
+  else if ("recettes" in content) checkRecipes(content, expected, fixes, issues);
+  else if ("experiences" in content) checkScience(content, expected, fixes, issues);
   else checkPranks(content as PranksKit, expected, fixes, issues);
 
   // Fiche boutique : longueurs SEO
@@ -125,6 +128,57 @@ function checkPranks(c: PranksKit, expected: number, fixes: string[], issues: Qu
   }
   if (!c.lettre_depart?.trim()) issues.push({ level: "error", message: "Lettre de départ absente." });
   if (c.mots_du_lutin.length < 10) issues.push({ level: "warning", message: `${c.mots_du_lutin.length} mot(s) du lutin au lieu de 10.` });
+}
+
+/** Promesses irréalistes (guides pratiques) : à reformuler. */
+const UNREALISTIC: Array<[RegExp, string]> = [
+  [/r[ée]sultats?\s+garantis?/i, "résultat garanti"],
+  [/garanti(e|s)?\s+(à\s+)?100\s?%/i, "garantie à 100 %"],
+  [/\bmiracle\b/i, "solution miracle"],
+  [/\binfaillible\b/i, "méthode infaillible"],
+  [/\bsans (aucun )?effort\b/i, "sans effort"],
+];
+const CHEMICALS = /chlore|brome|acide|soude|javel|oxyg[eè]ne actif|produit (de choc|chimique)|pesticide|solvant/i;
+
+/** Renumérote une liste d'éléments `numero` de 1 à n ; ajoute un correctif si besoin. */
+function renumber(items: Array<{ numero: number }>, label: string, fixes: string[]) {
+  let changed = false;
+  items.forEach((e, i) => { if (e.numero !== i + 1) { e.numero = i + 1; changed = true; } });
+  if (changed) fixes.push(`${label} renumérotés de 1 à ${items.length}`);
+}
+
+function checkGuide(c: Guide, expected: number, fixes: string[], issues: QualityIssue[]) {
+  if (c.chapitres.length < expected) issues.push({ level: "error", message: `${c.chapitres.length} chapitre(s) au lieu de ${expected} attendu(s). Relancez la rédaction ou complétez le contenu.` });
+  if (c.chapitres.length > expected) { c.chapitres = c.chapitres.slice(0, expected); fixes.push(`Chapitres réduits à ${expected}`); }
+  renumber(c.chapitres, "Chapitres", fixes);
+  for (const ch of c.chapitres) {
+    if (!ch.contenu?.trim() && !ch.etapes.length) issues.push({ level: "error", message: `Chapitre ${ch.numero} vide (ni texte ni étapes).` });
+    else if ((ch.contenu ?? "").length < 120 && ch.etapes.length < 2) issues.push({ level: "warning", message: `Chapitre ${ch.numero} très court.` });
+    if (!ch.illustration_description?.trim()) ch.illustration_description = `Illustration éditoriale sobre : ${ch.titre}`;
+  }
+  if (!c.checklist?.items?.length) issues.push({ level: "warning", message: "Guide sans checklist." });
+  if (!c.faq.length) issues.push({ level: "warning", message: "Guide sans questions fréquentes." });
+  const text = allText(c);
+  if (CHEMICALS.test(text) && !c.securite.length) issues.push({ level: "error", message: "Le guide évoque des produits chimiques mais n'a pas de section Sécurité : ajoutez les précautions d'usage (étiquette, protections, stockage, ne jamais mélanger)." });
+  for (const [re, label] of UNREALISTIC) if (re.test(text)) issues.push({ level: "error", message: `Promesse irréaliste (« ${label} ») : reformulez de façon honnête et mesurée.` });
+}
+
+function checkRecipes(c: Recipes, expected: number, fixes: string[], issues: QualityIssue[]) {
+  if (c.recettes.length < expected) issues.push({ level: "error", message: `${c.recettes.length} recette(s) au lieu de ${expected} attendue(s).` });
+  if (c.recettes.length > expected) { c.recettes = c.recettes.slice(0, expected); fixes.push(`Recettes réduites à ${expected}`); }
+  renumber(c.recettes, "Recettes", fixes);
+  for (const r of c.recettes) {
+    if (r.etapes.length < 2) issues.push({ level: "warning", message: `Recette ${r.numero} : une seule étape.` });
+    if (!r.allergenes.length) issues.push({ level: "warning", message: `Recette ${r.numero} : allergènes non renseignés.` });
+  }
+}
+
+function checkScience(c: Science, expected: number, fixes: string[], issues: QualityIssue[]) {
+  if (c.experiences.length < expected) issues.push({ level: "error", message: `${c.experiences.length} expérience(s) au lieu de ${expected} attendue(s).` });
+  if (c.experiences.length > expected) { c.experiences = c.experiences.slice(0, expected); fixes.push(`Expériences réduites à ${expected}`); }
+  renumber(c.experiences, "Expériences", fixes);
+  if (!c.securite_generale.length) issues.push({ level: "error", message: "Règles de sécurité générales absentes (présence d'un adulte, ne pas goûter…)." });
+  for (const e of c.experiences) if (!e.materiel.length) issues.push({ level: "warning", message: `Expérience ${e.numero} sans liste de matériel.` });
 }
 
 /** Résumé lisible pour la frise du pilote automatique. */

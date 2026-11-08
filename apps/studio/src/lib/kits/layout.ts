@@ -1,8 +1,9 @@
 import { prisma } from "../db";
 import { assetUrl } from "../storage";
 import { kitType } from "./types";
-import { KIT_CONTENT_SCHEMAS, KitCustomizationSchema, PranksKitSchema, TreasureHuntSchema } from "./schemas";
-import { buildPranksPages, buildTreasureHuntPages, type KitImages } from "./pages";
+import { GuideSchema, KIT_CONTENT_SCHEMAS, KitCustomizationSchema, PranksKitSchema, RecipesSchema, ScienceSchema, TreasureHuntSchema } from "./schemas";
+import { buildGuideBookPages, buildRecipesBookPages, buildScienceBookPages } from "./pages-universes";
+import { buildDiplomaPage, buildPranksPages, buildTreasureHuntPages, type KitImages } from "./pages";
 import type { BuildContext, BuiltPage } from "../layout/engine";
 
 /** Illustrations courantes d'un kit, indexées par emplacement (slot). */
@@ -24,6 +25,14 @@ export async function buildKitInteriorPages(book: { id: string; kitType: string;
     const custom = KitCustomizationSchema.safeParse(book.customization ?? {});
     const label = custom.success && /agent|enqu|mission|espion/i.test(custom.data.universe) ? "Mission" : "Défi";
     return buildTreasureHuntPages(ctx, TreasureHuntSchema.parse(parsed.data), images, { challengeLabel: label });
+  }
+  if (def.format === "guide") return buildGuideBookPages(ctx, GuideSchema.parse(parsed.data), images);
+  if (def.format === "recipes") return buildRecipesBookPages(ctx, RecipesSchema.parse(parsed.data), images);
+  if (def.format === "science") {
+    const pages = buildScienceBookPages(ctx, ScienceSchema.parse(parsed.data), images);
+    const sci = ScienceSchema.parse(parsed.data);
+    if (sci.diplome?.titre || sci.diplome?.texte) pages.push(buildDiplomaPage(ctx, { title: sci.diplome.titre ?? "Diplôme", body: sci.diplome.texte ?? "", img: images["diplome"] }));
+    return pages;
   }
   return buildPranksPages(ctx, PranksKitSchema.parse(parsed.data), images);
 }
