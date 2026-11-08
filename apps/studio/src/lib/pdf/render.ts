@@ -24,7 +24,12 @@ export interface RenderResult {
  */
 export async function renderPdf(opts: RenderOptions): Promise<RenderResult> {
   const browser = await getBrowser();
-  const context = await browser.newContext({ deviceScaleFactor: 2, viewport: { width: 1200, height: 1600 } });
+  const context = await browser.newContext({
+    deviceScaleFactor: 2,
+    viewport: { width: 1200, height: 1600 },
+    // Jeton interne : laisse passer les routes /print et /api/assets derrière la protection par mot de passe
+    extraHTTPHeaders: process.env.INTERNAL_TOKEN ? { "x-internal-token": process.env.INTERNAL_TOKEN } : undefined,
+  });
   const page = await context.newPage();
   const url = new URL(opts.url);
   if (opts.mode) url.searchParams.set("mode", opts.mode);

@@ -88,11 +88,18 @@ Parcours de test réalisé de bout en bout : illustrations (6 images de démonst
 
 ## Déploiement
 
-- **Interface** : Vercel (ou tout hébergeur Node). Variables : `DATABASE_URL`, `APP_URL`, `STORAGE_DRIVER=s3` + variables `S3_*`, clés IA.
-- **Worker** : un service Node longue durée (Railway, Render, Fly.io, VM, conteneur) exécutant `pnpm worker` avec les mêmes variables, `APP_URL` pointant vers l'interface publique (le worker charge les routes `/print/*` pour produire les PDF) et un Chromium disponible. Les générations d'images et les exports ne tournent jamais dans des fonctions serverless à délai court.
-- **Base de données** : PostgreSQL managé (Neon, Supabase, RDS…). `pnpm db:deploy` au déploiement.
-- **Stockage** : bucket S3 compatible ; `S3_PUBLIC_BASE_URL` facultatif pour servir les images via CDN.
-- **Accès** : l'application ne contient pas encore d'authentification ; placer l'interface derrière une protection (Vercel Password Protection, SSO, proxy) avant toute exposition publique.
+Le studio se déploie en deux services qui partagent la même base PostgreSQL et le même stockage S3 :
+
+| Service | Hébergement conseillé | Rôle |
+|---|---|---|
+| Interface (Next.js) | **Vercel**, Root Directory `apps/studio`, build `pnpm build` (migrations + build automatiques) | Pages, server actions, routes `/print` utilisées par le worker |
+| Worker | **Railway** ou Render, Dockerfile `apps/studio/Dockerfile.worker` (contexte = racine du dépôt) | Générations IA, mise en page, export PDF (Chromium inclus dans l'image) |
+| Base | Neon (ou autre PostgreSQL) | `DATABASE_URL` + `DATABASE_URL_UNPOOLED` ; sur Vercel les tables vont dans le schéma `studio` (`DB_SCHEMA`) |
+| Stockage | Cloudflare R2 / S3 compatible, bucket privé | Obligatoire en ligne (`STORAGE_DRIVER=s3`) : le web et le worker doivent voir les mêmes fichiers |
+
+Variables à définir **sur les deux services** : `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `DB_SCHEMA=studio`, `STORAGE_DRIVER=s3`, `S3_*`, `INTERNAL_TOKEN` (identique des deux côtés), `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`, `SHOP_API_URL`, `SHOP_API_KEY`. Côté web uniquement : `STUDIO_PASSWORD` (mot de passe d'accès, 8 caractères minimum). Côté worker uniquement : `APP_URL` = URL publique du studio (le worker y charge les routes `/print` avec le jeton interne pour produire les PDF).
+
+Accès : avec `STUDIO_PASSWORD` défini, toute l'interface demande le mot de passe (page `/connexion`, cookie 30 jours). Les routes `/print` et `/api/assets` restent accessibles au worker grâce à `INTERNAL_TOKEN`.
 
 ## Principes de qualité intégrés
 

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, BookOpen, PlusCircle, Library, Palette, FileDown, Settings, ListChecks, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { logoutAction } from "@/app/actions/auth";
 
 const NAV = [
   { href: "/", label: "Tableau de bord", icon: LayoutDashboard },
@@ -41,7 +42,7 @@ export function Sidebar() {
           );
         })}
       </nav>
-      <div className="p-4 text-[11px] text-slate-400 border-t border-slate-100">v0.1 · production éditoriale</div>
+      <div className="flex items-center justify-between p-4 text-[11px] text-slate-400 border-t border-slate-100"><span>v0.1 · production éditoriale</span><form action={logoutAction}><button className="rounded px-2 py-1 font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-900">Déconnexion</button></form></div>
     </aside>
   );
 }

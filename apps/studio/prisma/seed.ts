@@ -11,7 +11,8 @@ import { DEMO_BOOK, DEMO_CONCEPTS, DEMO_COVER, PILOT_ACTIVITY, PILOT_VISUAL_REFE
 import { BUILTIN_TEMPLATES } from "../src/lib/layout/themes";
 import { slugify } from "../src/lib/utils";
 
-const prisma = new PrismaClient();
+import { resolveDbSchema, withDbSchema } from "../src/lib/db-url";
+const prisma = new PrismaClient({ datasourceUrl: withDbSchema(process.env.DATABASE_URL, resolveDbSchema()) });
 
 async function main() {
   for (const t of BUILTIN_TEMPLATES) {

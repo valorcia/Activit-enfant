@@ -1,0 +1,21 @@
+# Worker Inventor Studio (générations IA, mise en page, export PDF via Chromium).
+# Contexte de build : la RACINE du monorepo (pnpm workspace).
+#   docker build -f apps/studio/Dockerfile.worker -t studio-worker .
+FROM mcr.microsoft.com/playwright:v1.64.1-noble AS base
+ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH CI=true
+RUN corepack enable && corepack prepare pnpm@10.28.0 --activate
+
+WORKDIR /app
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml .npmrc ./
+COPY apps/studio/package.json apps/studio/package.json
+COPY apps/shop/package.json apps/shop/package.json
+RUN pnpm install --frozen-lockfile --filter inventor-studio... --ignore-scripts
+
+COPY apps/studio apps/studio
+WORKDIR /app/apps/studio
+RUN pnpm exec prisma generate
+
+ENV NODE_ENV=production
+# Chromium fourni par l'image Playwright
+ENV CHROMIUM_PATH=/ms-playwright/chromium-*/chrome-linux/chrome
+CMD ["sh", "-c", "export CHROMIUM_PATH=$(ls -d /ms-playwright/chromium-*/chrome-linux*/chrome 2>/dev/null | head -1 || echo /usr/bin/chromium); pnpm exec tsx src/worker/index.ts"]
