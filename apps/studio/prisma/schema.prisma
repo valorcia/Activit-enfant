@@ -151,6 +151,7 @@ model Book {
   snapshots  BookSnapshot[]
   illustrations Illustration[]
   adVideos      AdVideo[]
+  autopilotRuns AutopilotRun[]
 
   @@index([status])
 }
@@ -520,4 +521,39 @@ model AdVideo {
 
   @@index([bookId, createdAt])
   @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// Pilote automatique : d'un brief à la campagne publicitaire, sans intervention
+// ---------------------------------------------------------------------------
+
+enum AutopilotStatus {
+  RUNNING
+  WAITING_INPUT
+  WAITING_APPROVAL
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model AutopilotRun {
+  id         String          @id @default(cuid())
+  bookId     String?
+  jobId      String?         // tâche « autopilot.run » (reprise pg-boss)
+  status     AutopilotStatus @default(RUNNING)
+  title      String?
+  brief      String?
+  stages     Json            // [{ key, label, status, startedAt, finishedAt, detail, error, costUsd, approved }]
+  config     Json            // instantané des réglages au lancement
+  state      Json?           // suivi interne : tâches enfants, vidéos, campagne…
+  costUsd    Decimal         @default(0) @db.Decimal(10, 4)
+  maxCostUsd Decimal         @default(10) @db.Decimal(10, 2)
+  error      String?
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  book Book? @relation(fields: [bookId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([bookId, createdAt])
 }

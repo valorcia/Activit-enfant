@@ -164,6 +164,7 @@ export interface PublishOptions {
   exportId?: string;
   publish?: boolean; // publication immédiate (sinon brouillon « à valider »)
   withPreviews?: boolean; // rendre des aperçus de pages (Chromium)
+  creationCostCents?: number; // coût de création (IA, illustrations) pour la rentabilité dans la boutique
   log?: (message: string) => void | Promise<void>;
 }
 
@@ -184,7 +185,7 @@ export async function publishBookToShop(bookId: string, opts: PublishOptions = {
   const log = opts.log ?? (() => undefined);
   const warnings: string[] = [];
   const book = await loadBookForListing(bookId);
-  const listing = buildListingFromBook(book, settings);
+  const listing = { ...buildListingFromBook(book, settings), ...(opts.creationCostCents != null ? { creationCostCents: Math.max(0, Math.round(opts.creationCostCents)) } : {}) };
   const shouldPublish = opts.publish ?? (ShopListingSchema.safeParse(book.shopListing ?? {}).data?.autoPublish ?? settings.autoPublish);
 
   try {

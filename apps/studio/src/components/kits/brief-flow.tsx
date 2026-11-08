@@ -9,6 +9,7 @@ import { analyzeBriefAction, createKitFromPlanAction, type BriefAnalysis } from 
 import { kitType } from "@/lib/kits/types";
 import type { KitPlan } from "@/lib/kits/schemas";
 import { KitPlanForm } from "./plan-form";
+import { AutopilotLaunch } from "@/components/autopilot/launch-panel";
 
 const EXAMPLE = "Fais-moi une chasse au trésor sur les dinosaures pour les 5-8 ans, avec une paléontologue rigolote et un bébé tricératops qui donne les indices. 10 énigmes dans la maison, prix 9,90 €.";
 
@@ -57,8 +58,9 @@ export function BriefFlow({ mode, categories }: { mode: "api" | "manual"; catego
           Collez une demande libre (comme à Claude), un prompt complet de <code>docs/prompts</code>, ou directement le JSON obtenu avec ce prompt : le studio reconnaît le contenu complet et l&apos;importe sans nouvel appel IA.
         </p>
         <Textarea id="brief" rows={12} value={text} onChange={(e) => setText(e.target.value)} placeholder={EXAMPLE} className="font-mono text-sm" />
-        <div className="flex flex-wrap items-center gap-3">
-          <Button onClick={analyze} disabled={pending || text.trim().length < 10}><Wand2 className="h-4 w-4" /> {pending && !plan ? "Analyse…" : "Analyser le brief"}</Button>
+        <AutopilotLaunch text={text} />
+        <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-3">
+          <Button variant="secondary" onClick={analyze} disabled={pending || text.trim().length < 10}><Wand2 className="h-4 w-4" /> {pending && !plan ? "Analyse…" : "Analyser le brief (étape par étape)"}</Button>
           <span className="text-xs text-slate-500">Mode actuel : {mode === "manual" ? "copier-coller (aucune clé API)" : "API"}</span>
         </div>
       </div>

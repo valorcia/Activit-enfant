@@ -15,6 +15,7 @@ export const QUEUES = {
   shopPublish: "shop.publish",
   adClip: "ad.clip",
   adRender: "ad.render",
+  autopilotRun: "autopilot.run",
 } as const;
 export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];
 

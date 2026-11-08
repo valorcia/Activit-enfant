@@ -96,3 +96,52 @@ export const VideoSettingsSchema = z.object({
 });
 export type VideoSettings = z.infer<typeof VideoSettingsSchema>;
 export const DEFAULT_VIDEO_SETTINGS: VideoSettings = VideoSettingsSchema.parse({});
+
+// ---------------------------------------------------------------------------
+// Pilote automatique (brief → kit → PDF → boutique → vidéo → publicités)
+// ---------------------------------------------------------------------------
+
+export const AUTOPILOT_STAGE_KEYS = ["plan", "content", "quality", "character", "illustrations", "layout", "pdf", "publish", "video", "ads"] as const;
+export type AutopilotStageKey = (typeof AUTOPILOT_STAGE_KEYS)[number];
+
+export const AutopilotSettingsSchema = z.object({
+  /** Étapes facultatives (les étapes de production — plan, contenu, illustrations, pages — sont toujours faites) */
+  stages: z
+    .object({
+      quality: z.boolean().default(true),
+      character: z.boolean().default(true),
+      pdf: z.boolean().default(true),
+      publish: z.boolean().default(true),
+      video: z.boolean().default(true),
+      ads: z.boolean().default(true),
+    })
+    .default({}),
+  /** Publication directe dans la boutique (sinon brouillon « à valider ») */
+  publishDirect: z.boolean().default(true),
+  /** Export imprimable en plus de la version numérique */
+  printPdf: z.boolean().default(false),
+  videoFormats: z.array(z.enum(["story", "square", "landscape"])).min(1).default(["story", "square"]),
+  videoDurationSeconds: z.number().int().min(6).max(20).default(15),
+  /** Clip d'accroche : aucun, Runway, copier-coller (ou démo en développement) */
+  clipProvider: z.enum(["none", "runway", "manual", "mock"]).default("none"),
+  clipDurationSeconds: z.union([z.literal(5), z.literal(10)]).default(5),
+  channels: z.array(z.enum(["instagram", "facebook", "tiktok"])).default(["instagram", "facebook", "tiktok"]),
+  variantsPerChannel: z.number().int().min(1).max(3).default(2),
+  postsMode: z.enum(["draft", "auto"]).default("draft"),
+  postsStartOffsetHours: z.number().int().min(0).max(24 * 30).default(24),
+  postsSpacingHours: z.number().int().min(1).max(24 * 7).default(24),
+  dailyBudgetCents: z.number().int().min(0).max(1_000_000).default(1000),
+  /** Points de validation humaine (le run s'arrête et attend « Valider et continuer ») */
+  approvals: z
+    .object({
+      afterContent: z.boolean().default(false),
+      afterIllustrations: z.boolean().default(false),
+      beforePublish: z.boolean().default(false),
+      /** null = automatique : validation seulement si les posts sont programmés automatiquement */
+      beforeAds: z.boolean().nullable().default(null),
+    })
+    .default({}),
+  maxCostUsd: z.number().min(0).max(500).default(10),
+});
+export type AutopilotSettings = z.infer<typeof AutopilotSettingsSchema>;
+export const DEFAULT_AUTOPILOT_SETTINGS: AutopilotSettings = AutopilotSettingsSchema.parse({});

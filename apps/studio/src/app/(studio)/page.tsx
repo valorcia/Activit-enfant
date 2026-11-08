@@ -6,7 +6,9 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { PageHeader } from "@/components/page-header";
 import { formatUsd, formatDate } from "@/lib/utils";
 import { labelFor } from "@/lib/jobs-labels";
-import { BookOpen, Sparkles, Library, Settings, Wand2, Store } from "lucide-react";
+import { BookOpen, Sparkles, Library, Settings, Wand2, Store, Rocket } from "lucide-react";
+import { RunBadge } from "@/components/autopilot/run-badge";
+import { currentStage, parseStages } from "@/lib/autopilot/stages";
 import { ShopPanel } from "@/components/shop/shop-panel";
 import { kitLabel } from "@/lib/kits/types";
 
@@ -35,9 +37,25 @@ export default async function Dashboard() {
     { label: "Coût IA cumulé", value: formatUsd(Number(cost._sum.costUsd ?? 0)), href: "/settings" },
   ];
 
+  const runs = await prisma.autopilotRun.findMany({ orderBy: { createdAt: "desc" }, take: 4, include: { book: { select: { title: true } } } });
+
   return (
     <div className="p-8 max-w-7xl">
       <PageHeader title="Tableau de bord" description="Vue d'ensemble de la production éditoriale." />
+      <div className="mb-8 flex flex-wrap items-center gap-4 rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-white p-6">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-xl font-black text-emerald-950">Lancer un nouvel e-book</h2>
+          <p className="mt-1 text-sm text-emerald-900">Collez votre brief (ou le JSON obtenu avec les prompts) : le pilote automatique rédige, illustre, met en page, exporte, publie dans la boutique, crée les vidéos et la campagne publicitaire.</p>
+          {runs.length > 0 && (
+            <ul className="mt-3 space-y-1 text-sm">
+              {runs.map((r) => { const cur = currentStage(parseStages(r.stages)); return (
+                <li key={r.id} className="flex flex-wrap items-center gap-2"><RunBadge status={r.status} /><Link href={`/autopilot/${r.id}`} className="font-semibold text-emerald-950 hover:underline">{r.book?.title ?? r.title ?? "Sans titre"}</Link>{cur && r.status !== "COMPLETED" && <span className="text-xs text-slate-500">{cur.label}</span>}</li>
+              ); })}
+            </ul>
+          )}
+        </div>
+        <Button asChild size="lg" className="bg-emerald-600 hover:bg-emerald-700"><Link href="/brief"><Rocket className="h-4 w-4" /> Lancer un nouvel e-book</Link></Button>
+      </div>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
         {[
           { href: "/books/new", label: "Nouveau kit", icon: BookOpen, primary: true },

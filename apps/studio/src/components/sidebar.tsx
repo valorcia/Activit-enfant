@@ -1,12 +1,13 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, BookOpen, PlusCircle, Library, Palette, FileDown, Settings, ListChecks, Sparkles, ClipboardPaste, Store, Wand2, Clapperboard } from "lucide-react";
+import { LayoutDashboard, BookOpen, PlusCircle, Library, Palette, FileDown, Settings, ListChecks, Sparkles, ClipboardPaste, Store, Wand2, Clapperboard, Rocket } from "lucide-react";
 import { ModeToggle } from "@/components/mode-toggle";
 import { cn } from "@/lib/utils";
 import { logoutAction } from "@/app/actions/auth";
 
 const NAV = [
+  { href: "/autopilot", label: "Pilote automatique", icon: Rocket },
   { href: "/", label: "Tableau de bord", icon: LayoutDashboard },
   { href: "/books/new", label: "Nouveau kit", icon: PlusCircle },
   { href: "/brief", label: "Créer depuis un brief", icon: Wand2 },
@@ -22,7 +23,7 @@ const NAV = [
   { href: "/settings", label: "Paramètres", icon: Settings },
 ];
 
-export function Sidebar({ mode = "api", pendingManual = 0, studioName = "La Malle à Jeux · Studio" }: { mode?: "api" | "manual"; pendingManual?: number; studioName?: string }) {
+export function Sidebar({ mode = "api", pendingManual = 0, activeRuns = 0, studioName = "La Malle à Jeux · Studio" }: { mode?: "api" | "manual"; pendingManual?: number; activeRuns?: number; studioName?: string }) {
   const [brand, sub] = studioName.includes("·") ? studioName.split("·").map((x) => x.trim()) : [studioName, "Studio"];
   const pathname = usePathname();
   if (pathname.startsWith("/print") || pathname.includes("/editor")) return null;
@@ -45,6 +46,7 @@ export function Sidebar({ mode = "api", pendingManual = 0, studioName = "La Mall
               <n.icon className="h-4 w-4" />
               <span className="flex-1">{n.label}</span>
               {n.href === "/manual" && pendingManual > 0 && <span className="rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">{pendingManual}</span>}
+              {n.href === "/autopilot" && activeRuns > 0 && <span className="rounded-full bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">{activeRuns}</span>}
             </Link>
           );
         })}

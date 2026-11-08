@@ -129,6 +129,7 @@ export function kitIllustrationPlan(content: KitContent): Array<{ slot: string; 
     add("diplome", `${hero} salue joyeusement, décor de fête assorti à l'univers.`, "Diplôme");
     add("invitation", `${hero} invite les enfants à l'aventure, décor de l'univers.`, "Invitation");
     for (const e of content.enigmes) add(`enigme-image-${e.numero}`, e.image_description || `Cachette : ${e.cachette}, un petit parchemin roulé bien visible.`, `Énigme ${e.numero} (image)`);
+    addMarketing(hero, content.personnage?.compagnon ?? "");
   } else {
     const hero = content.personnages?.[0]?.nom ?? "le lutin";
     add("planche-personnages", `Planche de personnages : ${content.personnages.map((p) => `${p.nom} (${p.description})`).join(", ")} ; vues de face, profil, trois expressions, fond crème.`, "Planche de personnages");
@@ -136,8 +137,40 @@ export function kitIllustrationPlan(content: KitContent): Array<{ slot: string; 
     add("lettre-depart", `${hero} fait au revoir de la main devant le sapin.`, "Lettre de départ");
     add("certificat", `${hero} et ses amis applaudissent, guirlandes et étoiles.`, "Certificat");
     for (const i of content.idees) add(`idee-${i.numero}`, i.illustration_description || `${hero} prépare la farce « ${i.titre} ».`, `Idée ${i.numero}`);
+    addMarketing(hero, content.personnages?.[1]?.nom ?? "");
   }
   return plan;
+
+  /** Visuels marketing (boutique et publicité) : carré « héros » et vertical pour les Stories. */
+  function addMarketing(hero: string, companion: string) {
+    const duo = [hero, companion].filter(Boolean).join(" et ") || "les personnages du kit";
+    add(MARKETING_SLOTS.hero, `Scène carrée pleine de joie pour la boutique et la publicité : des enfants de l'âge du kit vivent l'aventure avec ${duo}, au moment le plus magique (découverte, éclat de rire), décor de l'univers du kit. Aucun texte.`, "Visuel boutique (carré)");
+    add(MARKETING_SLOTS.story, `Visuel publicitaire vertical : ${duo}, très expressifs, au cœur de l'univers du kit ; tiers supérieur et tiers inférieur en fond clair et uni (zones réservées au texte de la publicité). Aucun texte.`, "Visuel publicitaire (vertical)");
+  }
+}
+
+/** Emplacements marketing ajoutés à chaque kit (utilisés par la boutique et les vidéos). */
+export const MARKETING_SLOTS = { hero: "visuel-heros", story: "visuel-story" } as const;
+
+/** Emplacement de la planche de personnages (référence visuelle des autres illustrations). */
+export function isCharacterSheetSlot(slot: string | null | undefined) {
+  return Boolean(slot && slot.startsWith("planche"));
+}
+
+/** Image de la planche de personnages d'un kit (référence pour la cohérence des personnages). */
+export async function characterSheetReference(bookId: string): Promise<Buffer | null> {
+  const sheet = await prisma.illustration.findFirst({
+    where: { bookId, kind: "KIT", slot: { startsWith: "planche" }, isCurrent: true, status: { in: ["ACCEPTED", "GENERATED"] }, assetId: { not: null } },
+    orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+    include: { asset: true },
+  });
+  if (!sheet?.asset) return null;
+  try {
+    const { getStorage } = await import("../storage");
+    return await getStorage().get(sheet.asset.key);
+  } catch {
+    return null;
+  }
 }
 
 export function readKitContent(book: { kitType: string; kitContent: unknown }): KitContent | null {
@@ -163,8 +196,10 @@ export async function generateKitIllustration(opts: { bookId: string; slot: stri
   if (previous) await prisma.illustration.update({ where: { id: previous.id }, data: { isCurrent: false } });
   const started = Date.now();
   try {
-    const size = /^enigme-image|^idee-|^planche/.test(opts.slot) ? "1024x1024" : opts.slot === "carte" ? "1024x1536" : settings.imageSize;
-    const r = await provider.generate({ prompt, negativePrompt: negative, size, quality: settings.imageQuality, model, label: `${opts.label} — ${book.title}` });
+    const size = opts.slot === MARKETING_SLOTS.story || opts.slot === "carte" ? "1024x1536" : /^enigme-image|^idee-|^planche/.test(opts.slot) || opts.slot === MARKETING_SLOTS.hero ? "1024x1024" : settings.imageSize;
+    // Cohérence des personnages : la planche validée sert de référence à toutes les autres illustrations
+    const sheet = isCharacterSheetSlot(opts.slot) ? null : await characterSheetReference(opts.bookId);
+    const r = await provider.generate({ prompt, negativePrompt: negative, size, quality: settings.imageQuality, model, references: sheet ? [sheet] : undefined, label: `${opts.label} — ${book.title}` });
     const asset = await storeAsset({ key: `illustrations/${opts.bookId}/kit-${opts.slot}-${record.id}.png`, data: r.data, mime: r.mime, width: r.width, height: r.height });
     await prisma.illustration.update({ where: { id: record.id }, data: { status: "GENERATED", assetId: asset.id, isDemo: r.isDemo, costUsd: r.costUsd, provider: r.provider, model: r.model } });
     await prisma.generationLog.create({ data: { kind: "image", provider: r.provider, model: r.model, purpose: "illustration", bookId: opts.bookId, jobId: opts.jobId, images: 1, costUsd: r.costUsd, durationMs: Date.now() - started, success: true } }).catch(() => undefined);

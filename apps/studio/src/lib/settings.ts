@@ -110,3 +110,22 @@ export function maskVideoSettings(s: VideoSettings) {
   return { ...s, runwayApiKey: "", runwayKeyPreview: s.runwayApiKey ? `${s.runwayApiKey.slice(0, 8)}…` : null, runwayConfigured: Boolean(s.runwayApiKey) };
 }
 export type VideoSettingsPublic = ReturnType<typeof maskVideoSettings>;
+
+// ---------------------------------------------------------------------------
+// Pilote automatique
+// ---------------------------------------------------------------------------
+import { AutopilotSettingsSchema, DEFAULT_AUTOPILOT_SETTINGS, type AutopilotSettings } from "./schemas/settings";
+
+const AUTOPILOT_KEY = "autopilot";
+
+export async function getAutopilotSettings(): Promise<AutopilotSettings> {
+  const row = await prisma.setting.findUnique({ where: { key: AUTOPILOT_KEY } }).catch(() => null);
+  const parsed = row ? AutopilotSettingsSchema.safeParse(row.value) : null;
+  return parsed?.success ? parsed.data : DEFAULT_AUTOPILOT_SETTINGS;
+}
+
+export async function saveAutopilotSettings(input: unknown): Promise<AutopilotSettings> {
+  const data = AutopilotSettingsSchema.parse(input);
+  await prisma.setting.upsert({ where: { key: AUTOPILOT_KEY }, create: { key: AUTOPILOT_KEY, value: data }, update: { value: data } });
+  return data;
+}

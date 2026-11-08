@@ -39,6 +39,10 @@ export async function generateIllustration(opts: {
     prompt = coverIllustrationPrompt(cover.illustrationBrief || `${book.title} — children's activity book cover`, artStyle, opts.coverVariant ?? 0);
     negative = negativeFor(null);
     label = `Couverture — ${book.title}`;
+    // Kits : la planche de personnages sert de référence pour garder les mêmes personnages en couverture
+    const { characterSheetReference } = await import("../kits/generate");
+    const sheet = await characterSheetReference(book.id);
+    if (sheet) references.push(sheet);
   } else {
     const content = await getActivityContent(opts.activityId!);
     if (!content) throw new Error("Fiche d'activité absente");

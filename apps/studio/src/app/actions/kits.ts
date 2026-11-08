@@ -13,25 +13,16 @@ import { KIT_CONTENT_SCHEMAS, KitCustomizationSchema, KitPlanSchema, detectKitCo
 import { KIT_TYPES, isStructuredKit, kitType, kitTypeFromShop } from "@/lib/kits/types";
 import { SYSTEM_KIT_EDITOR, briefToPlanPrompt } from "@/lib/kits/prompts";
 import { applyKitContent, generateKitPlan, type KitContent } from "@/lib/kits/generate";
+import { CreateKitSchema, createKitBookRaw, createKitFromPlan, planFromContent, type CreateKitInput } from "@/lib/kits/create";
 
-const KIT_KEYS = KIT_TYPES.map((k) => k.key) as [string, ...string[]];
 
-const CreateKitSchema = z.object({
-  kitType: z.enum(KIT_KEYS),
-  title: z.string().min(1).max(140),
-  subtitle: z.string().max(240).optional(),
-  ageRange: z.string().regex(/^\d+-\d+$/),
-  artStyle: z.string().default("aquarelle"),
-  pageFormat: z.string().default("A4_PORTRAIT"),
-  brief: z.string().max(20000).optional(),
-  customization: KitCustomizationSchema,
-});
-export type CreateKitInput = z.input<typeof CreateKitSchema>;
 
 /**
  * Crée un livre ou un kit. Kits structurés : rédaction du contenu (job « sommaire »).
  * Livres d'activités : génération du sommaire historique.
  */
+export type { CreateKitInput };
+
 export async function createKitBook(input: CreateKitInput, opts: { startProduction?: boolean } = {}) {
   const { bookId } = await createKitBookRaw(input);
   const structured = isStructuredKit(CreateKitSchema.parse(input).kitType);
@@ -51,38 +42,6 @@ export type BriefAnalysis =
   | { kind: "plan"; plan: KitPlan; contentJson?: string; source: "ia" | "json" | "contenu" }
   | { kind: "prompt"; prompt: string; message: string }
   | { kind: "error"; error: string };
-
-function kitTypeForContent(format: "treasure_hunt" | "pranks", content: Record<string, unknown>): string {
-  const b = (content.boutique ?? {}) as { categorySlug?: string; template?: string; name?: string; universe?: string };
-  const title = String(content.titre ?? b.name ?? "");
-  if (format === "pranks") return /lutin/i.test(title) ? "lutins-farceurs" : "kit-noel";
-  return kitTypeFromShop({ categorySlug: b.categorySlug ?? "chasses-au-tresor", template: b.template, name: title, universe: b.universe });
-}
-
-function planFromContent(format: "treasure_hunt" | "pranks", content: KitContent): KitPlan {
-  const raw = content as unknown as Record<string, unknown>;
-  const key = kitTypeForContent(format, raw);
-  const def = kitType(key);
-  const b = content.boutique ?? {};
-  const hunt = "enigmes" in content ? content : null;
-  const pranks = "idees" in content ? content : null;
-  return KitPlanSchema.parse({
-    kitType: key,
-    title: content.titre,
-    subtitle: content.sous_titre ?? "",
-    ageRange: b.ageMin != null && b.ageMax != null ? `${b.ageMin}-${b.ageMax}` : def.defaultAge,
-    universe: b.universe ?? def.defaultUniverse ?? "",
-    heroName: hunt?.personnage?.nom ?? pranks?.personnages?.[0]?.nom ?? "",
-    heroDescription: hunt?.personnage?.description ?? pranks?.personnages?.[0]?.description ?? "",
-    companion: hunt?.personnage?.compagnon ?? pranks?.personnages?.[1]?.nom ?? "",
-    place: hunt?.personnage?.vehicule ?? "",
-    tone: "",
-    count: hunt ? hunt.enigmes.length : pranks!.idees.length,
-    priceCents: b.priceCents,
-    shopCategorySlug: b.categorySlug ?? def.shopCategory,
-    notes: "Contenu complet importé tel quel (aucun appel IA pour le texte).",
-  });
-}
 
 /**
  * Analyse un texte collé :
@@ -122,21 +81,8 @@ export async function analyzeBriefAction(text: string): Promise<BriefAnalysis> {
 
 /** Crée le kit à partir du plan validé, importe le contenu fourni éventuel et lance la production. */
 export async function createKitFromPlanAction(input: { plan: KitPlan; brief?: string; contentJson?: string; startProduction: boolean }) {
-  const plan = KitPlanSchema.parse(input.plan);
-  const def = kitType(plan.kitType);
-  const { bookId } = await createKitBookRaw({
-    kitType: def.key,
-    title: plan.title,
-    subtitle: plan.subtitle,
-    ageRange: plan.ageRange,
-    brief: [input.brief?.trim() && !input.contentJson ? input.brief.trim() : "", plan.notes].filter(Boolean).join("\n\n").slice(0, 20000) || undefined,
-    customization: KitCustomizationSchema.parse({ universe: plan.universe, heroName: plan.heroName, heroDescription: plan.heroDescription, companion: plan.companion, place: plan.place, tone: plan.tone || "Joyeux et complice", count: plan.count, priceCents: plan.priceCents, shopCategorySlug: plan.shopCategorySlug, extraInstructions: plan.notes }),
-  });
-  if (input.contentJson) {
-    const json = JSON.parse(input.contentJson);
-    const format = detectKitContentFormat(json);
-    if (format) await applyKitContent(bookId, KIT_CONTENT_SCHEMAS[format].parse(json) as KitContent);
-  }
+  const def = kitType(KitPlanSchema.parse(input.plan).kitType);
+  const { bookId } = await createKitFromPlan(input);
   let jobId: string | null = null;
   if (input.startProduction && isStructuredKit(def.key)) {
     jobId = (await enqueue(QUEUES.bookPipeline, { bookId, withIllustrations: true, withCover: true })).id;
@@ -146,24 +92,6 @@ export async function createKitFromPlanAction(input: { plan: KitPlan; brief?: st
   }
   revalidatePath("/books");
   return { bookId, jobId };
-}
-
-async function createKitBookRaw(input: CreateKitInput) {
-  const data = CreateKitSchema.parse(input);
-  const def = kitType(data.kitType);
-  const studio = await getStudioSettings();
-  const count = data.customization.count ?? def.defaultCount;
-  const priceCents = data.customization.priceCents ?? studio.priceByKitType[def.key] ?? def.defaultPriceCents;
-  const book = await prisma.book.create({
-    data: {
-      title: data.title, subtitle: data.subtitle || null, collection: studio.defaultAuthor || "La Malle à Jeux",
-      bookType: def.key, kitType: def.key, ageRange: data.ageRange, targetCount: count, artStyle: data.artStyle, pageFormat: data.pageFormat,
-      brief: data.brief || null, theme: defaultThemeForBook(def.family === "kit" ? "kit" : def.key, data.ageRange), status: "DRAFT", cover: { introduction: "" },
-      customization: { ...data.customization, count, priceCents } as Prisma.InputJsonValue,
-      shopListing: { priceCents, categorySlug: data.customization.shopCategorySlug ?? def.shopCategory, template: data.customization.shopTemplate ?? def.template, universe: data.customization.universe || def.defaultUniverse } as Prisma.InputJsonValue,
-    },
-  });
-  return { bookId: book.id };
 }
 
 // ---------------------------------------------------------------------------

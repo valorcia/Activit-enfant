@@ -55,6 +55,7 @@ const PURPOSE_LABELS: Record<string, string> = {
   kit_hunt: "Contenu du kit (chasse au trésor)",
   kit_pranks: "Contenu du kit (idées)",
   kit_plan: "Plan de kit depuis un brief",
+  ads_copy: "Textes publicitaires",
   qc: "Contrôle qualité",
   repair: "Réparation",
 };

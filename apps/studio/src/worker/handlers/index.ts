@@ -19,6 +19,7 @@ import { markWaitingInput } from "@/lib/manual/requests";
 import { isStructuredKit } from "@/lib/kits/types";
 import { generateKitContent, generateKitIllustration, kitIllustrationPlan, readKitContent } from "@/lib/kits/generate";
 import { runClipStep, runRenderStep } from "@/lib/video/worker";
+import { processAutopilotRun } from "@/lib/autopilot/runner";
 
 type Handler = (data: JobPayload) => Promise<unknown>;
 
@@ -52,6 +53,8 @@ export const handlers: Record<string, Handler> = {
   // Vidéos publicitaires : clip d'accroche (Runway / copier-coller / démo) puis montage Remotion
   [QUEUES.adClip]: async ({ jobId, adVideoId }) => runClipStep(adVideoId as string, jobId),
   [QUEUES.adRender]: async ({ jobId, adVideoId }) => runRenderStep(adVideoId as string, jobId),
+  // Pilote automatique : brief → kit → PDF → boutique → vidéos → publicités
+  [QUEUES.autopilotRun]: async ({ jobId, runId }) => processAutopilotRun(runId as string, jobId),
   [QUEUES.bookOutline]: async ({ jobId, bookId }) => {
     const kb = await prisma.book.findUniqueOrThrow({ where: { id: bookId! }, select: { kitType: true } });
     if (isStructuredKit(kb.kitType)) {
@@ -178,12 +181,13 @@ export const handlers: Record<string, Handler> = {
     await setJob(jobId, { status: "COMPLETED", progress: 100, step: `${pages.length} pages assemblées`, result: { pages: pages.length } });
   },
 
-  [QUEUES.bookExport]: async ({ jobId, exportId, bookId }) => {
+  [QUEUES.bookExport]: async ({ jobId, exportId, bookId, skipAutoPublish }) => {
     await setJob(jobId, { status: "RUNNING", step: "Rendu PDF", progress: 20 });
     const r = await runExport(exportId as string);
     await setJob(jobId, { status: "COMPLETED", progress: 100, step: `PDF de ${r.pageCount} pages`, result: r.checks as never });
-    // Publication automatique vers la boutique après un export de livre (jamais bloquante pour l'export)
-    if (bookId) await maybeAutoPublish(bookId, exportId as string, jobId);
+    // Publication automatique vers la boutique après un export de livre (jamais bloquante pour l'export).
+    // Le pilote automatique publie lui-même, avec ses propres réglages.
+    if (bookId && !skipAutoPublish) await maybeAutoPublish(bookId, exportId as string, jobId);
   },
 
   /** Publication (ou re-synchronisation) manuelle d'un livre vers la boutique. */

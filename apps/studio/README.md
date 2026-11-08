@@ -160,6 +160,29 @@ Accès : avec `STUDIO_PASSWORD` défini, toute l'interface demande le mot de pas
 - La validation visuelle est humaine ; une pré-évaluation automatique par modèle multimodal peut être ajoutée dans `src/lib/quality`.
 - La correction orthographique est heuristique (typographie, répétitions) ; brancher un correcteur dédié si nécessaire.
 
+## Pilote automatique (du brief à la campagne)
+
+Page **Créer depuis un brief** → bouton **« Tout lancer en automatique »** : collez un brief libre, un prompt de `docs/prompts`, ou directement le JSON obtenu avec ce prompt. Le studio affiche les réglages appliqués et le coût estimé, puis enchaîne sans intervention :
+
+| # | Étape | Ce qui est fait |
+|---|---|---|
+| 1 | Plan | Brief → type de kit, personnages, univers, prix (JSON complet : import direct, aucun appel IA) |
+| 2 | Rédaction | Énigmes / idées, lettres, défis, guide, fiche boutique |
+| 3 | Contrôles qualité | Nombre d'éléments, champs obligatoires, longueurs ; corrections sûres automatiques ; blocage sur marque sous licence ou faux avis |
+| 4 | Planche de personnages | Générée en premier, puis jointe comme image de référence à toutes les illustrations et à la couverture |
+| 5 | Illustrations | Tous les emplacements du kit + couverture + visuel carré « héros » + visuel vertical publicitaire (tâche « Production du livre ») |
+| 6 | Mise en page | Assemblage des pages |
+| 7 | PDF | Export numérique (+ imprimable si activé) ; débordements corrigés automatiquement (police réduite, 2 tentatives), sinon arrêt |
+| 8 | Boutique | Fiche, couverture, aperçus, PDF privé, coût de création ; publication directe ou brouillon à valider |
+| 9 | Vidéos pub | Formats choisis, clip Runway si activé et sous le plafond (sinon montage seul), envoi à la boutique |
+| 10 | Publicités | `POST /api/v1/products/:id/marketing/autopilot` de la boutique ; si la boutique n'a pas de clé Claude (409), le studio rédige les textes (IA du studio ou demande « À coller ») |
+
+Suivi : page **Pilote automatique** (barre latérale, badge des runs actifs) avec la frise des 10 étapes, durées, coûts, liens (kit, PDF, fiche boutique, admin, vidéos, campagne) et les actions **Reprendre**, **Relancer l'étape**, **Valider et continuer**, **Annuler**. Chaque étape est idempotente : une reprise ne refait jamais ce qui est terminé.
+
+Réglages (**Paramètres → Pilote automatique**) : étapes actives, publication directe ou brouillon, PDF imprimable, formats et durée des vidéos, clip d'accroche, canaux, variantes, posts en brouillon ou programmés (décalage, espacement), budget quotidien indicatif, points de validation (après rédaction, après illustrations, avant boutique, avant publicités : par défaut seulement si les posts sont programmés), **plafond de coût par e-book** (10 $ par défaut : au-delà, le run attend une validation).
+
+Prérequis : le worker doit tourner (`pnpm worker`, ou `pnpm worker:prod` contre le studio en ligne) et le studio doit être joignable à `APP_URL` (rendu PDF). Pour un enchaînement 100 % automatique : clés Claude et OpenAI (studio), boutique configurée (Paramètres → Boutique). En mode copier-coller, le run s'arrête sur chaque demande « À coller » et reprend tout seul dès qu'elle est résolue. Le coût de création envoyé à la boutique est converti approximativement de $ en € (0,92).
+
 ## Publication vers la boutique
 
 Le studio est relié à la boutique (`apps/shop`) par son API v1 (`apps/shop/docs/API.md`). À chaque **export PDF de livre** terminé (numérique, ou imprimable s'il n'existe pas de version numérique), le worker crée ou met à jour la fiche produit correspondante et la **publie automatiquement** : la landing page dédiée (`/aventures/<slug>`) est en ligne sans intervention.

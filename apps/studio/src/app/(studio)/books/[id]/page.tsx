@@ -10,6 +10,9 @@ import { ShopListingSchema } from "@/lib/schemas/settings";
 import { buildListingFromBook, loadBookForListing } from "@/lib/shop/publish";
 import { estimateBookCost } from "@/lib/queue/estimate";
 import { BookTabs } from "@/components/book/book-tabs";
+import { RunBadge } from "@/components/autopilot/run-badge";
+import { currentStage, parseStages } from "@/lib/autopilot/stages";
+import { Rocket } from "lucide-react";
 import { buildContextForBook } from "@/lib/layout/book";
 import { getCover } from "@/lib/generation/cover";
 import { assetUrl } from "@/lib/storage";
@@ -76,6 +79,8 @@ export default async function BookPage({ params, searchParams }: { params: Promi
     const client = await shopClient();
     sales = client ? await client.productStats(book.shopProductId).catch(() => null) : null;
   }
+  const lastRun = await prisma.autopilotRun.findFirst({ where: { bookId: id }, orderBy: { createdAt: "desc" } });
+  const lastRunStage = lastRun ? currentStage(parseStages(lastRun.stages)) : null;
   const eur = (c: number, cur = "EUR") => new Intl.NumberFormat("fr-FR", { style: "currency", currency: cur }).format(c / 100);
 
   return (
@@ -90,6 +95,15 @@ export default async function BookPage({ params, searchParams }: { params: Promi
           </>
         }
       />
+      {lastRun && (
+        <Link href={`/autopilot/${lastRun.id}`} className="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 hover:border-emerald-300">
+          <Rocket className="h-4 w-4 text-emerald-700" />
+          <span className="font-bold text-emerald-950">Pilote automatique</span>
+          <RunBadge status={lastRun.status} />
+          <span className="text-sm text-emerald-900">{lastRun.status === "COMPLETED" ? "Toutes les étapes sont terminées" : lastRunStage ? `${lastRunStage.label}${lastRunStage.detail ? ` — ${lastRunStage.detail}` : ""}` : ""}</span>
+          <span className="ml-auto text-sm font-semibold text-emerald-800">Voir le suivi →</span>
+        </Link>
+      )}
       {sales && (
         <div className="mb-6 grid gap-3 sm:grid-cols-4">
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4"><div className="text-2xl font-black text-emerald-900">{sales.total.orders}</div><div className="text-xs text-emerald-800">commande(s) dans la boutique</div></div>

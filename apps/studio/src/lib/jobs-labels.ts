@@ -12,6 +12,7 @@ export function labelFor(type: string) {
       "shop.publish": "Publication boutique",
       "ad.clip": "Clip d'accroche (vidéo pub)",
       "ad.render": "Montage vidéo pub",
+      "autopilot.run": "Pilote automatique",
     }[type] ?? type
   );
 }
