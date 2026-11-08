@@ -1,3 +1,4 @@
+import { getSecrets } from "@/lib/integrations/secrets";
 import { prisma } from "@/lib/db";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader, AdminCard } from "@/components/admin/page-header";
@@ -13,6 +14,7 @@ export const dynamic = "force-dynamic";
 export default async function ConnectorsPage({ searchParams }: { searchParams: Promise<{ connecte?: string; comptes?: string; erreur?: string }> }) {
   await requirePermission("marketing:write");
   const sp = await searchParams;
+  const tokens = await getSecrets(["meta.capiToken", "tiktok.eventsToken"]);
   const [accounts, analytics] = await Promise.all([
     prisma.socialAccount.findMany({ where: { isActive: true }, orderBy: [{ provider: "asc" }, { kind: "asc" }, { name: "asc" }] }),
     getSetting("analytics"),
@@ -22,11 +24,11 @@ export default async function ConnectorsPage({ searchParams }: { searchParams: P
       <AdminPageHeader title="Connecteurs sociaux" description="Autorisez l'application à publier sur vos comptes et à lire les dépenses publicitaires. Les jetons sont chiffrés en base." />
       <MarketingNav />
       {sp.connecte && <Alert variant="success" className="mb-4">Connexion {sp.connecte} réussie : {sp.comptes ?? 0} compte(s) détecté(s).</Alert>}
-      {sp.erreur && <Alert variant="danger" className="mb-4">{sp.erreur === "non-configure" ? "Application non configurée : renseignez META_APP_ID / META_APP_SECRET ou TIKTOK_CLIENT_KEY / TIKTOK_CLIENT_SECRET." : `Connexion refusée : ${sp.erreur}`}</Alert>}
+      {sp.erreur && <Alert variant="danger" className="mb-4">{sp.erreur === "non-configure" ? "Application non configurée : renseignez l'identifiant et la clé secrète de l'application dans Paramètres → Intégrations." : `Connexion refusée : ${sp.erreur}`}</Alert>}
       <SocialConnectors
         accounts={accounts.map((a) => ({ id: a.id, provider: a.provider, kind: a.kind, name: a.name, username: a.username, avatarUrl: a.avatarUrl, needsReconnect: a.needsReconnect, tokenExpiresAt: a.tokenExpiresAt?.toISOString() ?? null, parentId: a.parentId }))}
-        configured={{ META: connectors.META.isConfigured(), TIKTOK: connectors.TIKTOK.isConfigured() }}
-        conversions={{ meta: Boolean(analytics.metaPixelId && analytics.metaCapiToken), tiktok: Boolean(analytics.tiktokPixelId && analytics.tiktokEventsToken) }}
+        configured={{ META: await connectors.META.isConfigured(), TIKTOK: await connectors.TIKTOK.isConfigured() }}
+        conversions={{ meta: Boolean(analytics.metaPixelId && (tokens["meta.capiToken"] || analytics.metaCapiToken)), tiktok: Boolean(analytics.tiktokPixelId && (tokens["tiktok.eventsToken"] || analytics.tiktokEventsToken)) }}
       />
       <AdminCard title="Ce que permettent (et ne permettent pas) les API" className="mt-6">
         <ul className="list-disc space-y-1.5 pl-5 text-sm text-ink-soft">

@@ -58,7 +58,7 @@ export async function refundOrderAction(raw: { orderId: string; amountCents?: nu
     const remaining = order.totalCents - order.refundedCents;
     const amount = input.amountCents ?? remaining;
     if (amount > remaining) return { ok: false, error: `Montant supérieur au reste remboursable (${(remaining / 100).toFixed(2)} €)` };
-    const refund = await getStripe().refunds.create({ payment_intent: order.stripePaymentIntentId, amount, reason: "requested_by_customer", metadata: { orderId: order.id, adminUserId: user.id, note: input.reason ?? "" } });
+    const refund = await (await getStripe()).refunds.create({ payment_intent: order.stripePaymentIntentId, amount, reason: "requested_by_customer", metadata: { orderId: order.id, adminUserId: user.id, note: input.reason ?? "" } });
     await prisma.refund.upsert({
       where: { stripeRefundId: refund.id },
       create: { orderId: order.id, stripeRefundId: refund.id, amountCents: amount, reason: input.reason, createdById: user.id },

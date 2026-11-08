@@ -32,12 +32,12 @@ pnpm dev                      # http://localhost:3000 — admin : http://localho
 
 ### Stripe en mode test
 
-1. Renseigner `STRIPE_SECRET_KEY` (sk_test_…), `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` (pk_test_…).
+1. Renseigner la clé secrète Stripe (sk_test_…) dans Admin → Paramètres → Intégrations (ou `STRIPE_SECRET_KEY`).
 2. Lancer l'écoute des webhooks en local :
    ```bash
    stripe listen --forward-to localhost:3000/api/stripe/webhook
    ```
-   puis copier le `whsec_…` dans `STRIPE_WEBHOOK_SECRET`.
+   puis copier le `whsec_…` dans Intégrations → Stripe → Secret du webhook (ou `STRIPE_WEBHOOK_SECRET`).
 3. Carte de test : `4242 4242 4242 4242`.
 
 Événements écoutés : `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, `checkout.session.expired`, `payment_intent.payment_failed`, `charge.refunded`.
@@ -99,8 +99,8 @@ Les pages publiques sont statiques/ISR (`revalidate = 300`) et invalidées par t
 
 1. Importer le dépôt, **Root Directory = `apps/shop`**, framework Next.js, commande de build `pnpm build` (exécute `prisma generate`).
 2. Base PostgreSQL managée (Neon via l'onglet Storage de Vercel, Supabase…) : `DATABASE_URL` et `DATABASE_URL_UNPOOLED` (connexion directe pour les migrations). Commande de build Vercel : `pnpm build:vercel` (migrations + seed idempotent + build) avec `ADMIN_EMAIL` / `ADMIN_PASSWORD` définis.
-3. Variables d'environnement (voir `.env.example`) : `NEXT_PUBLIC_APP_URL`, `AUTH_SECRET`, `STRIPE_*`, `STORAGE_DRIVER=s3` + `S3_*`, `EMAIL_DRIVER=resend` + `RESEND_API_KEY` + `EMAIL_FROM`, `DOWNLOAD_TOKEN_SECRET`, `CRON_SECRET`.
-4. Webhook Stripe (dashboard → Developers → Webhooks) : `https://<domaine>/api/stripe/webhook` avec les événements listés ci-dessus ; copier le secret dans `STRIPE_WEBHOOK_SECRET`.
+3. Variables d'environnement (voir `.env.example`) : `NEXT_PUBLIC_APP_URL`, `AUTH_SECRET`, `STORAGE_DRIVER=s3` + `S3_*`, `EMAIL_FROM`, `DOWNLOAD_TOKEN_SECRET`, `CRON_SECRET`. Les clés Stripe, Resend, IA, Meta et TikTok se saisissent ensuite dans l'administration (voir « Intégrations ») ; les variables correspondantes restent possibles en repli.
+4. Webhook Stripe (dashboard → Developers → Webhooks) : `https://<domaine>/api/stripe/webhook` avec les événements listés ci-dessus ; copier le secret dans Admin → Paramètres → Intégrations → Stripe.
 5. Crons (`vercel.json`) : `/api/cron/publish` (publications programmées) et `/api/cron/marketing` (paniers abandonnés, nouveautés).
 6. Prévoir deux projets/environnements Vercel (Preview = Stripe test, Production = Stripe live) et activer les sauvegardes de la base chez l'hébergeur.
 
@@ -113,6 +113,17 @@ Les pages publiques sont statiques/ISR (`revalidate = 300`) et invalidées par t
 - Consentements marketing tracés (`MarketingConsent`), double opt-in newsletter, bannière cookies avec chargement conditionnel des pixels.
 - Pages juridiques (mentions légales, CGV, confidentialité, cookies, rétractation) créées en **brouillon** : à rédiger et valider avant mise en production.
 - Les commandes historiques sont conservées lorsqu'un produit est archivé (jamais de suppression d'un produit vendu).
+
+## Intégrations (clés saisies dans l'administration)
+
+Admin → Paramètres → **Intégrations** : une carte par service (Stripe, Resend, Claude, OpenAI, Meta, TikTok, Runway, Google Gemini/Veo) avec saisie des clés, bouton **Tester** (appel en lecture seule au fournisseur) et état de chaque clé : *via la plateforme*, *via l'hébergement (Vercel)* ou *manquante*.
+
+- Stockage : table `IntegrationSecret`, valeurs chiffrées AES-256-GCM (clé dérivée de `MARKETING_ENCRYPTION_KEY`, sinon d'`AUTH_SECRET` : sans l'une des deux, la saisie est désactivée). Seuls les 4 derniers caractères sont affichés ; aucune valeur n'est renvoyée au navigateur ni journalisée.
+- Priorité : valeur saisie dans l'admin, puis variable d'environnement (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `RESEND_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `META_APP_ID`, `META_APP_SECRET`, `META_CAPI_TOKEN`, `TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET`, `TIKTOK_ADS_ACCESS_TOKEN`, `TIKTOK_ADVERTISER_IDS`, `TIKTOK_EVENTS_TOKEN`, `RUNWAY_API_KEY`, `GEMINI_API_KEY`). « Supprimer » une clé dans l'admin rend la main à la variable d'environnement.
+- Prise en compte : immédiate sur l'instance qui enregistre, sous 60 secondes au plus sur les autres (cache mémoire), sans redéploiement.
+- Emails : une clé Resend saisie dans l'admin active l'envoi réel ; une clé fournie uniquement par l'environnement exige `EMAIL_DRIVER=resend`.
+- Les jetons Conversions API (Meta) et Events API (TikTok) autrefois saisis dans l'onglet Analytics sont migrés automatiquement vers le coffre chiffré à la première ouverture des paramètres.
+- Accès : rôle Administrateur (`settings:write`) ; chaque modification est tracée dans le journal d'audit.
 
 ## Marketing social
 

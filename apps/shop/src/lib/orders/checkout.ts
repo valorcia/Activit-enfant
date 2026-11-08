@@ -55,7 +55,7 @@ export async function priceCart(lines: CartLineInput[], now = new Date()): Promi
 }
 
 export async function createCheckoutSession(input: CheckoutInput): Promise<{ url: string; orderId: string }> {
-  const stripe = getStripe();
+  const stripe = await getStripe();
   const commerce = await getSetting("commerce");
   const now = new Date();
   const lines = await priceCart(input.lines, now);

@@ -1,6 +1,7 @@
 import "server-only";
 import { Resend } from "resend";
 import { env } from "@/lib/env";
+import { getSecretStatus, getSecret } from "@/lib/integrations/secrets";
 
 export interface EmailMessage {
   to: string;
@@ -12,12 +13,22 @@ export interface EmailMessage {
 }
 
 /**
- * Envoi d'emails transactionnels. En développement (EMAIL_DRIVER=console), le
- * message est affiché dans la console du serveur au lieu d'être envoyé.
+ * Envoi d'emails transactionnels via Resend. La clé saisie dans Administration →
+ * Paramètres → Intégrations active Resend automatiquement ; une clé fournie
+ * seulement par l'environnement (RESEND_API_KEY) exige EMAIL_DRIVER=resend.
+ * Sans clé, le message est affiché dans la console du serveur (développement).
  */
+async function resolveResendKey(): Promise<string | null> {
+  const status = (await getSecretStatus()).find((s) => s.key === "resend.apiKey");
+  if (status?.source === "database") return getSecret("resend.apiKey");
+  if (env.emailDriver === "resend") return (await getSecret("resend.apiKey")) || null;
+  return null;
+}
+
 export async function sendEmail(msg: EmailMessage): Promise<{ ok: boolean; id?: string; error?: string }> {
-  if (env.emailDriver === "resend" && env.resendApiKey) {
-    const resend = new Resend(env.resendApiKey);
+  const resendKey = await resolveResendKey();
+  if (resendKey) {
+    const resend = new Resend(resendKey);
     const { data, error } = await resend.emails.send({
       from: env.emailFrom,
       to: msg.to,

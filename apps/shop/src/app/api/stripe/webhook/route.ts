@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { prisma } from "@/lib/db";
-import { env } from "@/lib/env";
-import { getStripe } from "@/lib/stripe";
+import { getStripe, getStripeWebhookSecret } from "@/lib/stripe";
 import { getSetting } from "@/lib/settings";
 import { applyRefund, fulfillOrderFromSession, markOrderExpired, markOrderFailed, recordStripeEvent } from "@/lib/orders/fulfillment";
 import { sendOrderConfirmation, sendRefundNotification } from "@/lib/orders/notify";
@@ -11,12 +10,13 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Webhook Stripe. La signature est vérifiée avec STRIPE_WEBHOOK_SECRET ; chaque
+ * Webhook Stripe. La signature est vérifiée avec le secret de webhook (Intégrations ou STRIPE_WEBHOOK_SECRET) ; chaque
  * événement est enregistré avant traitement (idempotence). La livraison des
  * fichiers n'a lieu qu'ici, après confirmation serveur du paiement.
  */
 export async function POST(req: Request) {
-  if (!env.stripeWebhookSecret) {
+  const webhookSecret = await getStripeWebhookSecret();
+  if (!webhookSecret) {
     return NextResponse.json({ error: "Webhook non configuré" }, { status: 500 });
   }
   const signature = req.headers.get("stripe-signature");
@@ -25,7 +25,7 @@ export async function POST(req: Request) {
   const payload = await req.text();
   let event: Stripe.Event;
   try {
-    event = getStripe().webhooks.constructEvent(payload, signature, env.stripeWebhookSecret);
+    event = (await getStripe()).webhooks.constructEvent(payload, signature, webhookSecret);
   } catch (err) {
     console.warn("[stripe] signature invalide", err);
     return NextResponse.json({ error: "Signature invalide" }, { status: 400 });

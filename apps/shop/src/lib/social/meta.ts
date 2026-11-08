@@ -1,3 +1,4 @@
+import { getSecret } from "@/lib/integrations/secrets";
 import type { SocialAccount } from "@prisma/client";
 import { SocialApiError, isoDate, toCents, type DiscoveredAccount, type ExternalCampaign, type PublishInput, type PublishResult, type SocialConnector, type SpendRow } from "./types";
 
@@ -10,8 +11,9 @@ import { SocialApiError, isoDate, toCents, type DiscoveredAccount, type External
 const GRAPH = "https://graph.facebook.com/v21.0";
 const SCOPES = ["public_profile", "pages_show_list", "pages_manage_posts", "pages_read_engagement", "instagram_basic", "instagram_content_publish", "ads_read", "ads_management", "business_management"];
 
-function appId() { return process.env.META_APP_ID ?? ""; }
-function appSecret() { return process.env.META_APP_SECRET ?? ""; }
+// Identifiants de l'application Meta : Administration → Paramètres → Intégrations (prioritaire) ou META_APP_ID / META_APP_SECRET
+const appId = () => getSecret("meta.appId");
+const appSecret = () => getSecret("meta.appSecret");
 
 async function graph<T>(path: string, params: Record<string, string | undefined>, init: { method?: "GET" | "POST"; token: string }): Promise<T> {
   const url = new URL(`${GRAPH}/${path.replace(/^\//, "")}`);
@@ -31,11 +33,11 @@ async function graph<T>(path: string, params: Record<string, string | undefined>
 
 export const metaConnector: SocialConnector = {
   provider: "META",
-  isConfigured: () => Boolean(appId() && appSecret()),
+  isConfigured: async () => Boolean((await appId()) && (await appSecret())),
 
-  authorizeUrl(state, redirectUri) {
+  async authorizeUrl(state, redirectUri) {
     const u = new URL("https://www.facebook.com/v21.0/dialog/oauth");
-    u.searchParams.set("client_id", appId());
+    u.searchParams.set("client_id", await appId());
     u.searchParams.set("redirect_uri", redirectUri);
     u.searchParams.set("state", state);
     u.searchParams.set("scope", SCOPES.join(","));
@@ -44,9 +46,9 @@ export const metaConnector: SocialConnector = {
   },
 
   async exchangeCode(code, redirectUri) {
-    const short = await graph<{ access_token: string; expires_in?: number }>("oauth/access_token", { client_id: appId(), client_secret: appSecret(), redirect_uri: redirectUri, code }, { token: "" });
+    const short = await graph<{ access_token: string; expires_in?: number }>("oauth/access_token", { client_id: await appId(), client_secret: await appSecret(), redirect_uri: redirectUri, code }, { token: "" });
     // Jeton longue durée (~60 jours)
-    const long = await graph<{ access_token: string; expires_in?: number }>("oauth/access_token", { grant_type: "fb_exchange_token", client_id: appId(), client_secret: appSecret(), fb_exchange_token: short.access_token }, { token: "" });
+    const long = await graph<{ access_token: string; expires_in?: number }>("oauth/access_token", { grant_type: "fb_exchange_token", client_id: await appId(), client_secret: await appSecret(), fb_exchange_token: short.access_token }, { token: "" });
     const expiresAt = long.expires_in ? new Date(Date.now() + long.expires_in * 1000) : null;
     return { accessToken: long.access_token, expiresAt, scopes: SCOPES };
   },

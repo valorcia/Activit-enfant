@@ -39,7 +39,7 @@ export function PostGenerator({ products, campaigns, apiAvailable, defaults }: {
 
       <div className="mt-5 flex flex-wrap items-center gap-2">
         <div className="flex rounded-full bg-ink/5 p-0.5 text-xs font-bold">
-          <button type="button" className={`rounded-full px-3 py-1 ${mode === "api" ? "bg-white shadow-sm" : "text-ink-soft"}`} onClick={() => setMode("api")} disabled={!apiAvailable} title={apiAvailable ? "" : "ANTHROPIC_API_KEY non configurée"}>API Claude</button>
+          <button type="button" className={`rounded-full px-3 py-1 ${mode === "api" ? "bg-white shadow-sm" : "text-ink-soft"}`} onClick={() => setMode("api")} disabled={!apiAvailable} title={apiAvailable ? "" : "Clé Claude non configurée (Paramètres → Intégrations)"}>API Claude</button>
           <button type="button" className={`rounded-full px-3 py-1 ${mode === "manual" ? "bg-white shadow-sm" : "text-ink-soft"}`} onClick={() => setMode("manual")}>Copier-coller (Claude / ChatGPT)</button>
         </div>
         {mode === "api" ? (

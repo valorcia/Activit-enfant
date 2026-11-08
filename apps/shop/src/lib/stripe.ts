@@ -1,24 +1,33 @@
 import "server-only";
 import Stripe from "stripe";
-import { env } from "@/lib/env";
+import { getSecret, getSecrets } from "@/lib/integrations/secrets";
 
-let stripeClient: Stripe | null = null;
+let stripeClient: { key: string; client: Stripe } | null = null;
 
-/** Client Stripe (serveur uniquement). Lève une erreur claire si la clé manque. */
-export function getStripe(): Stripe {
-  if (!env.stripeSecretKey) {
-    throw new Error("STRIPE_SECRET_KEY manquante : configurez Stripe dans les variables d'environnement.");
+/**
+ * Client Stripe (serveur uniquement). La clé vient d'Admin → Paramètres →
+ * Intégrations (prioritaire) ou de STRIPE_SECRET_KEY. Lève une erreur claire si absente.
+ */
+export async function getStripe(): Promise<Stripe> {
+  const key = await getSecret("stripe.secretKey");
+  if (!key) {
+    throw new Error("Clé secrète Stripe manquante : renseignez-la dans Administration → Paramètres → Intégrations.");
   }
-  if (!stripeClient) {
-    stripeClient = new Stripe(env.stripeSecretKey, { typescript: true });
+  if (!stripeClient || stripeClient.key !== key) {
+    stripeClient = { key, client: new Stripe(key, { typescript: true }) };
   }
-  return stripeClient;
+  return stripeClient.client;
 }
 
-export function isStripeConfigured(): boolean {
-  return Boolean(env.stripeSecretKey && env.stripeWebhookSecret);
+export async function getStripeWebhookSecret(): Promise<string> {
+  return getSecret("stripe.webhookSecret");
 }
 
-export function isStripeLiveMode(): boolean {
-  return env.stripeSecretKey.startsWith("sk_live_");
+export async function isStripeConfigured(): Promise<boolean> {
+  const s = await getSecrets(["stripe.secretKey", "stripe.webhookSecret"]);
+  return Boolean(s["stripe.secretKey"] && s["stripe.webhookSecret"]);
+}
+
+export async function isStripeLiveMode(): Promise<boolean> {
+  return (await getSecret("stripe.secretKey")).startsWith("sk_live_");
 }

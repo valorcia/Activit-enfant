@@ -1,3 +1,4 @@
+import { getSecret } from "@/lib/integrations/secrets";
 import { SocialApiError, isoDate, toCents, type DiscoveredAccount, type ExternalCampaign, type SocialConnector, type SpendRow } from "./types";
 
 /**
@@ -11,8 +12,9 @@ const OPEN = "https://open.tiktokapis.com/v2";
 const BUSINESS = "https://business-api.tiktok.com/open_api/v1.3";
 const SCOPES = ["user.info.basic", "user.info.profile", "video.publish", "video.upload"];
 
-function clientKey() { return process.env.TIKTOK_CLIENT_KEY ?? ""; }
-function clientSecret() { return process.env.TIKTOK_CLIENT_SECRET ?? ""; }
+// Identifiants de l'application TikTok : Administration → Paramètres → Intégrations (prioritaire) ou TIKTOK_CLIENT_KEY / TIKTOK_CLIENT_SECRET
+const clientKey = () => getSecret("tiktok.clientKey");
+const clientSecret = () => getSecret("tiktok.clientSecret");
 
 async function post<T>(url: string, body: unknown, token?: string, headers: Record<string, string> = {}): Promise<T> {
   const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json; charset=UTF-8", ...(token ? { authorization: `Bearer ${token}` } : {}), ...headers }, body: JSON.stringify(body), cache: "no-store" });
@@ -28,11 +30,11 @@ async function post<T>(url: string, body: unknown, token?: string, headers: Reco
 
 export const tiktokConnector: SocialConnector = {
   provider: "TIKTOK",
-  isConfigured: () => Boolean(clientKey() && clientSecret()),
+  isConfigured: async () => Boolean((await clientKey()) && (await clientSecret())),
 
-  authorizeUrl(state, redirectUri) {
+  async authorizeUrl(state, redirectUri) {
     const u = new URL(AUTH);
-    u.searchParams.set("client_key", clientKey());
+    u.searchParams.set("client_key", await clientKey());
     u.searchParams.set("scope", SCOPES.join(","));
     u.searchParams.set("response_type", "code");
     u.searchParams.set("redirect_uri", redirectUri);
@@ -44,7 +46,7 @@ export const tiktokConnector: SocialConnector = {
     const res = await fetch(`${OPEN}/oauth/token/`, {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ client_key: clientKey(), client_secret: clientSecret(), code, grant_type: "authorization_code", redirect_uri: redirectUri }),
+      body: new URLSearchParams({ client_key: await clientKey(), client_secret: await clientSecret(), code, grant_type: "authorization_code", redirect_uri: redirectUri }),
       cache: "no-store",
     });
     const json = (await res.json()) as { access_token?: string; refresh_token?: string; expires_in?: number; scope?: string; error?: string; error_description?: string };
@@ -59,8 +61,8 @@ export const tiktokConnector: SocialConnector = {
     const u = json.data.user;
     const out: DiscoveredAccount[] = [{ kind: "TIKTOK", externalId: u.open_id, name: u.display_name ?? u.username ?? "TikTok", username: u.username ?? null, avatarUrl: u.avatar_url ?? null, accessToken: userToken, scopes: SCOPES }];
     // Comptes publicitaires (Marketing API) : nécessite un jeton TikTok for Business distinct (TIKTOK_ADS_ACCESS_TOKEN + TIKTOK_ADVERTISER_IDS)
-    const adsToken = process.env.TIKTOK_ADS_ACCESS_TOKEN;
-    const advertisers = (process.env.TIKTOK_ADVERTISER_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+    const adsToken = await getSecret("tiktok.adsAccessToken");
+    const advertisers = (await getSecret("tiktok.advertiserIds")).split(",").map((s) => s.trim()).filter(Boolean);
     for (const id of advertisers) {
       if (adsToken) out.push({ kind: "AD_ACCOUNT", externalId: id, name: `Compte publicitaire TikTok ${id}`, accessToken: adsToken, metadata: { source: "env" } });
     }

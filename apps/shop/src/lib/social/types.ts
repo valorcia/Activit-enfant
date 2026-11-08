@@ -31,8 +31,8 @@ export interface ExternalCampaign { id: string; name: string; status?: string }
 
 export interface SocialConnector {
   provider: SocialProvider;
-  isConfigured(): boolean;
-  authorizeUrl(state: string, redirectUri: string): string;
+  isConfigured(): Promise<boolean>;
+  authorizeUrl(state: string, redirectUri: string): Promise<string>;
   exchangeCode(code: string, redirectUri: string): Promise<{ accessToken: string; refreshToken?: string | null; expiresAt?: Date | null; scopes?: string[] }>;
   listAccounts(userAccessToken: string): Promise<DiscoveredAccount[]>;
   publishPhotoPost(account: SocialAccount & { token: string }, input: PublishInput): Promise<PublishResult>;

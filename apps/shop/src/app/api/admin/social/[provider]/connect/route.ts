@@ -16,8 +16,8 @@ export async function GET(_req: Request, ctx: { params: Promise<{ provider: stri
   const key = provider.toUpperCase();
   if (key !== "META" && key !== "TIKTOK") return NextResponse.json({ error: "Fournisseur inconnu" }, { status: 404 });
   const connector = getConnector(key);
-  if (!connector.isConfigured()) return NextResponse.redirect(`${env.appUrl}/admin/marketing/connecteurs?erreur=non-configure`);
+  if (!(await connector.isConfigured())) return NextResponse.redirect(`${env.appUrl}/admin/marketing/connecteurs?erreur=non-configure`);
   const state = signPayload(`${key}:${user.id}`, Math.floor(Date.now() / 1000) + 600);
   const redirectUri = `${env.appUrl}/api/admin/social/${provider.toLowerCase()}/callback`;
-  return NextResponse.redirect(connector.authorizeUrl(state, redirectUri));
+  return NextResponse.redirect(await connector.authorizeUrl(state, redirectUri));
 }

@@ -31,7 +31,7 @@ export default async function PostsPage({ searchParams }: { searchParams: Promis
     <div>
       <AdminPageHeader title="Posts & publicités" description="Générez des variantes de publications pour un e-book, retouchez-les, puis publiez (comptes connectés) ou copiez-les dans vos outils." />
       <MarketingNav />
-      <PostGenerator products={products.map((p) => ({ id: p.id, name: p.name }))} campaigns={campaigns} apiAvailable={isClaudeConfigured()} defaults={{ productId: sp.produit ?? "", campaignId: sp.campagne ?? "" }} />
+      <PostGenerator products={products.map((p) => ({ id: p.id, name: p.name }))} campaigns={campaigns} apiAvailable={await isClaudeConfigured()} defaults={{ productId: sp.produit ?? "", campaignId: sp.campagne ?? "" }} />
       <section className="mt-8">
         <h2 className="mb-3 font-heading text-lg font-bold">{views.length} post{views.length > 1 ? "s" : ""}{sp.campagne || sp.produit ? " (filtrés)" : ""}</h2>
         {views.length === 0 ? <p className="rounded-2xl border-2 border-dashed border-line bg-white/60 p-8 text-center text-sm text-ink-soft">Aucun post pour l'instant. Utilisez le générateur ci-dessus.</p> : (

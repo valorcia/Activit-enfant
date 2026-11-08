@@ -180,7 +180,7 @@ export async function prepareGenerationAction(raw: unknown): Promise<Result<{ pr
     const parsed = genSchema.safeParse(raw);
     if (!parsed.success) return fail("Paramètres invalides", zodFields(parsed.error));
     const { brief } = await briefFor(parsed.data.productId, parsed.data.campaignId);
-    return { ok: true, data: { prompt: buildCopywriterPrompt(brief, parsed.data.channels as Channel[], parsed.data.variants), apiAvailable: isClaudeConfigured() } };
+    return { ok: true, data: { prompt: buildCopywriterPrompt(brief, parsed.data.channels as Channel[], parsed.data.variants), apiAvailable: await isClaudeConfigured() } };
   } catch (e) { return handle(e); }
 }
 
@@ -207,7 +207,7 @@ export async function generateWithApiAction(raw: unknown): Promise<Result<{ ids:
     const user = await assertPermission("marketing:write");
     const parsed = genSchema.safeParse(raw);
     if (!parsed.success) return fail("Paramètres invalides", zodFields(parsed.error));
-    if (!isClaudeConfigured()) return fail("ANTHROPIC_API_KEY non configurée : utilisez le mode copier-coller");
+    if (!(await isClaudeConfigured())) return fail("Clé Claude non configurée : utilisez le mode copier-coller ou renseignez-la dans Paramètres → Intégrations");
     const { brief } = await briefFor(parsed.data.productId, parsed.data.campaignId);
     const variants = await generateWithClaude(buildCopywriterPrompt(brief, parsed.data.channels as Channel[], parsed.data.variants));
     const ids = await saveVariants(user.id, parsed.data.productId, parsed.data.campaignId, variants, "api");

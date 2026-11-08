@@ -1,15 +1,18 @@
 import "server-only";
+import { getSecret } from "@/lib/integrations/secrets";
 import { parseCopywriterOutput, type PostVariant } from "./copywriter";
 
-export function isClaudeConfigured(): boolean {
-  return Boolean(process.env.ANTHROPIC_API_KEY);
+/** Clé Claude : Administration → Paramètres → Intégrations (prioritaire) ou ANTHROPIC_API_KEY. */
+export async function isClaudeConfigured(): Promise<boolean> {
+  return Boolean(await getSecret("anthropic.apiKey"));
 }
 
 /** Appel API Claude (serveur). Lance une erreur si la clé est absente. */
 export async function generateWithClaude(prompt: string): Promise<PostVariant[]> {
-  if (!isClaudeConfigured()) throw new Error("ANTHROPIC_API_KEY non configurée : utilisez le mode copier-coller");
+  const apiKey = await getSecret("anthropic.apiKey");
+  if (!apiKey) throw new Error("Clé Claude non configurée : utilisez le mode copier-coller ou renseignez-la dans Paramètres → Intégrations");
   const { default: Anthropic } = await import("@anthropic-ai/sdk");
-  const client = new Anthropic();
+  const client = new Anthropic({ apiKey });
   const response = await client.messages.create({
     model: "claude-opus-5-5",
     max_tokens: 8000,

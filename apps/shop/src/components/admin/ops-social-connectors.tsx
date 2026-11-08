@@ -28,7 +28,7 @@ export function SocialConnectors({ accounts, configured, conversions }: { accoun
           <section key={p.key} className="rounded-2xl border border-line bg-white p-5">
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-xl bg-ink text-white">{p.icon}</span><div><h2 className="font-heading text-lg font-bold">{p.label}</h2><p className="text-xs text-ink-soft">{p.help}</p></div></div>
-              {configured[p.key] ? <Badge variant="success"><Check /> App configurée</Badge> : <Badge variant="warning"><AlertTriangle /> Variables manquantes</Badge>}
+              {configured[p.key] ? <Badge variant="success"><Check /> App configurée</Badge> : <Badge variant="warning"><AlertTriangle /> Identifiants manquants</Badge>}
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
               <Button asChild size="sm" variant={mine.length ? "outline" : "admin"} disabled={!configured[p.key]}>
@@ -38,7 +38,7 @@ export function SocialConnectors({ accounts, configured, conversions }: { accoun
             </div>
             {needs && <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">Un jeton a expiré ou a été révoqué : reconnectez le compte.</p>}
             <ul className="mt-4 divide-y divide-line text-sm">
-              {mine.length === 0 && <li className="py-3 text-ink-soft">Aucun compte connecté. {configured[p.key] ? "Cliquez sur Connecter." : "Renseignez les variables d'environnement puis redéployez."}</li>}
+              {mine.length === 0 && <li className="py-3 text-ink-soft">Aucun compte connecté. {configured[p.key] ? "Cliquez sur Connecter." : <>Renseignez les identifiants de l&apos;application dans <a href="/admin/parametres?onglet=integration" className="font-semibold text-coral-dark underline">Paramètres → Intégrations</a>.</>}</li>}
               {mine.map((a) => (
                 <li key={a.id} className="flex items-center gap-3 py-3">
                   {a.avatarUrl ? <img src={a.avatarUrl} alt="" className="size-9 rounded-full object-cover" /> : <span className="grid size-9 place-items-center rounded-full bg-ink/5 text-xs font-bold">{a.name.charAt(0)}</span>}

@@ -1,7 +1,6 @@
 "use client";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, NativeSelect, Textarea } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -9,19 +8,12 @@ import { FormField, FormSection } from "@/components/admin/form-controls";
 import { UploadField } from "@/components/admin/upload-field";
 import { saveSettingAction } from "@/app/actions/admin/settings";
 import type { AnalyticsSettings, CommerceSettings, SeoSettings, SettingsKey } from "@/lib/schemas/settings";
+import type { SecretStatus } from "@/lib/integrations/secrets";
+import { IntegrationsForm, type InfraState } from "@/components/admin/ops-integrations-form";
 
-export interface IntegrationState { stripeConfigured: boolean; stripeLive: boolean; stripeKeyPresent: boolean; webhookSecretPresent: boolean; publishableKeyPresent: boolean; storageDriver: string; s3Configured: boolean; emailDriver: string; resendConfigured: boolean; cronSecretPresent: boolean; appUrl: string }
+export interface IntegrationsProps { statuses: SecretStatus[]; canEncrypt: boolean; infra: InfraState }
 
-function Status({ ok, label, detail }: { ok: boolean; label: string; detail?: string }) {
-  return (
-    <li className="flex items-start gap-2 text-sm">
-      {ok ? <CheckCircle2 className="mt-0.5 size-4 text-sage-dark" /> : <XCircle className="mt-0.5 size-4 text-red-500" />}
-      <span><span className="font-semibold">{label}</span>{detail && <span className="block text-xs text-ink-muted">{detail}</span>}</span>
-    </li>
-  );
-}
-
-export function SettingsForm({ commerce: c0, seo: s0, analytics: a0, integration: it }: { commerce: CommerceSettings; seo: SeoSettings; analytics: AnalyticsSettings; integration: IntegrationState }) {
+export function SettingsForm({ commerce: c0, seo: s0, analytics: a0, integrations, defaultTab = "commerce" }: { commerce: CommerceSettings; seo: SeoSettings; analytics: AnalyticsSettings; integrations: IntegrationsProps; defaultTab?: string }) {
   const [commerce, setCommerce] = useState(c0);
   const [seo, setSeo] = useState(s0);
   const [analytics, setAnalytics] = useState(a0);
@@ -30,7 +22,7 @@ export function SettingsForm({ commerce: c0, seo: s0, analytics: a0, integration
   const num = (v: string, fallback: number) => (v === "" ? fallback : Number(v));
 
   return (
-    <Tabs defaultValue="commerce">
+    <Tabs defaultValue={defaultTab}>
       <TabsList className="mb-4">
         <TabsTrigger value="commerce">Commerce</TabsTrigger>
         <TabsTrigger value="seo">SEO</TabsTrigger>
@@ -88,25 +80,15 @@ export function SettingsForm({ commerce: c0, seo: s0, analytics: a0, integration
             <FormField label="Meta Pixel ID"><Input value={analytics.metaPixelId ?? ""} onChange={(e) => setAnalytics({ ...analytics, metaPixelId: e.target.value || null })} /></FormField>
             <FormField label="Pinterest Tag ID"><Input value={analytics.pinterestTagId ?? ""} onChange={(e) => setAnalytics({ ...analytics, pinterestTagId: e.target.value || null })} /></FormField>
             <FormField label="TikTok Pixel ID"><Input value={analytics.tiktokPixelId ?? ""} onChange={(e) => setAnalytics({ ...analytics, tiktokPixelId: e.target.value || null })} /></FormField>
-            <FormField label="Jeton Meta Conversions API" hint={analytics.metaCapiToken ? "Un jeton est enregistré (masqué). Saisissez-en un nouveau pour le remplacer." : "Events Manager → Pixel → Paramètres → Générer un jeton d'accès"}><Input type="password" autoComplete="off" placeholder={analytics.metaCapiToken ? "••••••••" : ""} defaultValue="" onChange={(e) => setAnalytics({ ...analytics, metaCapiToken: e.target.value || analytics.metaCapiToken })} /></FormField>
-            <FormField label="Jeton TikTok Events API" hint={analytics.tiktokEventsToken ? "Un jeton est enregistré (masqué)." : "TikTok Ads Manager → Événements → Paramètres → Générer un jeton"}><Input type="password" autoComplete="off" placeholder={analytics.tiktokEventsToken ? "••••••••" : ""} defaultValue="" onChange={(e) => setAnalytics({ ...analytics, tiktokEventsToken: e.target.value || analytics.tiktokEventsToken })} /></FormField>
           </div>
+          <p className="text-xs text-ink-muted">Les jetons serveur (Meta Conversions API, TikTok Events API) se saisissent dans l&apos;onglet Intégrations.</p>
           <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={analytics.consentBannerEnabled} onChange={(e) => setAnalytics({ ...analytics, consentBannerEnabled: e.target.checked })} className="size-4 accent-coral" /> Afficher la bannière de consentement aux cookies</label>
           <div><Button variant="admin" disabled={pending} onClick={() => save("analytics", analytics)}>Enregistrer</Button></div>
         </FormSection>
       </TabsContent>
 
       <TabsContent value="integration">
-        <FormSection title="État des intégrations" description="Configuration lue depuis les variables d'environnement (jamais modifiable ni affichée ici).">
-          <ul className="space-y-2">
-            <Status ok={it.stripeKeyPresent} label={`Clé secrète Stripe ${it.stripeKeyPresent ? (it.stripeLive ? "(mode PRODUCTION)" : "(mode test)") : "absente"}`} detail="STRIPE_SECRET_KEY" />
-            <Status ok={it.publishableKeyPresent} label="Clé publique Stripe" detail="NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY" />
-            <Status ok={it.webhookSecretPresent} label="Secret du webhook Stripe" detail={`STRIPE_WEBHOOK_SECRET · endpoint : ${it.appUrl}/api/stripe/webhook (événements : checkout.session.completed, checkout.session.async_payment_succeeded/failed, checkout.session.expired, payment_intent.payment_failed, charge.refunded)`} />
-            <Status ok={it.storageDriver === "s3" ? it.s3Configured : true} label={`Stockage des fichiers : ${it.storageDriver === "s3" ? "S3 compatible" : "local (développement)"}`} detail={it.storageDriver === "local" ? "Passer en S3 (STORAGE_DRIVER=s3) avant la mise en production sur Vercel" : "S3_BUCKET, S3_REGION, S3_ENDPOINT, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY"} />
-            <Status ok={it.emailDriver === "resend" ? it.resendConfigured : true} label={`Emails : ${it.emailDriver === "resend" ? "Resend" : "console (développement)"}`} detail={it.emailDriver === "console" ? "Passer EMAIL_DRIVER=resend et RESEND_API_KEY en production" : "RESEND_API_KEY, EMAIL_FROM"} />
-            <Status ok={it.cronSecretPresent} label="Secret des tâches planifiées" detail="CRON_SECRET · /api/cron/publish (publications programmées) et /api/cron/marketing (relances, nouveautés)" />
-          </ul>
-        </FormSection>
+        <IntegrationsForm statuses={integrations.statuses} canEncrypt={integrations.canEncrypt} infra={integrations.infra} />
       </TabsContent>
     </Tabs>
   );

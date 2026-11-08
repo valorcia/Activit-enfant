@@ -2,6 +2,7 @@ import type { PrismaClient } from "@prisma/client";
 import { prisma as defaultPrisma } from "@/lib/db";
 import { sha256Normalized } from "@/lib/crypto";
 import { getSetting } from "@/lib/settings";
+import { getSecrets } from "@/lib/integrations/secrets";
 
 /**
  * Envoi serveur des achats aux API de conversion (Meta Conversions API, TikTok
@@ -94,7 +95,11 @@ export async function sendPurchaseConversions(orderId: string, db: PrismaClient 
     }
   };
 
-  result.meta = await run("META", Boolean(analytics.metaPixelId && analytics.metaCapiToken), () => sendMeta(payload, analytics.metaPixelId as string, analytics.metaCapiToken as string));
-  result.tiktok = await run("TIKTOK", Boolean(analytics.tiktokPixelId && analytics.tiktokEventsToken), () => sendTikTok(payload, analytics.tiktokPixelId as string, analytics.tiktokEventsToken as string));
+  // Jetons : Intégrations (prioritaire), sinon paramètres Analytics (compatibilité)
+  const secrets = await getSecrets(["meta.capiToken", "tiktok.eventsToken"]);
+  const metaToken = secrets["meta.capiToken"] || analytics.metaCapiToken || "";
+  const tiktokToken = secrets["tiktok.eventsToken"] || analytics.tiktokEventsToken || "";
+  result.meta = await run("META", Boolean(analytics.metaPixelId && metaToken), () => sendMeta(payload, analytics.metaPixelId as string, metaToken));
+  result.tiktok = await run("TIKTOK", Boolean(analytics.tiktokPixelId && tiktokToken), () => sendTikTok(payload, analytics.tiktokPixelId as string, tiktokToken));
   return result;
 }

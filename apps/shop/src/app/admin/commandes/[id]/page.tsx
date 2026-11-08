@@ -27,7 +27,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
   });
   if (!order) notFound();
   const canRefund = roleCan(user.role, "orders:refund");
-  const live = isStripeLiveMode();
+  const live = await isStripeLiveMode();
   const stripeBase = `https://dashboard.stripe.com${live ? "" : "/test"}`;
   const isPaid = order.status === "PAID" || order.status === "PARTIALLY_REFUNDED";
   const address = order.billingAddress as { line1?: string; line2?: string; postal_code?: string; city?: string; country?: string } | null;

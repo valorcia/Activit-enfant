@@ -18,7 +18,7 @@ export type CheckoutActionResult = { ok: true; url: string } | { ok: false; erro
 export async function startCheckoutAction(raw: unknown): Promise<CheckoutActionResult> {
   const parsed = schema.safeParse(raw);
   if (!parsed.success) return { ok: false, error: "Panier invalide. Vérifiez votre email et réessayez." };
-  if (!isStripeConfigured()) return { ok: false, error: "Le paiement n'est pas encore configuré sur ce site (clés Stripe manquantes)." };
+  if (!(await isStripeConfigured())) return { ok: false, error: "Le paiement n'est pas encore configuré sur ce site (clés Stripe manquantes)." };
   const input = parsed.data;
   try {
     const email = input.email || null;

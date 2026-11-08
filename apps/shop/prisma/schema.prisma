@@ -130,6 +130,7 @@ model User {
   reviewsModerated Review[]  @relation("ReviewModeratedBy")
   apiKeys         ApiKey[]
   auditLogs       AuditLog[]
+  integrationSecrets IntegrationSecret[]
   imports         ImportJob[]
   refunds         Refund[]
   socialAccounts  SocialAccount[]
@@ -148,6 +149,19 @@ model ApiKey {
   lastUsedAt  DateTime?
   revokedAt   DateTime?
   createdAt   DateTime  @default(now())
+}
+
+// Clés d'intégration saisies dans l'administration (chiffrées AES-256-GCM).
+// Priorité sur les variables d'environnement, qui restent un repli.
+model IntegrationSecret {
+  id          String   @id @default(cuid())
+  key         String   @unique // ex. stripe.secretKey, meta.appId
+  valueEnc    String
+  hint        String?  // 4 derniers caractères, pour l'affichage
+  updatedById String?
+  updatedBy   User?    @relation(fields: [updatedById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model AuditLog {

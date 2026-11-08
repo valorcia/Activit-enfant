@@ -16,9 +16,8 @@ export const env = {
   nodeEnv: process.env.NODE_ENV ?? "development",
   isProd: process.env.NODE_ENV === "production",
 
-  stripeSecretKey: process.env.STRIPE_SECRET_KEY ?? "",
-  stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",
-  stripePublishableKey: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "",
+  // Clés Stripe, Resend, IA, Meta, TikTok : voir src/lib/integrations/secrets.ts
+  // (saisies dans l'administration, variables d'environnement en repli).
 
   storageDriver: (process.env.STORAGE_DRIVER ?? "local") as "local" | "s3",
   storageLocalDir: process.env.STORAGE_LOCAL_DIR ?? "./storage",
@@ -32,7 +31,6 @@ export const env = {
   },
 
   emailDriver: (process.env.EMAIL_DRIVER ?? "console") as "console" | "resend",
-  resendApiKey: process.env.RESEND_API_KEY ?? "",
   emailFrom: process.env.EMAIL_FROM ?? "Boutique <no-reply@example.com>",
 
   downloadTokenSecret: process.env.DOWNLOAD_TOKEN_SECRET ?? process.env.AUTH_SECRET ?? "dev-secret",
