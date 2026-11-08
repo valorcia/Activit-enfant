@@ -5,6 +5,7 @@ import { ProductionTab } from "./production-tab";
 import { PagesTab } from "./pages-tab";
 import { CoverTab } from "./cover-tab";
 import { ExportsTab } from "./exports-tab";
+import { ShopTab, type ShopSyncView } from "./shop-tab";
 import type { BookTheme, PageLayout } from "@/lib/schemas/layout";
 import type { CoverData } from "@/lib/schemas/activity";
 import type { estimateBookCost } from "@/lib/queue/estimate";
@@ -29,6 +30,7 @@ export function BookTabs(props: {
   cover: CoverData & { introduction?: string };
   coverIllustrations: CoverIll[];
   settings: { textProvider: string; imageProvider: string; stepIllustrations: boolean };
+  shop: ShopSyncView;
 }) {
   return (
     <Tabs defaultValue={props.defaultTab}>
@@ -38,12 +40,14 @@ export function BookTabs(props: {
         <TabsTrigger value="pages">Pages ({props.pages.length})</TabsTrigger>
         <TabsTrigger value="cover">Couverture</TabsTrigger>
         <TabsTrigger value="exports">Exports ({props.exports.length})</TabsTrigger>
+        <TabsTrigger value="shop">Boutique{props.shop.publishedAt ? " ✓" : ""}</TabsTrigger>
       </TabsList>
       <TabsContent value="outline"><OutlineTab book={props.book} activities={props.activities} /></TabsContent>
       <TabsContent value="production"><ProductionTab book={props.book} activities={props.activities} jobs={props.jobs} activeJobId={props.activeJobId} estimate={props.estimate} settings={props.settings} /></TabsContent>
       <TabsContent value="pages"><PagesTab book={props.book} pages={props.pages} /></TabsContent>
       <TabsContent value="cover"><CoverTab book={props.book} cover={props.cover} illustrations={props.coverIllustrations} /></TabsContent>
       <TabsContent value="exports"><ExportsTab book={props.book} exports={props.exports} snapshots={props.snapshots} /></TabsContent>
+      <TabsContent value="shop"><ShopTab bookId={props.book.id} sync={props.shop} /></TabsContent>
     </Tabs>
   );
 }

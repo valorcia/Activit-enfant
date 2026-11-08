@@ -61,7 +61,9 @@ Templates : `ADVENTURE`, `ACTIVITY`, `STORY`, `EVENT`, `CLASSIC`. Rôles d'image
 
 Réponse `201` : le produit complet, avec `editUrl` (lien d'édition dans l'administration) et `publicUrl` (null tant qu'il n'est pas publié). Les images dont le téléchargement a échoué sont listées dans `warnings`.
 
-### `GET /products?page=1&perPage=25&status=PUBLISHED`
+### `GET /products?page=1&perPage=25&status=PUBLISHED&slug=…&source=api`
+
+Filtres facultatifs : `status`, `slug` (recherche exacte, utile pour retrouver un produit créé par une intégration), `source` (`admin`, `csv`, `api`, `duplicate`).
 
 ### `GET /products/:id` (id ou slug)
 
@@ -71,12 +73,12 @@ Envoyez uniquement les champs à modifier. Le statut ne change pas via PATCH (sa
 
 ### `POST /products/:id/images`
 
-- multipart/form-data : `file` (image), `role`, `alt`
-- ou JSON : `{ "url": "https://…", "role": "GALLERY", "alt": "…" }`
+- multipart/form-data : `file` (image), `role`, `alt`, `replace` (`1` pour supprimer d'abord les images existantes du même rôle)
+- ou JSON : `{ "url": "https://…", "role": "GALLERY", "alt": "…", "replace": true }`
 
 ### `POST /products/:id/files`
 
-multipart/form-data : `file` (PDF ou ZIP, 100 Mo max), `kind` (`MAIN_PDF`, `EXTRA_PDF`, `INSTRUCTIONS`, `BONUS`), `name`, `description`. Le fichier est stocké dans l'espace **privé** : il n'a jamais d'URL publique et n'est livré qu'après paiement.
+multipart/form-data : `file` (PDF ou ZIP, 100 Mo max), `kind` (`MAIN_PDF`, `EXTRA_PDF`, `INSTRUCTIONS`, `BONUS`), `name`, `description`, `replace` (`1` pour remplacer les fichiers existants du même type : re-synchronisation idempotente depuis un outil de création). Le fichier est stocké dans l'espace **privé** : il n'a jamais d'URL publique et n'est livré qu'après paiement.
 
 ### `POST /products/:id/publish`
 

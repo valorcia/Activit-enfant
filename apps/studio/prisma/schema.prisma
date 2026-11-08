@@ -106,6 +106,14 @@ model Book {
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 
+  // Synchronisation avec la boutique (API v1 de apps/shop)
+  shopProductId   String?
+  shopProductSlug String?
+  shopPublishedAt DateTime?
+  shopLastSyncAt  DateTime?
+  shopSyncError   String?
+  shopListing     Json?     // ShopListing : fiche commerciale éditable (prix, textes, catégorie, FAQ, autoPublish)
+
   activities BookActivity[]
   pages      BookPage[]
   exports    Export[]

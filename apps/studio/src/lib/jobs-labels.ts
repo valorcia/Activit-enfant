@@ -9,6 +9,7 @@ export function labelFor(type: string) {
       "book.layout": "Mise en page",
       "book.export": "Export PDF",
       "book.cover": "Couverture",
+      "shop.publish": "Publication boutique",
     }[type] ?? type
   );
 }

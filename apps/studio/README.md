@@ -109,3 +109,17 @@ Parcours de test réalisé de bout en bout : illustrations (6 images de démonst
 - Le fournisseur d'images réel implémenté est OpenAI ; d'autres fournisseurs se branchent via l'interface `ImageProvider` (`src/lib/ai/image`).
 - La validation visuelle est humaine ; une pré-évaluation automatique par modèle multimodal peut être ajoutée dans `src/lib/quality`.
 - La correction orthographique est heuristique (typographie, répétitions) ; brancher un correcteur dédié si nécessaire.
+
+## Publication vers la boutique
+
+Le studio est relié à la boutique (`apps/shop`) par son API v1 (`apps/shop/docs/API.md`). À chaque **export PDF de livre** terminé (numérique, ou imprimable s'il n'existe pas de version numérique), le worker crée ou met à jour la fiche produit correspondante et la **publie automatiquement** : la landing page dédiée (`/aventures/<slug>`) est en ligne sans intervention.
+
+Configuration : **Paramètres → Boutique** (URL de la boutique, clé API créée dans l'admin de la boutique avec les scopes `products:write` et `products:publish`, publication immédiate ou brouillon à valider, prix / catégorie / modèle par défaut, bouton « Tester la connexion »). Variables d'environnement de repli : `SHOP_API_URL`, `SHOP_API_KEY`.
+
+Pour chaque livre, l'onglet **Boutique** de la page du livre affiche l'état de synchronisation (jamais publié, brouillon à valider, publié avec liens public et admin), permet d'éditer la fiche commerciale (prix, sous-titre, descriptions, catégorie, modèle de fiche, FAQ, SEO) et de publier ou re-synchroniser à la demande. Les champs vides sont dérivés du livre : titre, sous-titre, introduction, sommaire des activités (contenu du kit), tranche d'âge, nombre de pages, matériel.
+
+Ce qui est envoyé : la fiche, la couverture acceptée (image principale), jusqu'à trois aperçus de pages intérieures (rendus par Chromium depuis la route d'impression) et le PDF exporté (stockage privé, livré uniquement après paiement). La synchronisation est idempotente : un livre déjà publié est mis à jour, jamais dupliqué (slug stable `titre-<fin de l'identifiant>`).
+
+Scripts : `pnpm tsx scripts/dev-publish-to-shop.ts <bookId> [--draft] [--no-previews]`.
+
+Note technique : le studio épingle Prisma `6.19.2` tandis que la boutique utilise `6.19.3`. Avec une version identique, pnpm partage un seul paquet `@prisma/client` entre les deux applications et chaque `prisma generate` écrase le client de l'autre.

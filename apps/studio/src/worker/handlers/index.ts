@@ -9,6 +9,9 @@ import { generateCoverTexts } from "@/lib/generation/cover";
 import { rebuildBookPages } from "@/lib/layout/book";
 import { runActivityChecks } from "@/lib/quality/checks";
 import { runExport } from "@/lib/export";
+import { publishBookToShop } from "@/lib/shop/publish";
+import { getShopSettings } from "@/lib/settings";
+import { ShopListingSchema } from "@/lib/schemas/settings";
 import { getAiSettings } from "@/lib/settings";
 import type { IllustrationKind } from "@prisma/client";
 
@@ -114,10 +117,21 @@ export const handlers: Record<string, Handler> = {
     await setJob(jobId, { status: "COMPLETED", progress: 100, step: `${pages.length} pages assemblées`, result: { pages: pages.length } });
   },
 
-  [QUEUES.bookExport]: async ({ jobId, exportId }) => {
+  [QUEUES.bookExport]: async ({ jobId, exportId, bookId }) => {
     await setJob(jobId, { status: "RUNNING", step: "Rendu PDF", progress: 20 });
     const r = await runExport(exportId as string);
     await setJob(jobId, { status: "COMPLETED", progress: 100, step: `PDF de ${r.pageCount} pages`, result: r.checks as never });
+    // Publication automatique vers la boutique après un export de livre (jamais bloquante pour l'export)
+    if (bookId) await maybeAutoPublish(bookId, exportId as string, jobId);
+  },
+
+  /** Publication (ou re-synchronisation) manuelle d'un livre vers la boutique. */
+  [QUEUES.shopPublish]: async ({ jobId, bookId, exportId, publish }) => {
+    await setJob(jobId, { status: "RUNNING", step: "Synchronisation avec la boutique", progress: 10 });
+    const r = await publishBookToShop(bookId!, { exportId: exportId as string | undefined, publish: publish as boolean | undefined, log: (m) => jobLog(jobId, m) });
+    for (const w of r.warnings) await jobLog(jobId, w, "warn");
+    const label = r.status === "published" ? "Publié dans la boutique" : r.status === "draft_pending_review" ? "Brouillon en attente de validation dans la boutique" : "Fiche mise à jour";
+    await setJob(jobId, { status: "COMPLETED", progress: 100, step: label, result: { productId: r.product.id, slug: r.product.slug, publicUrl: r.product.publicUrl, status: r.status } });
   },
 
   /**
@@ -211,4 +225,32 @@ async function finish(jobId: string, bookId: string, status: "COMPLETED" | "FAIL
 /** Lance le pipeline complet d'un livre (utilisé par l'UI). */
 export async function startBookPipeline(bookId: string, opts: { withIllustrations: boolean; withCover: boolean }) {
   return enqueue(QUEUES.bookPipeline, { bookId, ...opts });
+}
+
+
+/**
+ * Après un export de livre réussi : si la boutique est configurée et la publication
+ * automatique active (réglage global, surchargeable par livre), on synchronise la fiche
+ * et on la publie. Les erreurs sont journalisées sur le job d'export sans le faire échouer.
+ */
+async function maybeAutoPublish(bookId: string, exportId: string, jobId: string) {
+  try {
+    const exp = await prisma.export.findUnique({ where: { id: exportId }, select: { kind: true, status: true } });
+    if (!exp || exp.status !== "COMPLETED" || (exp.kind !== "BOOK_DIGITAL" && exp.kind !== "BOOK_PRINT")) return;
+    const settings = await getShopSettings();
+    if (!settings.shopApiUrl || !settings.shopApiKey) return;
+    const book = await prisma.book.findUnique({ where: { id: bookId }, select: { shopListing: true, exports: { where: { status: "COMPLETED", kind: "BOOK_DIGITAL" }, select: { id: true }, take: 1 } } });
+    if (!book) return;
+    // Un export imprimable ne déclenche la publication que s'il n'existe pas de version numérique
+    if (exp.kind === "BOOK_PRINT" && book.exports.length > 0) return;
+    const listing = ShopListingSchema.safeParse(book.shopListing ?? {});
+    const auto = listing.success && listing.data.autoPublish !== undefined ? listing.data.autoPublish : settings.autoPublish;
+    if (!auto) return;
+    await jobLog(jobId, "Publication automatique vers la boutique…");
+    const r = await publishBookToShop(bookId, { exportId, publish: true, log: (m) => jobLog(jobId, m) });
+    for (const w of r.warnings) await jobLog(jobId, w, "warn");
+    await jobLog(jobId, r.status === "published" ? `Publié : ${r.product.publicUrl ?? r.product.slug}` : `Fiche créée en brouillon (validation dans la boutique) : ${r.product.editUrl}`);
+  } catch (err) {
+    await jobLog(jobId, `Publication boutique échouée : ${err instanceof Error ? err.message : err}`, "error");
+  }
 }

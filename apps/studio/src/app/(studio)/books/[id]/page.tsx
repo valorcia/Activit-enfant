@@ -5,7 +5,9 @@ import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui/button";
 import { ageRangeLabel, ART_STYLES, BOOK_TYPES, PAGE_FORMATS } from "@/lib/schemas/activity";
-import { getAiSettings } from "@/lib/settings";
+import { getAiSettings, getShopSettings } from "@/lib/settings";
+import { ShopListingSchema } from "@/lib/schemas/settings";
+import { buildListingFromBook, loadBookForListing } from "@/lib/shop/publish";
 import { estimateBookCost } from "@/lib/queue/estimate";
 import { BookTabs } from "@/components/book/book-tabs";
 import { buildContextForBook } from "@/lib/layout/book";
@@ -37,6 +39,10 @@ export default async function BookPage({ params, searchParams }: { params: Promi
   const ctx = await buildContextForBook(id);
   const cover = await getCover(id);
   const activeJob = book.jobs.find((j) => ["QUEUED", "RUNNING", "PAUSED"].includes(j.status));
+  const shopSettings = await getShopSettings();
+  const shopConfigured = Boolean(shopSettings.shopApiUrl && shopSettings.shopApiKey);
+  const listingParsed = ShopListingSchema.safeParse(book.shopListing ?? {});
+  const derived = buildListingFromBook(await loadBookForListing(id), shopSettings);
 
   return (
     <div className="p-8 max-w-7xl">
@@ -74,6 +80,18 @@ export default async function BookPage({ params, searchParams }: { params: Promi
         cover={cover}
         coverIllustrations={book.illustrations.map((i) => ({ id: i.id, status: i.status, isDemo: i.isDemo, isCurrent: i.isCurrent, src: assetUrl(i.assetId), version: i.version }))}
         settings={{ textProvider: settings.textProvider, imageProvider: settings.imageProvider, stepIllustrations: settings.stepIllustrations }}
+        shop={{
+          configured: shopConfigured,
+          shopUrl: shopSettings.shopApiUrl || null,
+          productId: book.shopProductId,
+          productSlug: book.shopProductSlug,
+          publishedAt: book.shopPublishedAt?.toISOString() ?? null,
+          lastSyncAt: book.shopLastSyncAt?.toISOString() ?? null,
+          syncError: book.shopSyncError,
+          listing: listingParsed.success ? listingParsed.data : {},
+          defaults: { priceCents: shopSettings.defaultPriceCents, categorySlug: shopSettings.defaultCategorySlug, template: derived.template, autoPublish: shopSettings.autoPublish, name: derived.name, tagline: derived.tagline ?? "", shortDescription: derived.shortDescription ?? "" },
+          hasExport: book.exports.some((e) => e.status === "COMPLETED" && (e.kind === "BOOK_DIGITAL" || e.kind === "BOOK_PRINT")),
+        }}
       />
     </div>
   );

@@ -58,3 +58,23 @@ export async function attachPrivateFile(productId: string, buf: Buffer, mime: st
     data: { productId, name: opts.name.slice(0, 160), kind: opts.kind ?? "MAIN_PDF", storageKey: key, mime, sizeBytes: buf.length, description: opts.description ?? null, position: await nextPosition(productId, "file") },
   });
 }
+
+/** Supprime les images d'un produit ayant un rôle donné (stockage + base). Utilisé par le mode `replace` de l'API. */
+export async function removeImagesByRole(productId: string, role: MediaRole) {
+  const rows = await prisma.productImage.findMany({ where: { productId, role } });
+  const storage = getStorage();
+  for (const r of rows) {
+    if (r.storageKey) await storage.delete(r.storageKey).catch(() => undefined);
+  }
+  await prisma.productImage.deleteMany({ where: { productId, role } });
+  return rows.length;
+}
+
+/** Supprime les fichiers payants d'un produit d'un type donné (stockage privé + base). */
+export async function removeFilesByKind(productId: string, kind: FileKind) {
+  const rows = await prisma.productFile.findMany({ where: { productId, kind } });
+  const storage = getStorage();
+  for (const r of rows) await storage.delete(r.storageKey).catch(() => undefined);
+  await prisma.productFile.deleteMany({ where: { productId, kind } });
+  return rows.length;
+}

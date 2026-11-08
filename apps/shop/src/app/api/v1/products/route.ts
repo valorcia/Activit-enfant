@@ -19,7 +19,13 @@ export async function GET(req: Request) {
   const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
   const perPage = Math.min(100, Math.max(1, Number(url.searchParams.get("perPage")) || 25));
   const status = url.searchParams.get("status");
-  const where = status && ["DRAFT", "SCHEDULED", "PUBLISHED", "ARCHIVED"].includes(status) ? { status: status as "DRAFT" } : {};
+  const slug = url.searchParams.get("slug");
+  const source = url.searchParams.get("source");
+  const where = {
+    ...(status && ["DRAFT", "SCHEDULED", "PUBLISHED", "ARCHIVED"].includes(status) ? { status: status as "DRAFT" } : {}),
+    ...(slug ? { slug } : {}),
+    ...(source ? { source } : {}),
+  };
   const [items, total] = await Promise.all([
     prisma.product.findMany({ where, orderBy: { createdAt: "desc" }, skip: (page - 1) * perPage, take: perPage, select: apiProductSelect }),
     prisma.product.count({ where }),
