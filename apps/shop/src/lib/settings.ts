@@ -10,7 +10,11 @@ export function defaultSettings<K extends SettingsKey>(key: K): SettingsMap[K] {
 }
 
 async function loadAllSettings(): Promise<SettingsMap> {
-  const rows = await prisma.siteSetting.findMany();
+  // Base injoignable (réveil Neon, incident) : on sert les valeurs par défaut plutôt qu'une erreur 500
+  const rows = await prisma.siteSetting.findMany().catch((e: unknown) => {
+    console.error("[settings] base injoignable, valeurs par défaut utilisées", e instanceof Error ? e.message : e);
+    return [] as Array<{ key: string; value: unknown }>;
+  });
   const byKey = new Map(rows.map((r) => [r.key, r.value]));
   const result = {} as SettingsMap;
   for (const key of Object.keys(settingsSchemas) as SettingsKey[]) {
