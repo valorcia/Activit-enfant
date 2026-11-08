@@ -1,6 +1,6 @@
 # Boutique — La Malle à Jeux
 
-Plateforme e-commerce premium pour vendre des produits numériques destinés aux enfants de 3 à 12 ans : chasses au trésor, cahiers d'activités, kits d'événements, histoires illustrées. Site vitrine, boutique, landing page automatique par produit, back-office complet, paiement Stripe Checkout et livraison numérique sécurisée.
+Plateforme e-commerce premium pour vendre des produits numériques destinés aux enfants de 3 à 10 ans : chasses au trésor, cahiers d'activités, kits d'événements, histoires illustrées. Site vitrine, boutique, landing page automatique par produit, back-office complet, paiement Stripe Checkout et livraison numérique sécurisée.
 
 ## Pile technique
 

@@ -107,7 +107,7 @@ export interface CatalogQuery {
   q?: string;
   category?: string;      // slug
   collection?: string;    // slug
-  age?: string;           // "3-5" | "5-8" | "8-12"
+  age?: string;           // "3-5" | "5-8" | "8-10"
   theme?: string;         // universe
   priceMax?: number;      // euros
   duration?: string;      // "court" (<30) | "moyen" (30-60) | "long" (>60)
@@ -119,7 +119,7 @@ export interface CatalogQuery {
 export const AGE_BUCKETS: Record<string, { min: number; max: number; label: string }> = {
   "3-5": { min: 3, max: 5, label: "3–5 ans" },
   "5-8": { min: 5, max: 8, label: "5–8 ans" },
-  "8-12": { min: 8, max: 12, label: "8–12 ans" },
+  "8-10": { min: 8, max: 10, label: "8–10 ans" },
 };
 
 export const DURATION_BUCKETS: Record<string, { min?: number; max?: number; label: string }> = {

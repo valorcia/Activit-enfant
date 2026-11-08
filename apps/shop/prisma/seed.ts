@@ -57,8 +57,9 @@ async function main() {
     { slug: "pirates", name: "Univers Pirates", description: "Trésors, cartes et bateaux pirates.", color: "#A9D8F5", position: 1 },
     { slug: "3-5-ans", name: "3–5 ans", description: "Premières aventures pour les plus petits.", color: "#FFD66B", position: 2 },
     { slug: "5-8-ans", name: "5–8 ans", description: "Énigmes et activités pour les aventuriers en herbe.", color: "#A8C9A1", position: 3 },
-    { slug: "8-12-ans", name: "8–12 ans", description: "Défis et missions pour les grands explorateurs.", color: "#C8B6E8", position: 4 },
+    { slug: "8-10-ans", name: "8–10 ans", description: "Défis et missions pour les grands explorateurs.", color: "#C8B6E8", position: 4 },
   ];
+  await prisma.collection.updateMany({ where: { slug: "8-12-ans" }, data: { slug: "8-10-ans", name: "8–10 ans" } });
   const colBySlug: Record<string, string> = {};
   for (const c of collections) {
     const row = await prisma.collection.upsert({ where: { slug: c.slug }, create: c, update: { name: c.name, description: c.description, color: c.color, position: c.position } });

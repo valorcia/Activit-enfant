@@ -122,7 +122,7 @@ export default async function HomePage() {
         <div className="container-shell grid items-center gap-10 py-12 sm:py-16 lg:grid-cols-[1.05fr_1fr] lg:py-24">
           <div className="relative z-10">
             <p className="mb-4 inline-flex items-center gap-2 rounded-full bg-white px-4 py-1.5 font-heading text-sm font-bold text-ink shadow-card">
-              <Icon name="sparkles" className="size-4 text-honey-dark" /> Kits d&apos;activités à imprimer · 3 à 12 ans
+              <Icon name="sparkles" className="size-4 text-honey-dark" /> Kits d&apos;activités à imprimer · 3 à 10 ans
             </p>
             <h1 id="hero-title" className="font-heading text-4xl font-bold leading-[1.05] text-balance sm:text-5xl lg:text-6xl">{homepage.hero.title}</h1>
             <p className="mt-5 max-w-xl text-lg text-ink-soft text-pretty sm:text-xl">{homepage.hero.subtitle}</p>

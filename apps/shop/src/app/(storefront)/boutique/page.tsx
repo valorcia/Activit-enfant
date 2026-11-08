@@ -10,7 +10,7 @@ export async function generateMetadata({ searchParams }: { searchParams: Promise
   const filtered = Boolean(v.q || v.age || v.theme || v.prix || v.duree || v.categorie || v.page > 1);
   return {
     title: v.q ? `Recherche : ${v.q}` : "Boutique — toutes les aventures à imprimer",
-    description: "Chasses au trésor, cahiers d'activités, kits d'anniversaire et histoires à imprimer pour enfants de 3 à 12 ans. Filtrez par âge, thème, prix et durée.",
+    description: "Chasses au trésor, cahiers d'activités, kits d'anniversaire et histoires à imprimer pour enfants de 3 à 10 ans. Filtrez par âge, thème, prix et durée.",
     alternates: { canonical: `${env.appUrl}/boutique` },
     robots: filtered ? { index: false, follow: true } : undefined,
   };

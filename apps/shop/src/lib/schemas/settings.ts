@@ -145,7 +145,7 @@ export type CommerceSettings = z.infer<typeof commerceSettingsSchema>;
 export const seoSettingsSchema = z.object({
   defaultTitle: z.string().max(70).default("La Malle à Jeux — Chasses au trésor et activités à imprimer"),
   titleTemplate: z.string().max(70).default("%s | La Malle à Jeux"),
-  defaultDescription: z.string().max(170).default("Chasses au trésor, cahiers d'activités, kits d'anniversaire et histoires à imprimer pour les enfants de 3 à 12 ans. Téléchargement immédiat."),
+  defaultDescription: z.string().max(170).default("Chasses au trésor, cahiers d'activités, kits d'anniversaire et histoires à imprimer pour les enfants de 3 à 10 ans. Téléchargement immédiat."),
   ogImageUrl: z.string().max(500).optional().nullable().default("/images/brand/banniere-la-malle-a-jeux.webp"),
   robotsIndex: z.boolean().default(true),
 });
