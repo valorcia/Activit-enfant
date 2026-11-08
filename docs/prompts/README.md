@@ -14,3 +14,4 @@ Chaque e-book se produit en trois temps :
 | Lutins farceurs : 30 idées pour Noël | `lutins-farceurs-noel.md` |
 | Charte d'illustration commune | `style-illustrations.md` |
 | Prompts d'images ChatGPT (3 e-books) | `images-openai.md` |
+| Dinosaures : toutes les images en une demande | `dinosaures-images-tout-en-un.md` |
