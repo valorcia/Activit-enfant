@@ -109,6 +109,10 @@ Le studio se déploie en deux services qui partagent la même base PostgreSQL et
 
 Variables à définir **sur les deux services** : `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `DB_SCHEMA=studio`, `STORAGE_DRIVER=s3`, `S3_*`, `INTERNAL_TOKEN` (identique des deux côtés), `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`, `SHOP_API_URL`, `SHOP_API_KEY`. Côté web uniquement : `STUDIO_PASSWORD` (mot de passe d'accès, 8 caractères minimum). Côté worker uniquement : `APP_URL` = URL publique du studio (le worker y charge les routes `/print` avec le jeton interne pour produire les PDF).
 
+### Worker sur votre ordinateur (option gratuite)
+
+Le worker n'a pas besoin d'être hébergé : copiez `.env.production.example` en `.env.production` (base Neon, bucket R2, `APP_URL` du studio en ligne, `INTERNAL_TOKEN`), puis lancez `pnpm worker:prod` le temps de produire un livre. Les tâches en attente sont traitées, les PDF rendus avec le Chromium local (`npx playwright install chromium` la première fois), puis vous arrêtez le worker. Pour un worker allumé en permanence, utilisez Railway/Render avec `Dockerfile.worker`.
+
 Accès : avec `STUDIO_PASSWORD` défini, toute l'interface demande le mot de passe (page `/connexion`, cookie 30 jours). Les routes `/print` et `/api/assets` restent accessibles au worker grâce à `INTERNAL_TOKEN`.
 
 ## Principes de qualité intégrés

@@ -17,7 +17,8 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
     "postinstall": "prisma generate",
-    "build:next": "prisma generate && next build"
+    "build:next": "prisma generate && next build",
+    "worker:prod": "node --env-file=.env.production --import tsx src/worker/index.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
