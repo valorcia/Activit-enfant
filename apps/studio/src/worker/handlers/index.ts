@@ -13,7 +13,7 @@ import { publishBookToShop } from "@/lib/shop/publish";
 import { getShopSettings } from "@/lib/settings";
 import { ShopListingSchema } from "@/lib/schemas/settings";
 import { getAiSettings } from "@/lib/settings";
-import type { IllustrationKind } from "@prisma/client";
+import type { IllustrationKind, Prisma } from "@prisma/client";
 import { isManualInputRequired } from "@/lib/ai/manual-core";
 import { markWaitingInput } from "@/lib/manual/requests";
 import { isStructuredKit } from "@/lib/kits/types";
@@ -21,6 +21,8 @@ import { generateKitContent, generateKitIllustration, kitIllustrationPlan, readK
 import { mainCount } from "@/lib/kits/content";
 import { runClipStep, runRenderStep } from "@/lib/video/worker";
 import { processAutopilotRun } from "@/lib/autopilot/runner";
+import { needsGeneration } from "@/lib/generation/regen-policy";
+import { finalizeSketches, reworkIllustration, type ReworkMode } from "@/lib/generation/rework";
 
 type Handler = (data: JobPayload) => Promise<unknown>;
 
@@ -87,7 +89,7 @@ export const handlers: Record<string, Handler> = {
     await setJob(jobId, { status: "COMPLETED", progress: 100, step: "Fiche rédigée", costUsd: v.usage.costUsd });
   },
 
-  [QUEUES.activityIllustrate]: async ({ jobId, activityId, bookId }) => {
+  [QUEUES.activityIllustrate]: async ({ jobId, activityId, bookId, sketch }) => {
     await setJob(jobId, { status: "RUNNING", step: "Préparation", progress: 5 });
     const settings = await getAiSettings();
     const content = await getActivityContent(activityId!);
@@ -108,15 +110,12 @@ export const handlers: Record<string, Handler> = {
         break;
       }
       const p = plan[i];
-      // Ne régénère pas une illustration déjà acceptée
-      const existing = await prisma.illustration.findFirst({ where: { activityId, kind: p.kind, stepIndex: p.stepIndex ?? null, isCurrent: true, status: "ACCEPTED", isDemo: false } });
-      if (existing) continue;
-      // Mode copier-coller : une image déjà collée (non encore validée) n'est pas redemandée
-      const pasted = await prisma.illustration.findFirst({ where: { activityId, kind: p.kind, stepIndex: p.stepIndex ?? null, isCurrent: true, status: "GENERATED", provider: "manual" } });
-      if (pasted) continue;
+      // Pas de regénération implicite : une image acceptée, générée ou collée est conservée
+      const current = await prisma.illustration.findFirst({ where: { activityId, kind: p.kind, stepIndex: p.stepIndex ?? null, isCurrent: true }, orderBy: { version: "desc" } });
+      if (!needsGeneration(current, { realProvider: settings.imageProvider !== "mock" || settings.mode === "manual" })) continue;
       await setJob(jobId, { step: p.kind === "FINAL" ? "Illustration du résultat final" : `Illustration de l'étape ${p.stepIndex! + 1}`, progress: 10 + Math.round((i / plan.length) * 85) });
       try {
-        const r = await generateIllustration({ activityId, bookId, kind: p.kind, stepIndex: p.stepIndex, jobId });
+        const r = await generateIllustration({ activityId, bookId, kind: p.kind, stepIndex: p.stepIndex, jobId, sketch: typeof sketch === "boolean" ? sketch : undefined });
         cost += r.costUsd;
         await setJob(jobId, { costUsd: r.costUsd });
       } catch (err) {
@@ -142,8 +141,17 @@ export const handlers: Record<string, Handler> = {
     await setJob(jobId, { status: "COMPLETED", progress: 100, step: "Illustration générée", costUsd: r.costUsd, result: { illustrationId: r.illustrationId, isDemo: r.isDemo } });
   },
 
-  [QUEUES.bookCover]: async ({ jobId, bookId, variants }) => {
+  [QUEUES.bookCover]: async ({ jobId, bookId, variants, onlyIfMissing, sketch }) => {
     await setJob(jobId, { status: "RUNNING", step: "Textes de couverture", progress: 10 });
+    // Relance d'un pipeline : la couverture existante n'est jamais regénérée implicitement
+    if (onlyIfMissing) {
+      const s0 = await getAiSettings();
+      const current = await prisma.illustration.findFirst({ where: { bookId, kind: "COVER", isCurrent: true }, orderBy: { version: "desc" } });
+      if (!needsGeneration(current, { realProvider: s0.imageProvider !== "mock" || s0.mode === "manual" })) {
+        await setJob(jobId, { status: "COMPLETED", progress: 100, step: "Couverture conservée (aucune regénération)" });
+        return;
+      }
+    }
     const cb = await prisma.book.findUniqueOrThrow({ where: { id: bookId! }, select: { kitType: true, kitContent: true } });
     // Kits : les textes de couverture viennent du contenu du kit (pas d'appel IA supplémentaire)
     if (!(isStructuredKit(cb.kitType) && cb.kitContent)) {
@@ -159,7 +167,7 @@ export const handlers: Record<string, Handler> = {
       const pasted = await prisma.illustration.findFirst({ where: { bookId, kind: "COVER", isCurrent: true, status: { in: ["GENERATED", "ACCEPTED"] }, provider: "manual" }, skip: v });
       if (pasted) continue;
       try {
-        const ill = await generateIllustration({ bookId, kind: "COVER", jobId, coverVariant: v });
+        const ill = await generateIllustration({ bookId, kind: "COVER", jobId, coverVariant: v, sketch: typeof sketch === "boolean" ? sketch : undefined });
         await setJob(jobId, { progress: 40 + Math.round(((v + 1) / n) * 55), costUsd: ill.costUsd });
       } catch (err) {
         if (isManualInputRequired(err)) {
@@ -174,6 +182,37 @@ export const handlers: Record<string, Handler> = {
       throw new WaitingInputSignal(waiting);
     }
     await setJob(jobId, { status: "COMPLETED", progress: 100, step: "Couverture générée" });
+  },
+
+  // Reprise volontaire d'une image (version finale, correction, nouvelle image)
+  [QUEUES.illustrationRework]: async ({ jobId, illustrationId, mode, correction }) => {
+    await setJob(jobId, { status: "RUNNING", step: mode === "final" ? "Version finale de l'image" : "Reprise de l'image", progress: 20 });
+    try {
+      const r = await reworkIllustration({ illustrationId: illustrationId as string, mode: mode as ReworkMode, correction: correction as string | undefined, jobId });
+      await setJob(jobId, { status: "COMPLETED", progress: 100, step: "Image mise à jour dans les pages", costUsd: r.costUsd, result: { illustrationId: r.illustrationId } });
+    } catch (err) {
+      if (isManualInputRequired(err)) {
+        await markWaitingInput(jobId, 1);
+        throw new WaitingInputSignal(1);
+      }
+      throw err;
+    }
+  },
+
+  // « Valider les esquisses et générer la version finale »
+  [QUEUES.bookFinalize]: async ({ jobId, bookId, illustrationIds }) => {
+    await setJob(jobId, { status: "RUNNING", step: "Versions finales", progress: 5 });
+    const r = await finalizeSketches(bookId!, {
+      illustrationIds: Array.isArray(illustrationIds) ? (illustrationIds as string[]) : undefined,
+      jobId,
+      onProgress: async (done, total, label) => setJob(jobId, { step: `Version finale ${done + 1}/${total} : ${label}`, progress: 5 + Math.round((done / Math.max(1, total)) * 90) }),
+    });
+    for (const e of r.errors) await jobLog(jobId, `Échec version finale ${e}`, "error");
+    if (r.waiting > 0) {
+      await markWaitingInput(jobId, r.waiting);
+      throw new WaitingInputSignal(r.waiting);
+    }
+    await setJob(jobId, { status: r.errors.length && !r.finalized ? "FAILED" : "COMPLETED", progress: 100, step: `${r.finalized}/${r.total} image(s) en version finale`, costUsd: r.costUsd, error: r.errors.length ? r.errors.join(" | ") : null, result: r as unknown as Prisma.InputJsonValue });
   },
 
   [QUEUES.bookLayout]: async ({ jobId, bookId, force }) => {
@@ -205,12 +244,13 @@ export const handlers: Record<string, Handler> = {
    * concepts → fiches → références visuelles → illustrations → pages → contrôles → statut REVIEW.
    * Chaque activité avance indépendamment ; un échec n'efface rien de ce qui a été produit.
    */
-  [QUEUES.bookPipeline]: async ({ jobId, bookId, withIllustrations, withCover }) => {
+  [QUEUES.bookPipeline]: async ({ jobId, bookId, withIllustrations, withCover, sketch }) => {
+    const sk = typeof sketch === "boolean" ? sketch : undefined;
     const settings = await getAiSettings();
     await setJob(jobId, { status: "RUNNING", step: "Démarrage", progress: 1 });
     await prisma.book.update({ where: { id: bookId! }, data: { status: "GENERATING" } });
     const pb = await prisma.book.findUniqueOrThrow({ where: { id: bookId! }, select: { kitType: true } });
-    if (isStructuredKit(pb.kitType)) return runKitPipeline(jobId, bookId!, { withIllustrations: withIllustrations !== false, withCover: withCover !== false });
+    if (isStructuredKit(pb.kitType)) return runKitPipeline(jobId, bookId!, { withIllustrations: withIllustrations !== false, withCover: withCover !== false, sketch: sk });
     const links = await prisma.bookActivity.findMany({ where: { bookId: bookId! }, include: { activity: true }, orderBy: { position: "asc" } });
     const total = links.length;
     const errors: string[] = [];
@@ -258,7 +298,7 @@ export const handlers: Record<string, Handler> = {
         await setJob(jobId, { step: `Illustrations ${i + 1}/${total} : ${a.title}`, progress: 32 + Math.round((i / total) * 50) });
         const child = await prisma.job.create({ data: { type: QUEUES.activityIllustrate, status: "RUNNING", bookId, activityId: a.id, parentId: jobId, startedAt: new Date() } });
         try {
-          await handlers[QUEUES.activityIllustrate]({ jobId: child.id, activityId: a.id, bookId });
+          await handlers[QUEUES.activityIllustrate]({ jobId: child.id, activityId: a.id, bookId, sketch: sk });
           const c = await prisma.job.findUnique({ where: { id: child.id } });
           await setJob(jobId, { costUsd: Number(c?.costUsd ?? 0) });
         } catch (err) {
@@ -279,7 +319,7 @@ export const handlers: Record<string, Handler> = {
       await setJob(jobId, { step: "Couverture", progress: 84 });
       const child = await prisma.job.create({ data: { type: QUEUES.bookCover, status: "RUNNING", bookId, parentId: jobId, startedAt: new Date() } });
       try {
-        await handlers[QUEUES.bookCover]({ jobId: child.id, bookId, variants: 2 });
+        await handlers[QUEUES.bookCover]({ jobId: child.id, bookId, variants: 2, onlyIfMissing: true, sketch: sk });
       } catch (err) {
         if (err instanceof WaitingInputSignal) {
           waiting += err.count;
@@ -312,7 +352,7 @@ export const handlers: Record<string, Handler> = {
  * Pipeline d'un kit structuré : contenu (si absent) → illustrations par emplacement →
  * couverture → pages. Idempotent : ce qui existe (contenu, images générées ou collées) est conservé.
  */
-async function runKitPipeline(jobId: string, bookId: string, opts: { withIllustrations: boolean; withCover: boolean }) {
+async function runKitPipeline(jobId: string, bookId: string, opts: { withIllustrations: boolean; withCover: boolean; sketch?: boolean }) {
   const settings = await getAiSettings();
   let waiting = 0;
   const errors: string[] = [];
@@ -340,15 +380,16 @@ async function runKitPipeline(jobId: string, bookId: string, opts: { withIllustr
     for (let i = 0; i < plan.length; i++) {
       if (!(await gate(jobId))) return finish(jobId, bookId, "CANCELLED");
       const it = plan[i];
-      const existing = await prisma.illustration.findFirst({ where: { bookId, kind: "KIT", slot: it.slot, isCurrent: true, status: { in: ["GENERATED", "ACCEPTED"] } } });
-      if (existing) continue;
+      // Pas de regénération implicite : une image acceptée, générée ou collée est conservée
+      const current = await prisma.illustration.findFirst({ where: { bookId, kind: "KIT", slot: it.slot, isCurrent: true }, orderBy: { version: "desc" } });
+      if (!needsGeneration(current, { realProvider: settings.imageProvider !== "mock" || settings.mode === "manual" })) continue;
       if ((await spentOnBook(bookId)) > settings.maxBudgetPerBookUsd) {
         await jobLog(jobId, `Budget du livre dépassé (${settings.maxBudgetPerBookUsd} $) : illustrations interrompues`, "warn");
         break;
       }
       await setJob(jobId, { step: `Illustration ${i + 1}/${plan.length} : ${it.label}`, progress: 10 + Math.round((i / plan.length) * 70) });
       try {
-        const r = await generateKitIllustration({ bookId, slot: it.slot, prompt: it.prompt, label: it.label, jobId });
+        const r = await generateKitIllustration({ bookId, slot: it.slot, prompt: it.prompt, label: it.label, jobId, sketch: opts.sketch });
         await setJob(jobId, { costUsd: r.costUsd });
       } catch (err) {
         if (isManualInputRequired(err)) { waiting++; continue; }
@@ -364,7 +405,7 @@ async function runKitPipeline(jobId: string, bookId: string, opts: { withIllustr
     await setJob(jobId, { step: "Couverture", progress: 84 });
     const child = await prisma.job.create({ data: { type: QUEUES.bookCover, status: "RUNNING", bookId, parentId: jobId, startedAt: new Date() } });
     try {
-      await handlers[QUEUES.bookCover]({ jobId: child.id, bookId, variants: 1 });
+      await handlers[QUEUES.bookCover]({ jobId: child.id, bookId, variants: 1, onlyIfMissing: true, sketch: opts.sketch });
     } catch (err) {
       if (err instanceof WaitingInputSignal) waiting += err.count;
       else {
@@ -391,7 +432,7 @@ async function finish(jobId: string, bookId: string, status: "COMPLETED" | "FAIL
 }
 
 /** Lance le pipeline complet d'un livre (utilisé par l'UI). */
-export async function startBookPipeline(bookId: string, opts: { withIllustrations: boolean; withCover: boolean }) {
+export async function startBookPipeline(bookId: string, opts: { withIllustrations: boolean; withCover: boolean; sketch?: boolean }) {
   return enqueue(QUEUES.bookPipeline, { bookId, ...opts });
 }
 

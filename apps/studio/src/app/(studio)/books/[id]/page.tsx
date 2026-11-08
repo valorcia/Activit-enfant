@@ -12,7 +12,7 @@ import { estimateBookCost } from "@/lib/queue/estimate";
 import { BookTabs } from "@/components/book/book-tabs";
 import { RunBadge } from "@/components/autopilot/run-badge";
 import { currentStage, parseStages } from "@/lib/autopilot/stages";
-import { Rocket } from "lucide-react";
+import { BookOpen, Rocket } from "lucide-react";
 import { buildContextForBook } from "@/lib/layout/book";
 import { getCover } from "@/lib/generation/cover";
 import { assetUrl } from "@/lib/storage";
@@ -61,7 +61,7 @@ export default async function BookPage({ params, searchParams }: { params: Promi
   if (isStructuredKit(book.kitType)) {
     const def = kitType(book.kitType);
     const content = readKitContent(book);
-    const ills = await prisma.illustration.findMany({ where: { bookId: id, kind: "KIT", isCurrent: true } });
+    const ills = await prisma.illustration.findMany({ where: { bookId: id, kind: "KIT", isCurrent: true }, include: { asset: { select: { width: true, height: true } } } });
     const bySlot = new Map(ills.map((i) => [i.slot ?? "", i]));
     const custom = KitCustomizationSchema.safeParse(book.customization ?? {});
     kit = {
@@ -72,7 +72,7 @@ export default async function BookPage({ params, searchParams }: { params: Promi
       hasContent: Boolean(content),
       heroName: content ? heroOf(content) : null,
       elements: content ? mainItems(content).map((e) => ({ title: e.title, detail: e.detail })) : [],
-      slots: content ? kitIllustrationPlan(content).map((p) => { const i = bySlot.get(p.slot); return { slot: p.slot, label: p.label, status: i?.status ?? null, src: i ? assetUrl(i.assetId) ?? null : null, isDemo: i?.isDemo ?? false, provider: i?.provider ?? null }; }) : [],
+      slots: content ? kitIllustrationPlan(content).map((p) => { const i = bySlot.get(p.slot); return { slot: p.slot, label: p.label, status: i?.status ?? null, src: i ? assetUrl(i.assetId) ?? null : null, isDemo: i?.isDemo ?? false, provider: i?.provider ?? null, isSketch: i?.isSketch ?? false, framing: i?.assetId ? { id: i.id, label: p.label, src: assetUrl(i.assetId)!, width: i.asset?.width ?? null, height: i.asset?.height ?? null, focalX: i.focalX, focalY: i.focalY, zoom: i.zoom, fit: i.fit === "cover" || i.fit === "contain" ? i.fit : null, targetRatio: i.targetRatio } : null }; }) : [],
     };
   }
 
@@ -95,6 +95,7 @@ export default async function BookPage({ params, searchParams }: { params: Promi
         description={`${site ? `${site.name} · ` : book.siteSlug ? `${book.siteSlug} · ` : ""}${BOOK_TYPES.find((t) => t.key === book.bookType)?.label ?? kitLabel(book.kitType)} · ${ageRangeLabel(book.ageRange)} · ${ART_STYLES.find((s) => s.key === book.artStyle)?.label} · ${PAGE_FORMATS[book.pageFormat as keyof typeof PAGE_FORMATS]?.label ?? book.pageFormat} · ${kit ? `${book.targetCount} ${kitType(book.kitType).countLabel}` : `${book.activities.length} activités`} · ${book.pages.length} pages · dépensé ${formatUsd(Number(spent._sum.costUsd ?? 0))}`}
         actions={
           <>
+            <Button asChild className="bg-amber-500 text-amber-950 hover:bg-amber-400"><Link href={`/books/${id}/apercu`}><BookOpen className="h-4 w-4" /> Aperçu</Link></Button>
             <Button asChild variant="secondary"><Link href={`/print/books/${id}`} target="_blank">Aperçu impression</Link></Button>
             <Button asChild><Link href={`/books/${id}/editor`}>Ouvrir l'éditeur</Link></Button>
           </>

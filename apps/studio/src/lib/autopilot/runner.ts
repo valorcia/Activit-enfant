@@ -18,7 +18,9 @@ import { getAiSettings, getShopSettings, getVideoSettings } from "../settings";
 import { AutopilotSettingsSchema, type AutopilotSettings, type AutopilotStageKey } from "../schemas/settings";
 import { isManualInputRequired } from "../ai/manual-core";
 import { markWaitingInput } from "../manual/requests";
-import { getTextProvider, effectiveTextModel } from "../ai/registry";
+import { getTextProvider, effectiveTextModel, manualImages } from "../ai/registry";
+import { sketchSummary } from "../generation/rework";
+import { checkBookImages, summarizeImageIssues } from "../quality/images";
 import { generateStructured, contextBlock } from "../ai/structured";
 import { createKitFromPlan, resolveBrief } from "../kits/create";
 import { KitCustomizationSchema, type KitContentFormat } from "../kits/schemas";
@@ -41,6 +43,9 @@ export const EUR_PER_USD = 0.92;
 
 export interface RunState {
   illustrationsJobId?: string;
+  /** Mode esquisse : validation des esquisses demandée, puis tâche des versions finales */
+  sketchApprovalRequested?: boolean;
+  finalizeJobId?: string;
   pdfExportIds?: string[];
   pdfJobIds?: string[];
   pdfAutofixAttempts?: number;
@@ -213,7 +218,7 @@ async function runStage(key: AutopilotStageKey, run: RunRow, cfg: AutopilotSetti
     case "content": return stageContent(run, jobId);
     case "quality": return stageQuality(run);
     case "character": return stageCharacter(run, jobId);
-    case "illustrations": return stageIllustrations(run);
+    case "illustrations": return stageIllustrations(run, cfg);
     case "layout": return stageLayout(run);
     case "pdf": return stagePdf(run, cfg);
     case "publish": return stagePublish(run, cfg);
@@ -287,19 +292,22 @@ async function stageCharacter(run: RunRow, jobId: string): Promise<StageOutcome>
   return { type: "done", detail: `Planche générée${r.isDemo ? " (démo)" : ""} : référence de toutes les illustrations suivantes` };
 }
 
-async function stageIllustrations(run: RunRow): Promise<StageOutcome> {
+async function stageIllustrations(run: RunRow, cfg: AutopilotSettings): Promise<StageOutcome> {
   const bookId = requireBook(run);
   const state = stateOf(run);
+  // Mode esquisse (sauf copier-coller : les images faites dans ChatGPT ne coûtent rien à l'unité)
+  const sketchFirst = cfg.sketchFirst !== false && !manualImages(await getAiSettings());
   if (!state.illustrationsJobId) {
-    const job = await enqueue(QUEUES.bookPipeline, { bookId, withIllustrations: true, withCover: true });
+    const job = await enqueue(QUEUES.bookPipeline, { bookId, withIllustrations: true, withCover: true, sketch: sketchFirst });
     await patchState(run.id, { illustrationsJobId: job.id });
-    return { type: "poll", detail: "Illustrations lancées" };
+    return { type: "poll", detail: sketchFirst ? "Esquisses lancées (qualité basse)" : "Illustrations lancées" };
   }
+  if (state.finalizeJobId) return pollFinalize(state.finalizeJobId);
   const job = await prisma.job.findUnique({ where: { id: state.illustrationsJobId } });
   if (!job) return { type: "failed", error: "Tâche d'illustrations introuvable : relancez l'étape." };
   if (job.status === "FAILED" || job.status === "CANCELLED") return { type: "failed", error: job.error ?? `Tâche ${job.status === "FAILED" ? "échouée" : "annulée"}` };
   if (job.status === "WAITING_INPUT") return { type: "waiting_input", detail: `${job.step ?? "Images à coller"} (page « À coller »)`, poll: true };
-  if (job.status !== "COMPLETED") return { type: "poll", detail: job.step ?? "Illustrations en cours" };
+  if (job.status !== "COMPLETED") return { type: "poll", detail: `${sketchFirst ? "Esquisses — " : ""}${job.step ?? "Illustrations en cours"}` };
   // Vérification : chaque emplacement a son image, et la couverture existe
   const book = await prisma.book.findUniqueOrThrow({ where: { id: bookId } });
   const content = readKitContent(book);
@@ -313,12 +321,49 @@ async function stageIllustrations(run: RunRow): Promise<StageOutcome> {
     return { type: "failed", error: `${list.length} illustration(s) manquante(s) : ${list.slice(0, 8).join(", ")}${list.length > 8 ? "…" : ""}. ${job.error ?? ""} Relancez l'étape (les images déjà faites sont conservées).`.trim() };
   }
   const demo = done.filter((d) => d.isDemo).length;
-  return { type: "done", detail: `${done.length} illustrations + couverture${demo ? ` (dont ${demo} de démonstration)` : ""}` };
+  const summary = `${done.length} illustrations + couverture${demo ? ` (dont ${demo} de démonstration)` : ""}`;
+  const sketches = sketchFirst ? await sketchSummary(bookId) : null;
+  if (!sketches?.count) return { type: "done", detail: summary };
+
+  // Esquisses prêtes : pages assemblées pour l'aperçu, puis validation (désactivable) avant les versions finales
+  if (cfg.sketchApproval !== false && !state.sketchApprovalRequested) {
+    await rebuildBookPages(bookId);
+    await patchState(run.id, { sketchApprovalRequested: true });
+    return {
+      type: "approval",
+      reason: `Esquisses prêtes : ${sketches.count} image(s) pour ${usdFr(sketches.sketchCostUsd)}. Vérifiez l'aperçu du livre (recadrez, remplacez ou corrigez une image si besoin), puis « Valider et continuer » pour générer la version finale des esquisses validées (estimation ${usdFr(sketches.finalCostUsd)}).`,
+    };
+  }
+  // Une finalisation lancée depuis l'aperçu est reprise telle quelle (jamais payée deux fois)
+  const active = await prisma.job.findFirst({ where: { bookId, type: QUEUES.bookFinalize, status: { in: ["QUEUED", "RUNNING", "PAUSED", "WAITING_INPUT"] } }, orderBy: { createdAt: "desc" } });
+  const fin = active ?? (await enqueue(QUEUES.bookFinalize, { bookId }));
+  await patchState(run.id, { finalizeJobId: fin.id });
+  return { type: "poll", detail: `Versions finales lancées : ${sketches.count} image(s), estimation ${usdFr(sketches.finalCostUsd)}` };
+}
+
+async function pollFinalize(jobId: string): Promise<StageOutcome> {
+  const job = await prisma.job.findUnique({ where: { id: jobId } });
+  if (!job) return { type: "failed", error: "Tâche des versions finales introuvable : relancez l'étape." };
+  if (job.status === "FAILED" || job.status === "CANCELLED") return { type: "failed", error: job.error ?? "Versions finales interrompues" };
+  if (job.status === "WAITING_INPUT") return { type: "waiting_input", detail: `${job.step ?? "Images à coller"} (page « À coller »)`, poll: true };
+  if (job.status !== "COMPLETED") return { type: "poll", detail: `Versions finales — ${job.step ?? "en cours"}` };
+  return { type: "done", detail: `Esquisses validées puis ${job.step ?? "versions finales générées"}` };
+}
+
+function usdFr(n: number) {
+  return `${n.toFixed(2).replace(".", ",")} $`;
 }
 
 async function stageLayout(run: RunRow): Promise<StageOutcome> {
-  const pages = await rebuildBookPages(requireBook(run));
-  return { type: "done", detail: `${pages.length} pages assemblées` };
+  const bookId = requireBook(run);
+  const pages = await rebuildBookPages(bookId);
+  // Contrôle des images (résolution, format, image vide) : alerte, échec seulement si bloquant
+  const qc = await checkBookImages(bookId);
+  if (qc.blocking > 0) {
+    const first = qc.issues.filter((i) => i.severity === "blocking").slice(0, 3).map((i) => `page ${i.pageIndex + 1} : ${i.message}`);
+    return { type: "failed", error: `${summarizeImageIssues(qc)} — ${first.join(" ; ")}. Corrigez depuis l'aperçu (/books/${bookId}/apercu : recadrer, remplacer ou regénérer l'image), puis « Relancer l'étape ».` };
+  }
+  return { type: "done", detail: `${pages.length} pages assemblées · ${summarizeImageIssues(qc)}` };
 }
 
 async function stagePdf(run: RunRow, cfg: AutopilotSettings): Promise<StageOutcome> {

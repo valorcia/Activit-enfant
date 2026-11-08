@@ -43,8 +43,8 @@ export const STAGE_DESCRIPTIONS: Record<AutopilotStageKey, string> = {
   content: "Énigmes, défis, lettres, guide, fiche boutique…",
   quality: "Nombre d'éléments, champs obligatoires, longueurs, mentions interdites",
   character: "Planche de référence des personnages, utilisée pour toutes les illustrations",
-  illustrations: "Illustrations du kit, couverture, visuels boutique et publicité",
-  layout: "Assemblage des pages",
+  illustrations: "Esquisses (qualité basse) puis versions finales des images validées : illustrations du kit, couverture, visuels boutique et publicité",
+  layout: "Assemblage des pages, cadrage automatique et contrôle des images (résolution, format)",
   pdf: "Export PDF et contrôles (débordements, images manquantes)",
   publish: "Fiche produit, couverture, aperçus, PDF privé, publication",
   video: "Vidéos publicitaires (Story, carré…) envoyées à la boutique",
@@ -179,7 +179,8 @@ export function applyOutcome(run: RunView, key: AutopilotStageKey, outcome: Stag
         requeueSeconds: outcome.poll ? outcome.delaySeconds ?? POLL_WAITING_SECONDS : null,
       };
     case "approval":
-      return { status: "WAITING_APPROVAL", stages: patchStage(run.stages, key, { status: "waiting", detail: outcome.reason }), error: null, requeueSeconds: null };
+      // Une étape qui redemande une validation (ex. esquisses) attend un nouvel accord
+      return { status: "WAITING_APPROVAL", stages: patchStage(run.stages, key, { status: "waiting", detail: outcome.reason, approved: false }), error: null, requeueSeconds: null };
     case "failed":
       return { status: "FAILED", stages: patchStage(run.stages, key, { status: "failed", finishedAt: now.toISOString(), error: outcome.error, costUsd: stageCost }), error: `${stage?.label ?? key} : ${outcome.error}`, requeueSeconds: null };
   }

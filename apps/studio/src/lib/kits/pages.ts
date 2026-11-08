@@ -156,9 +156,11 @@ export function buildDiplomaPage(ctx: BuildContext, o: { title: string; body: st
   for (let i = 0; i < 2; i++) {
     const y = m + i * (h + 8);
     p.layout.blocks.push(shape({ x: m, y, w, h, color: PAPER, radius: 6, border: "#C9A66B" }));
-    if (o.img?.src) p.layout.blocks.push(image({ x: m + 3, y: y + 3, w: w * 0.32, h: h - 6, img: o.img, alt: o.title, radius: 4 }));
-    const tx = m + (o.img?.src ? w * 0.36 : 10);
-    const tw = w - (o.img?.src ? w * 0.36 + 8 : 20);
+    // Cadre portrait (≈ 2:3 à moins de 25 %) : l'illustration portrait n'est pas rognée
+    const iw = Math.min(w * 0.38, (h - 6) * 0.6);
+    if (o.img?.src) p.layout.blocks.push(image({ x: m + 3, y: y + 3, w: iw, h: h - 6, img: o.img, alt: o.title, radius: 4 }));
+    const tx = m + (o.img?.src ? iw + 8 : 10);
+    const tw = w - (o.img?.src ? iw + 14 : 20);
     p.layout.blocks.push(text({ text: o.title || "Diplôme", x: tx, y: y + 10, w: tw, h: 12, pt: 20, align: "center", weight: "bold", color: ctx.theme.colorSecondary, role: "title" }));
     p.layout.blocks.push(text({ text: o.body.replace(/…|\.\.\./g, "______________________"), x: tx, y: y + 26, w: tw, h: h - 52, pt: 11, align: "center", lineHeight: 1.6 }));
     p.layout.blocks.push(text({ text: "Date : ____________", x: tx, y: y + h - 20, w: tw / 2, h: 8, pt: 9, color: "#6b7280" }));
@@ -194,8 +196,11 @@ export function buildGuidePages(ctx: BuildContext, title: string, sections: Arra
   pages.push(p);
   let y = m;
   if (img?.src) {
-    p.layout.blocks.push(image({ x: m, y, w, h: 55, img, alt: title, radius: 4 }));
-    y += 60;
+    // Bandeau au format paysage (3:2 à moins de 25 %), centré
+    const ih = 58;
+    const iw = Math.min(w, ih * 1.6);
+    p.layout.blocks.push(image({ x: m + (w - iw) / 2, y, w: iw, h: ih, img, alt: title, radius: 4 }));
+    y += ih + 5;
   }
   p.layout.blocks.push(text({ text: title, x: m, y, w, h: 12, pt: 20, weight: "bold", color: ctx.theme.colorPrimary, role: "title" }));
   y += 16;
@@ -229,7 +234,9 @@ export function buildIdeaPage(ctx: BuildContext, idea: PranksKit["idees"][number
   p.layout.blocks.push(text({ text: [idea.resume, [`${idea.temps_minutes} min`, ["Très facile", "Facile", "Grand jeu"][Math.min(2, Math.max(0, idea.difficulte - 1))], idea.age_conseille ? `${idea.age_conseille.replace("+", "")} ans et +` : ""].filter(Boolean).join(" · ")].filter(Boolean).join("\n"), x: m + 24, y: m + 13, w: w - 24, h: 14, pt: 10, color: "#4b5563" }));
   const imgY = m + 32;
   const imgH = ctx.heightMm * 0.3;
-  p.layout.blocks.push(image({ x: m, y: imgY, w, h: imgH, img, alt: idea.illustration_description || idea.titre, radius: 5 }));
+  // Cadre paysage (3:2 à moins de 25 %), centré
+  const imgW = Math.min(w, imgH * 1.6);
+  p.layout.blocks.push(image({ x: m + (w - imgW) / 2, y: imgY, w: imgW, h: imgH, img, alt: idea.illustration_description || idea.titre, radius: 5 }));
   const y = imgY + imgH + 6;
   const colW = (w - 8) / 2;
   const bottomH = ctx.heightMm - y - m - 40;

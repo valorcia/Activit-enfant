@@ -7,6 +7,9 @@ import { getVisualReference, bookArtStyle } from "./visualReference";
 import { finalIllustrationPrompt, stepIllustrationPrompt, coverIllustrationPrompt, negativeFor } from "./prompts";
 import type { IllustrationKind } from "@prisma/client";
 import { isManualInputRequired } from "../ai/manual-core";
+import { compositionHints, ratioForSlot, sizeForRatio } from "../images/framing";
+import { initIllustrationFraming } from "../images/service";
+import { useSketch } from "./sketch";
 
 /**
  * Génère (ou régénère) UNE illustration : résultat final, étape ou couverture.
@@ -21,6 +24,8 @@ export async function generateIllustration(opts: {
   stepIndex?: number;
   jobId?: string;
   coverVariant?: number;
+  /** Esquisse (qualité basse) ; par défaut : réglage « mode esquisse » */
+  sketch?: boolean;
 }) {
   const settings = await getAiSettings();
   const provider = getImageProvider(settings, { activityId: opts.activityId, bookId: opts.bookId, jobId: opts.jobId });
@@ -71,6 +76,13 @@ export async function generateIllustration(opts: {
     }
   }
 
+  // Format juste dès la génération : ratio du cadre de mise en page + consignes de composition
+  const ratio = ratioForSlot(null, opts.kind);
+  const size = sizeForRatio(ratio);
+  prompt = `${prompt}\n\n${compositionHints(null, opts.kind)}`;
+  const sketch = useSketch(settings, provider.name, opts.sketch);
+  const quality = sketch ? settings.sketchQuality : settings.imageQuality;
+
   // Archive la version courante
   const previous = await prisma.illustration.findFirst({
     where: { activityId: opts.activityId ?? null, bookId: opts.kind === "COVER" ? opts.bookId : undefined, kind: opts.kind, stepIndex: opts.stepIndex ?? null, isCurrent: true },
@@ -90,23 +102,27 @@ export async function generateIllustration(opts: {
       provider: provider.name,
       model,
       isCurrent: true,
+      targetRatio: ratio,
+      isSketch: sketch,
+      quality,
     },
   });
   if (previous) await prisma.illustration.update({ where: { id: previous.id }, data: { isCurrent: false } });
 
   const started = Date.now();
   try {
-    const result = await provider.generate({ prompt, negativePrompt: negative, size: settings.imageSize, quality: settings.imageQuality, model, references, label });
+    const result = await provider.generate({ prompt, negativePrompt: negative, size, quality, model, references, label });
     const key = `illustrations/${opts.activityId ?? opts.bookId}/${record.id}.png`;
     const asset = await storeAsset({ key, data: result.data, mime: result.mime, width: result.width, height: result.height });
     await prisma.illustration.update({
       where: { id: record.id },
       data: { status: "GENERATED", assetId: asset.id, isDemo: result.isDemo, costUsd: result.costUsd, provider: result.provider, model: result.model },
     });
+    await initIllustrationFraming(record.id, result.data).catch(() => undefined);
     await prisma.generationLog.create({
       data: { kind: "image", provider: result.provider, model: result.model, purpose: opts.kind === "COVER" ? "cover" : "illustration", bookId: opts.bookId, activityId: opts.activityId, jobId: opts.jobId, images: 1, costUsd: result.costUsd, durationMs: Date.now() - started, success: true },
     });
-    return { illustrationId: record.id, assetId: asset.id, isDemo: result.isDemo, costUsd: result.costUsd };
+    return { illustrationId: record.id, assetId: asset.id, isDemo: result.isDemo, costUsd: result.costUsd, isSketch: sketch };
   } catch (err) {
     if (isManualInputRequired(err)) {
       // Mode copier-coller : la demande est enregistrée, on retire la version provisoire et on rétablit la précédente

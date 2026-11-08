@@ -12,8 +12,8 @@ export interface EstimateInput {
   count: number;
   /** Le contenu complet est déjà fourni (JSON collé) : pas de rédaction ni de plan par l'IA */
   contentProvided: boolean;
-  ai: Pick<AiSettings, "mode" | "manualFor" | "textProvider" | "textModel" | "imageProvider" | "imageModel" | "imageQuality">;
-  autopilot: Pick<AutopilotSettings, "stages" | "videoFormats" | "clipProvider" | "clipDurationSeconds">;
+  ai: Pick<AiSettings, "mode" | "manualFor" | "textProvider" | "textModel" | "imageProvider" | "imageModel" | "imageQuality"> & Partial<Pick<AiSettings, "sketchQuality">>;
+  autopilot: Pick<AutopilotSettings, "stages" | "videoFormats" | "clipProvider" | "clipDurationSeconds"> & Partial<Pick<AutopilotSettings, "sketchFirst">>;
   runwayUsdPerSecond: number;
 }
 
@@ -48,6 +48,9 @@ export function estimateRun(input: EstimateInput): CostEstimate {
   const manualImagesOn = ai.mode === "manual" && ai.manualFor !== "text";
   const text = (inTok: number, outTok: number) => (manualTextOn || ai.textProvider === "mock" ? 0 : textCost(ai.textModel, inTok, outTok));
   const perImage = (size: string) => (manualImagesOn || ai.imageProvider === "mock" ? 0 : imageCost(ai.imageModel, ai.imageQuality, size));
+  // Mode esquisse : une esquisse (qualité basse) + la version finale de chaque image validée
+  const sketchOn = autopilot.sketchFirst !== false && !manualImagesOn;
+  const perSketch = (size: string) => (sketchOn && ai.imageProvider !== "mock" ? imageCost(ai.imageModel, ai.sketchQuality ?? "low", size) : 0);
   const notes: string[] = [];
   const stages: CostEstimate["stages"] = {};
 
@@ -57,7 +60,7 @@ export function estimateRun(input: EstimateInput): CostEstimate {
   stages.quality = 0;
   stages.character = autopilot.stages.character !== false ? perImage("1024x1024") : 0;
   const nImages = illustrationCount(input.format, input.count);
-  stages.illustrations = round(nImages * perImage("1024x1024"));
+  stages.illustrations = round(nImages * (perImage("1024x1024") + perSketch("1024x1024")));
   stages.layout = 0;
   stages.pdf = 0;
   stages.publish = 0;
@@ -69,6 +72,7 @@ export function estimateRun(input: EstimateInput): CostEstimate {
   if (manualImagesOn) notes.push("Images en mode copier-coller : aucun coût API (images à générer dans ChatGPT puis à téléverser).");
   if (!manualTextOn && ai.textProvider === "mock") notes.push("Fournisseur texte de démonstration : textes fictifs, coût nul.");
   if (!manualImagesOn && ai.imageProvider === "mock") notes.push("Fournisseur d'images de démonstration : images étiquetées « DÉMO », coût nul.");
+  if (sketchOn && ai.imageProvider !== "mock") notes.push(`Mode esquisse : ${nImages} esquisse(s) à ${perSketch("1024x1024").toFixed(3)} $ puis version finale des images validées (les images refusées ne sont pas payées en qualité finale).`);
   if (clipOn) notes.push(`Clip Runway : ${autopilot.videoFormats.length} format(s) × ${autopilot.clipDurationSeconds} s.`);
   if (stages.ads) notes.push("Publicités : textes générés par la boutique si elle a une clé Claude, sinon par le studio (coût indiqué).");
 

@@ -52,3 +52,19 @@ body {
 .editor-selected { outline: 2px solid #2563eb; outline-offset: 1px; }
 .editor-hover:hover { outline: 1px dashed #93c5fd; }
 .resize-handle { position: absolute; width: 10px; height: 10px; background: #2563eb; border: 2px solid #fff; border-radius: 2px; right: -5px; bottom: -5px; cursor: nwse-resize; }
+
+/* Aperçu du livre : tourne-page léger (désactivé si l'utilisateur réduit les animations) */
+@keyframes page-turn-next {
+  from { opacity: 0.35; transform: perspective(1600px) rotateY(-9deg) translateX(18px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes page-turn-prev {
+  from { opacity: 0.35; transform: perspective(1600px) rotateY(9deg) translateX(-18px); }
+  to { opacity: 1; transform: none; }
+}
+.page-turn-next { animation: page-turn-next 320ms ease-out; transform-origin: left center; }
+.page-turn-prev { animation: page-turn-prev 320ms ease-out; transform-origin: right center; }
+@media (prefers-reduced-motion: reduce) {
+  .page-turn-next, .page-turn-prev { animation: none; }
+}
+.preview-sheet { box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08), 0 10px 30px -12px rgba(15, 23, 42, 0.35); }

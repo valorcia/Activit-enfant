@@ -55,6 +55,8 @@ export function AutopilotSettingsForm({ initial, allowMock }: { initial: Autopil
           <Check2 label="Après la rédaction" checked={s.approvals.afterContent} onChange={(v) => set("approvals", { ...s.approvals, afterContent: v })} />
           <Check2 label="Après les illustrations" checked={s.approvals.afterIllustrations} onChange={(v) => set("approvals", { ...s.approvals, afterIllustrations: v })} />
           <Check2 label="Avant la publication en boutique" checked={s.approvals.beforePublish} onChange={(v) => set("approvals", { ...s.approvals, beforePublish: v })} />
+          <Check2 label="Esquisses d'abord (qualité basse), puis version finale des images validées" checked={s.sketchFirst !== false} onChange={(v) => set("sketchFirst", v)} />
+          {s.sketchFirst !== false && <Check2 label="Valider les esquisses dans l'aperçu avant la version finale (sinon : version finale directement après les esquisses)" checked={s.sketchApproval !== false} onChange={(v) => set("sketchApproval", v)} />}
           <Field label="Avant les publicités">
             <Select value={s.approvals.beforeAds === null ? "auto" : s.approvals.beforeAds ? "yes" : "no"} onChange={(e) => set("approvals", { ...s.approvals, beforeAds: e.target.value === "auto" ? null : e.target.value === "yes" })}>
               <option value="auto">Automatique (seulement si les posts sont programmés)</option>

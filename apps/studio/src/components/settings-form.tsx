@@ -76,11 +76,19 @@ export function SettingsForm({ initial, availability }: { initial: AiSettings; a
             <option value="high">Haute (impression)</option>
           </Select>
         </Field>
-        <Field label="Taille des images">
-          <Select value={s.imageSize} onChange={(e) => set("imageSize", e.target.value as AiSettings["imageSize"])}>
-            <option value="1024x1024">1024 × 1024 (carré)</option>
-            <option value="1536x1024">1536 × 1024 (paysage)</option>
-            <option value="1024x1536">1024 × 1536 (portrait)</option>
+        <Field label="Format des images" hint="Automatique : chaque image est demandée au format de son cadre (portrait 1024 × 1536, paysage 1536 × 1024, carré 1024 × 1024), avec des marges de sécurité dans le prompt.">
+          <Input value="Selon l'emplacement (automatique)" disabled />
+        </Field>
+        <Field label="Mode esquisse" hint="Les images sont d'abord produites en qualité basse (≈ 0,01 $ l'image) pour valider l'aperçu ; la version finale n'est générée que pour les images validées, en gardant leur composition.">
+          <Select value={s.sketchMode ? "1" : "0"} onChange={(e) => set("sketchMode", e.target.value === "1")}>
+            <option value="1">Activé : esquisses d'abord, version finale après validation</option>
+            <option value="0">Désactivé : directement en qualité finale</option>
+          </Select>
+        </Field>
+        <Field label="Qualité des esquisses">
+          <Select value={s.sketchQuality} onChange={(e) => set("sketchQuality", e.target.value as AiSettings["sketchQuality"])}>
+            <option value="low">Basse (la moins chère)</option>
+            <option value="medium">Moyenne</option>
           </Select>
         </Field>
         <Field label="Illustrations d'étapes">

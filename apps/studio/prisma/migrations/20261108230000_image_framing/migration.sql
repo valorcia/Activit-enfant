@@ -1,0 +1,14 @@
+-- Cadrage des illustrations et analyse automatique des images
+ALTER TABLE "Illustration" ADD COLUMN "focalX" DOUBLE PRECISION NOT NULL DEFAULT 0.5;
+ALTER TABLE "Illustration" ADD COLUMN "focalY" DOUBLE PRECISION NOT NULL DEFAULT 0.5;
+ALTER TABLE "Illustration" ADD COLUMN "zoom" DOUBLE PRECISION NOT NULL DEFAULT 1;
+ALTER TABLE "Illustration" ADD COLUMN "fit" TEXT;
+ALTER TABLE "Illustration" ADD COLUMN "framedManually" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "Illustration" ADD COLUMN "targetRatio" TEXT;
+ALTER TABLE "Illustration" ADD COLUMN "isSketch" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "Illustration" ADD COLUMN "quality" TEXT;
+
+ALTER TABLE "Asset" ADD COLUMN "focalX" DOUBLE PRECISION;
+ALTER TABLE "Asset" ADD COLUMN "focalY" DOUBLE PRECISION;
+ALTER TABLE "Asset" ADD COLUMN "dominantColor" TEXT;
+ALTER TABLE "Asset" ADD COLUMN "contrast" DOUBLE PRECISION;

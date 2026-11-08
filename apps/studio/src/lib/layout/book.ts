@@ -2,6 +2,7 @@ import { prisma } from "../db";
 import { ActivityContentSchema } from "../schemas/activity";
 import { PageLayoutSchema } from "../schemas/layout";
 import { assetUrl } from "../storage";
+import { applyFramingToBookPages } from "../images/service";
 import { pageSize } from "./formats";
 import { themeFor, defaultThemeForBook } from "./themes";
 import { getCover } from "../generation/cover";
@@ -47,6 +48,7 @@ export async function rebuildBookPages(bookId: string, opts?: { force?: boolean;
         for (const g of all) for (const p of g.pages) await tx.bookPage.create({ data: { bookId, position: position++, templateKey: p.templateKey, layout: PageLayoutSchema.parse(p.layout) } });
         await tx.book.update({ where: { id: bookId }, data: { version: { increment: 1 } } });
       });
+      await applyFramingToBookPages(bookId).catch(() => undefined);
       return prisma.bookPage.findMany({ where: { bookId }, orderBy: { position: "asc" } });
     }
   }
@@ -133,6 +135,8 @@ export async function rebuildBookPages(bookId: string, opts?: { force?: boolean;
     }
     await tx.book.update({ where: { id: bookId }, data: { version: { increment: 1 } } });
   });
+  // Cadrage des images (point focal, zoom, remplir/ajuster) : appliqué sans aucun appel IA
+  await applyFramingToBookPages(bookId).catch(() => undefined);
   return prisma.bookPage.findMany({ where: { bookId }, orderBy: { position: "asc" } });
 }
 

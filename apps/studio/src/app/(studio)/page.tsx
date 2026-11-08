@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { firstPagesFor } from "@/lib/preview/thumbs";
+import { BookThumbs } from "@/components/preview/book-thumbs";
 import { prisma } from "@/lib/db";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -37,6 +39,7 @@ export default async function Dashboard() {
     { label: "Coût IA cumulé", value: formatUsd(Number(cost._sum.costUsd ?? 0)), href: "/settings" },
   ];
 
+  const thumbs = await firstPagesFor(recentBooks.map((b) => b.id));
   const runs = await prisma.autopilotRun.findMany({ orderBy: { createdAt: "desc" }, take: 4, include: { book: { select: { title: true } } } });
 
   return (
@@ -89,7 +92,10 @@ export default async function Dashboard() {
             <ul className="divide-y divide-slate-100">
               {recentBooks.map((b) => (
                 <li key={b.id} className="py-2 flex items-center justify-between gap-3">
-                  <Link href={`/books/${b.id}`} className="font-semibold hover:underline truncate">{b.title}</Link>
+                  <div className="flex min-w-0 items-center gap-3">
+                    <BookThumbs bookId={b.id} data={thumbs[b.id]} height={56} />
+                    <Link href={`/books/${b.id}`} className="font-semibold hover:underline truncate">{b.title}</Link>
+                  </div>
                   <div className="flex items-center gap-2 text-xs text-slate-500 shrink-0">
                     <span>{kitLabel(b.kitType)} · {b._count.pages} p.</span>
                     <StatusBadge kind="book" status={b.status} />

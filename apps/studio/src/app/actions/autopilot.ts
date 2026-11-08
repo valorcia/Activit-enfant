@@ -124,7 +124,7 @@ export async function resumeAutopilotAction(runId: string): Promise<Result<null>
 
 /** État interne propre à chaque étape, effacé quand on relance l'étape. */
 const STAGE_STATE_KEYS: Partial<Record<AutopilotStageKey, Array<keyof RunState>>> = {
-  illustrations: ["illustrationsJobId"],
+  illustrations: ["illustrationsJobId", "sketchApprovalRequested", "finalizeJobId"],
   pdf: ["pdfExportIds", "pdfJobIds", "pdfAutofixAttempts", "pdfAutofixNotes"],
   publish: ["productId", "publicUrl", "editUrl", "publishStatus"],
   video: ["videoIds", "videoNotes"],
@@ -155,7 +155,7 @@ export async function cancelAutopilotAction(runId: string): Promise<Result<null>
     const run = await prisma.autopilotRun.findUniqueOrThrow({ where: { id: runId } });
     const state = (run.state ?? {}) as RunState;
     await prisma.autopilotRun.update({ where: { id: runId }, data: { status: "CANCELLED", error: "Annulé" } });
-    for (const id of [run.jobId, state.illustrationsJobId, ...(state.pdfJobIds ?? [])].filter(Boolean) as string[]) await cancelJob(id);
+    for (const id of [run.jobId, state.illustrationsJobId, state.finalizeJobId, ...(state.pdfJobIds ?? [])].filter(Boolean) as string[]) await cancelJob(id);
     revalidatePath(`/autopilot/${runId}`);
     return { ok: true, data: null };
   } catch (e) {

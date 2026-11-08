@@ -13,6 +13,8 @@ export function labelFor(type: string) {
       "ad.clip": "Clip d'accroche (vidéo pub)",
       "ad.render": "Montage vidéo pub",
       "autopilot.run": "Pilote automatique",
+      "illustration.rework": "Reprise d'une image",
+      "book.finalize": "Versions finales des esquisses",
     }[type] ?? type
   );
 }

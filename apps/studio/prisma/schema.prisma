@@ -258,6 +258,11 @@ model Asset {
   width     Int?
   height    Int?
   sha256    String?
+  // Analyse automatique (gratuite, sharp) : zone d'intérêt, couleur moyenne, contraste
+  focalX        Float?
+  focalY        Float?
+  dominantColor String?
+  contrast      Float? // écart type moyen des canaux (image quasi uniforme si très faible)
   createdAt DateTime @default(now())
 
   illustrations  Illustration[]
@@ -319,6 +324,15 @@ model Illustration {
   costUsd     Decimal?           @db.Decimal(10, 5)
   reviewNote  String?
   error       String?
+  // Cadrage (appliqué aux pages sans regénération) : point focal 0–1, zoom 1–3, ajustement
+  focalX         Float   @default(0.5)
+  focalY         Float   @default(0.5)
+  zoom           Float   @default(1)
+  fit            String? // "cover" | "contain" ; null = automatique selon l'écart de format
+  framedManually Boolean @default(false)
+  targetRatio    String? // portrait | landscape | square
+  isSketch       Boolean @default(false) // esquisse basse qualité (à valider avant la version finale)
+  quality        String? // low | medium | high
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
 

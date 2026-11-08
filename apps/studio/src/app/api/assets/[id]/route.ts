@@ -1,11 +1,23 @@
 import { prisma } from "@/lib/db";
 import { getStorage } from "@/lib/storage";
 import { NextResponse } from "next/server";
+import { verifyPreviewToken } from "@/lib/preview/token";
+
+/** Lien d'aperçu partagé : l'image doit appartenir au livre du jeton (illustration du livre ou de ses activités). */
+async function assetAllowedForPreview(assetId: string, token: string): Promise<boolean> {
+  const v = await verifyPreviewToken(token);
+  if (!v) return false;
+  const links = await prisma.bookActivity.findMany({ where: { bookId: v.bookId }, select: { activityId: true } });
+  const ill = await prisma.illustration.findFirst({ where: { assetId, OR: [{ bookId: v.bookId }, { activityId: { in: links.map((l) => l.activityId) } }] }, select: { id: true } });
+  return !!ill;
+}
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const pt = new URL(req.url).searchParams.get("pt");
+  if (pt !== null && !(await assetAllowedForPreview(id, pt))) return new NextResponse("Lien d'aperçu invalide ou expiré", { status: 403 });
   const asset = await prisma.asset.findUnique({ where: { id } });
   if (!asset) return new NextResponse("Not found", { status: 404 });
   const storage = getStorage();

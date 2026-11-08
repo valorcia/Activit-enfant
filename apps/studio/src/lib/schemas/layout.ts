@@ -93,6 +93,11 @@ export const ImageBlockSchema = z.object({
   caption: z.string().default(""),
   isDemo: z.boolean().default(false),
   fit: z.enum(["contain", "cover"]).default("contain"),
+  /** Cadrage (copié depuis l'illustration) : point focal 0–1, zoom 1–3, couleur de fond en mode « ajuster » */
+  focalX: z.number().min(0).max(1).optional(),
+  focalY: z.number().min(0).max(1).optional(),
+  zoom: z.number().min(1).max(3).optional(),
+  bg: z.string().optional(),
   ...Rect,
   style: TextStyleSchema.default({}),
   editable: z.boolean().default(true),

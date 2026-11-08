@@ -45,6 +45,7 @@ export function BookTabs(props: {
       <TabsList>
         {props.kit ? <TabsTrigger value="kit">Kit</TabsTrigger> : <TabsTrigger value="outline">Sommaire ({props.activities.length})</TabsTrigger>}
         {!props.kit && <TabsTrigger value="production">Production</TabsTrigger>}
+        <TabsTrigger value="apercu" asChild><a href={`/books/${props.book.id}/apercu`} className="!bg-amber-100 !text-amber-950 font-bold">Aperçu</a></TabsTrigger>
         <TabsTrigger value="pages">Pages ({props.pages.length})</TabsTrigger>
         <TabsTrigger value="cover">Couverture</TabsTrigger>
         <TabsTrigger value="exports">Exports ({props.exports.length})</TabsTrigger>

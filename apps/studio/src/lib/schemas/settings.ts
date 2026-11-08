@@ -11,6 +11,9 @@ export const AiSettingsSchema = z.object({
   imageModel: z.string().default("gpt-image-1"),
   imageQuality: z.enum(["low", "medium", "high"]).default("medium"),
   imageSize: z.enum(["1024x1024", "1536x1024", "1024x1536"]).default("1024x1024"),
+  /** Mode esquisse : illustrations d'abord en qualité basse (≈ 0,01 $), version finale après validation de l'aperçu */
+  sketchMode: z.boolean().default(false),
+  sketchQuality: z.enum(["low", "medium"]).default("low"),
   stepIllustrations: z.boolean().default(true),
   maxStepIllustrations: z.number().int().min(0).max(15).default(8),
   maxBudgetPerBookUsd: z.number().min(0).default(50),
@@ -147,6 +150,10 @@ export const AutopilotSettingsSchema = z.object({
     })
     .default({}),
   maxCostUsd: z.number().min(0).max(500).default(10),
+  /** Esquisses d'abord (qualité basse) puis version finale des images validées : évite de payer plusieurs fois la qualité finale */
+  sketchFirst: z.boolean().default(true),
+  /** Point de validation des esquisses (aperçu) avant la version finale ; sinon la version finale est lancée directement */
+  sketchApproval: z.boolean().default(true),
 });
 export type AutopilotSettings = z.infer<typeof AutopilotSettingsSchema>;
 export const DEFAULT_AUTOPILOT_SETTINGS: AutopilotSettings = AutopilotSettingsSchema.parse({});

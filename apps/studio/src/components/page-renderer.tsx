@@ -2,6 +2,7 @@
 import * as React from "react";
 import type { Block, BookTheme, PageLayout } from "@/lib/schemas/layout";
 import { cn } from "@/lib/utils";
+import { framingStyle } from "@/lib/images/framing";
 
 export interface PageRendererProps {
   layout: PageLayout;
@@ -165,11 +166,21 @@ function BlockView({ block, theme, mode, selected, onSelect, onBlockPointerDown,
       );
     }
     case "image": {
+      const fr = framingStyle({ fit: block.fit, focalX: block.focalX, focalY: block.focalY, zoom: block.zoom });
+      const contain = block.fit === "contain";
       return wrap(
-        <div data-measure style={{ position: "relative", width: "100%", height: "100%", borderRadius: s.radius ? `${s.radius}mm` : undefined, overflow: "hidden", background: (s.background as string) ?? theme.colorPanel }}>
+        <div data-measure data-image-frame={block.illustrationId ?? ""} style={{ position: "relative", width: "100%", height: "100%", borderRadius: s.radius ? `${s.radius}mm` : undefined, overflow: "hidden", background: contain && block.src ? block.bg ?? (s.background as string) ?? theme.colorPanel : (s.background as string) ?? theme.colorPanel }}>
           {block.src ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={block.src} alt={block.alt} style={{ width: "100%", height: "100%", objectFit: block.fit, display: "block" }} />
+            // Calque de découpe : le fond flou et le zoom ne débordent jamais du cadre (ni de la mesure des débordements)
+            <div style={{ position: "absolute", inset: 0, overflow: "hidden", borderRadius: "inherit" }}>
+              {contain && (
+                // Fond « ajuster » : l'image elle-même, floutée (jamais de bandes noires)
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={block.src} alt="" aria-hidden style={{ position: "absolute", inset: "-4mm", width: "calc(100% + 8mm)", height: "calc(100% + 8mm)", maxWidth: "none", objectFit: "cover", filter: "blur(4mm) saturate(0.9)", opacity: 0.55 }} />
+              )}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={block.src} alt={block.alt} draggable={false} style={{ position: "relative", width: "100%", height: "100%", display: "block", ...fr }} />
+            </div>
           ) : (
             <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", border: "0.5mm dashed #cbd5e1", borderRadius: "inherit", color: "#64748b", fontSize: "9pt", textAlign: "center", padding: "4mm" }}>Illustration à générer</div>
           )}

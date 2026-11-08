@@ -17,6 +17,7 @@ export default async function AutopilotRunPage({ params }: { params: Promise<{ i
   const state = (run.state ?? {}) as RunState;
   const links: RunViewData["links"] = [];
   if (run.book) links.push({ label: "Ouvrir le kit", href: `/books/${run.book.id}?tab=kit` });
+  if (run.book && (await prisma.bookPage.count({ where: { bookId: run.book.id } })) > 0) links.unshift({ label: "Aperçu du livre", href: `/books/${run.book.id}/apercu` });
   if (state.pdfExportIds?.length) {
     const exp = await prisma.export.findFirst({ where: { id: { in: state.pdfExportIds }, status: "COMPLETED", assetId: { not: null } }, orderBy: { kind: "asc" } });
     if (exp?.assetId) links.push({ label: "Télécharger le PDF", href: `/api/assets/${exp.assetId}?download=1`, external: true });

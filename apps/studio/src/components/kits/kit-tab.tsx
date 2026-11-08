@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { JobProgress } from "@/components/job-progress";
 import { importKitJsonAction, regenerateKitContentAction, regenerateKitSlotAction } from "@/app/actions/kits";
 import { queueLayout, startPipeline } from "@/app/actions/books";
+import { ImageToolsDialog } from "@/components/preview/image-tools";
+import type { FramingTarget } from "@/components/preview/framing-editor";
 
 export interface KitTabView {
   typeLabel: string;
@@ -17,7 +19,7 @@ export interface KitTabView {
   hasContent: boolean;
   heroName: string | null;
   elements: Array<{ title: string; detail: string }>;
-  slots: Array<{ slot: string; label: string; status: string | null; src: string | null; isDemo: boolean; provider: string | null }>;
+  slots: Array<{ slot: string; label: string; status: string | null; src: string | null; isDemo: boolean; provider: string | null; isSketch?: boolean; framing?: FramingTarget | null }>;
 }
 
 /** Onglet « Kit » : contenu structuré, personnalisation, illustrations par emplacement, production. */
@@ -28,6 +30,7 @@ export function KitTab({ bookId, kit, activeJobId }: { bookId: string; kit: KitT
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const [tool, setTool] = useState<{ ill: FramingTarget; isSketch: boolean } | null>(null);
   const done = kit.slots.filter((s) => s.status === "GENERATED" || s.status === "ACCEPTED").length;
 
   const act = (fn: () => Promise<{ jobId: string } | void>, ok?: string) =>
@@ -89,13 +92,18 @@ export function KitTab({ bookId, kit, activeJobId }: { bookId: string; kit: KitT
                 <div className="relative aspect-square bg-slate-100">
                   {s.src ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={s.src} alt={s.label} className="h-full w-full object-cover" />
+                    <img src={s.src} alt={s.label} className="h-full w-full object-contain" />
                   ) : <div className="flex h-full items-center justify-center p-2 text-center text-[11px] text-slate-400">À générer</div>}
                   {s.isDemo && <span className="absolute left-1 top-1 rounded bg-red-600 px-1 text-[9px] font-bold text-white">DÉMO</span>}
+                  {s.isSketch && <span className="absolute right-1 top-1 rounded bg-amber-400 px-1 text-[9px] font-bold text-amber-950">ESQUISSE</span>}
                 </div>
                 <div className="flex items-center justify-between gap-1 p-1.5">
                   <span className="truncate text-[11px] font-semibold" title={s.label}>{s.label}</span>
-                  {s.src && <button className="text-[10px] text-blue-700 hover:underline" disabled={pending || !!jobId} onClick={() => act(() => regenerateKitSlotAction(bookId, s.slot))}>Refaire</button>}
+                  {s.framing ? (
+                    <button className="text-[10px] font-semibold text-blue-700 hover:underline" onClick={() => setTool({ ill: s.framing!, isSketch: !!s.isSketch })}>Cadrer · refaire</button>
+                  ) : s.src ? (
+                    <button className="text-[10px] text-blue-700 hover:underline" disabled={pending || !!jobId} onClick={() => { if (confirm("Regénérer cette illustration ? Une nouvelle image sera payée.")) act(() => regenerateKitSlotAction(bookId, s.slot)); }}>Refaire</button>
+                  ) : null}
                 </div>
               </li>
             ))}
@@ -117,6 +125,7 @@ export function KitTab({ bookId, kit, activeJobId }: { bookId: string; kit: KitT
         })}><ClipboardPaste className="h-4 w-4" /> Importer le JSON</Button>
       </div>
 
+      {tool && <ImageToolsDialog ill={tool.ill} isSketch={tool.isSketch} open onOpenChange={(o) => { if (!o) { setTool(null); router.refresh(); } }} />}
       {message && <p className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">{message}</p>}
       {error && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}
     </div>

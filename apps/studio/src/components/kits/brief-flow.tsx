@@ -107,8 +107,13 @@ export function BriefFlow({ mode, categories, sites = [], sitesNote }: { mode: "
             <p className="text-sm text-slate-500">Livre d&apos;activités : le sommaire sera proposé, vous le validerez avant la production.</p>
           )}
           <Button size="lg" onClick={create} disabled={pending || Boolean(jobId)}>Créer le kit{start && kitType(plan.kitType).family === "kit" ? " et lancer la production" : ""}</Button>
-          {jobId && bookId && <JobProgress jobId={jobId} title="Production" onDone={() => router.push(`/books/${bookId}?tab=kit`)} />}
-          {jobId && bookId && <Button variant="link" onClick={() => router.push(`/books/${bookId}?tab=kit`)}>Ouvrir le kit</Button>}
+          {jobId && bookId && <JobProgress jobId={jobId} title="Production" onDone={() => router.push(`/books/${bookId}/apercu`)} />}
+          {jobId && bookId && (
+            <div className="flex flex-wrap gap-2">
+              <Button variant="secondary" onClick={() => router.push(`/books/${bookId}/apercu`)}>Voir l'aperçu du livre</Button>
+              <Button variant="link" onClick={() => router.push(`/books/${bookId}?tab=kit`)}>Ouvrir le kit</Button>
+            </div>
+          )}
         </div>
       )}
 

@@ -125,7 +125,9 @@ class Flow {
     if (!image?.src) return;
     const h = this.ctx.heightMm * ratio;
     this.need(h + 4);
-    this.blocks.push(img({ x: this.m, y: this.y, w: this.w, h, img: image, alt }));
+    // Cadre paysage (3:2 à moins de 25 %), centré : l'image n'est pas rognée en bandeau
+    const w = Math.min(this.w, h * 1.6);
+    this.blocks.push(img({ x: this.m + (this.w - w) / 2, y: this.y, w, h, img: image, alt }));
     this.y += h + 5;
   }
   space(mm: number) {

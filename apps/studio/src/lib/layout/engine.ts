@@ -243,7 +243,7 @@ export function buildCoverPage(cover: CoverData, ctx: BuildContext, illustration
   const H = ctx.heightMm;
   const blocks: Block[] = [
     { id: newId("s"), type: "shape", shape: "rect", color: t.colorPrimary, x: 0, y: 0, w: W, h: H, style: {}, editable: false },
-    { id: newId("i"), type: "image", role: "cover", illustrationId: illustration?.id, src: illustration?.src, alt: cover.illustrationBrief, caption: "", isDemo: illustration?.isDemo ?? false, fit: "cover", x: 12, y: H * 0.3, w: W - 24, h: H * 0.5, style: { radius: 6, background: "#ffffff" }, editable: true },
+    { id: newId("i"), type: "image", role: "cover", illustrationId: illustration?.id, src: illustration?.src, alt: cover.illustrationBrief, caption: "", isDemo: illustration?.isDemo ?? false, fit: "cover", x: 20, y: H * 0.3, w: W - 40, h: H * 0.5, style: { radius: 6, background: "#ffffff" }, editable: true },
     { id: newId("t"), type: "text", role: "label", text: cover.collection, x: 12, y: 16, w: W - 24, h: 8, style: { fontSizePt: 12, color: "#ffffff", align: "center", weight: "bold" }, editable: true },
     { id: newId("t"), type: "text", role: "title", text: cover.title, x: 12, y: 28, w: W - 24, h: 30, style: { fontSizePt: cover.title.length > 22 ? 34 : 42, color: "#ffffff", align: "center", weight: "bold", lineHeight: 1.05 }, editable: true },
     { id: newId("t"), type: "text", role: "subtitle", text: cover.subtitle, x: 12, y: 60, w: W - 24, h: 14, style: { fontSizePt: 18, color: t.colorSecondary, align: "center", weight: "bold" }, editable: true },

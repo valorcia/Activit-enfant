@@ -61,6 +61,33 @@ Chaque univers porte un **préréglage** (`src/lib/universes/presets.ts`) qui fi
 
 `pnpm tsx scripts/dev-kit-smoke.ts [chasse-au-tresor|lutins-farceurs]` produit un kit complet en mode démonstration, sans worker, pour vérifier le pipeline.
 
+## Aperçu
+
+Chaque livre a une page **Aperçu** (`/books/<id>/apercu`, bouton orange « Aperçu » sur la fiche du livre, onglet « Aperçu », lien « Aperçu du livre » dans le suivi du pilote automatique, et ouverture automatique après une production lancée depuis le brief).
+
+- **Même rendu que le PDF** : les pages sont dessinées par le même moteur (`PageRenderer`) que la route d'impression utilisée par Chromium. Ce que vous voyez est ce qui sera imprimé.
+- **Visionneuse** : double page (couverture seule), tourne-page léger (désactivé si le système demande de réduire les animations), flèches du clavier / Page précédente-suivante / Début-Fin, glisser du doigt, miniatures, zoom ajusté / 100 % / 200 %, plein écran, bascule page simple / double page ; page simple automatiquement sur téléphone.
+- **Contrôles** (calque activable) : fond perdu (bande de 3 mm), marges de sécurité (pointillés), cadres des images (cliquables), badges d'alerte par page : texte qui déborde (même règle que l'export PDF), basse résolution, recadrage conseillé, image presque unie, image manquante, esquisse. Chaque alerte propose son action : **Recadrer**, **Remplacer par un fichier**, **Regénérer cette image**, **Modifier le texte** (ouvre l'éditeur sur la page).
+- **En-tête** : titre, univers, type, nombre de pages, coût cumulé, état des images (esquisses / version finale), boutons **Exporter le PDF**, **Télécharger le PDF**, **Publier / mettre à jour en boutique**, **Partager un lien d'aperçu**.
+- **Lien partagé** : `/preview/<jeton>`, lecture seule, signé (HMAC), valable 7 jours, accessible sans le mot de passe du studio (le middleware laisse passer `/preview/…` ; les images y sont servies avec `?pt=<jeton>` et la route d'asset vérifie que l'image appartient bien au livre). Secret : `PREVIEW_SECRET` (à défaut `STUDIO_PASSWORD`, puis `INTERNAL_TOKEN`) ; changer ce secret invalide tous les liens.
+- **Vignettes** : l'accueil et la liste des livres montrent la couverture et les 3 premières pages (clic → aperçu).
+
+## Cadrage et économies
+
+Objectif : une image juste du premier coup, et ne jamais payer deux fois la même illustration.
+
+**1. Format juste dès la génération.** Chaque emplacement déclare son format cible (`src/lib/images/framing.ts`) : portrait 2:3 → 1024 × 1536 (énigmes en images, carte, diplôme, certificat, invitation, visuel Story), paysage 3:2 → 1536 × 1024 (lettres, idées, chapitres, recettes, expériences, planche de personnages), carré → 1024 × 1024 (couverture, résultat final, étapes, visuel héros). La taille est la même en démo et en copier-coller (le prompt à coller indique le format). Le prompt reçoit des consignes de composition : sujet centré dans la zone utile, marges de sécurité de 10 %, zones laissées libres quand la page pose du texte (diplôme, invitation, lettre, Story), « aucun texte dans l'image ». Les cadres des gabarits (diplôme, idées, guide, flux des guides/recettes/expériences, couverture) ont été redimensionnés pour rester à moins de 25 % de ces formats.
+
+**2. Cadrage sans regénération.** Chaque illustration a un point focal (`focalX`, `focalY`, 0–1), un zoom (1–3) et un ajustement (`cover` = remplir, `contain` = ajuster, vide = automatique). Le point focal est détecté gratuitement à la création (sharp, stratégie « attention », repli « entropy ») ; le cadrage manuel n'est jamais écrasé. Le rendu applique `object-fit` / `object-position` + zoom, sans déformation ; au-delà de 25 % d'écart de format l'image passe automatiquement en « ajuster », sur un fond tiré de l'image (couleur moyenne + image floutée, jamais de bandes noires). L'**éditeur de cadrage** (depuis l'aperçu ou « Cadrer · refaire » dans l'onglet Kit) : glisser le point d'intérêt, zoom, remplir / ajuster / auto, « Recadrage automatique », Enregistrer → les pages sont mises à jour sans aucun appel IA.
+
+**3. Contrôle des images** (`src/lib/quality/images.ts`) : résolution à l'impression (alerte sous 150 ppp, blocage sous 100 ppp), écart de format > 25 %, image presque unie, image manquante, esquisse. Les alertes s'affichent dans l'aperçu ; l'étape « Mise en page » du pilote automatique les résume et n'échoue que sur un problème bloquant.
+
+**4. Économiser les générations.**
+- **Mode esquisse** (Paramètres → IA, et activé par défaut dans le pilote automatique) : les images sont d'abord produites en qualité basse (≈ 0,01 $ l'image avec gpt-image-1), l'aperçu est assemblé, puis « **Valider les esquisses et générer la version finale** » ne reprend que les esquisses retenues, en qualité finale, avec le même prompt et l'esquisse en image de référence (`images.edit`) pour garder la composition. Les coûts esquisse / finale sont affichés avant confirmation.
+- **Pilote automatique** : l'étape « Illustrations » produit les esquisses, s'arrête pour validation dans l'aperçu (désactivable : « Valider les esquisses… » décoché = version finale directement ; « Esquisses d'abord » décoché = tout en final directement), puis génère les versions finales.
+- **Jamais de regénération implicite** (`src/lib/generation/regen-policy.ts`) : relancer un pipeline conserve toute image acceptée, générée ou collée, ainsi que la couverture existante ; seules les images absentes, échouées, refusées (ou de démonstration quand un vrai fournisseur est configuré) sont produites.
+- **Regénérer une image** est toujours volontaire : coût estimé et confirmation, recadrage gratuit proposé d'abord, « Regénérer avec correction » (texte libre ajouté au prompt, image actuelle en référence) ou nouvelle image ; « Remplacer par un fichier » ne coûte rien. La nouvelle version remplace l'ancienne dans les pages sans les reconstruire.
+
 ## Mode copier-coller (sans clé API)
 
 Le studio fonctionne aussi **sans aucune clé API** : les prompts sont copiés dans l'assistant de votre choix (Claude.ai, ChatGPT…) et les réponses collées dans le studio.
