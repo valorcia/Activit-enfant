@@ -25,6 +25,13 @@ export interface PublishInput {
 
 export interface PublishResult { externalPostId: string; externalUrl?: string | null }
 
+export interface PublishVideoInput {
+  text: string;
+  videoUrl: string; // URL publique absolue (MP4)
+  coverUrl?: string | null;
+  linkUrl?: string | null;
+}
+
 export interface SpendRow { date: string; spendCents: number; impressions?: number; clicks?: number; raw?: unknown }
 
 export interface ExternalCampaign { id: string; name: string; status?: string }
@@ -36,6 +43,8 @@ export interface SocialConnector {
   exchangeCode(code: string, redirectUri: string): Promise<{ accessToken: string; refreshToken?: string | null; expiresAt?: Date | null; scopes?: string[] }>;
   listAccounts(userAccessToken: string): Promise<DiscoveredAccount[]>;
   publishPhotoPost(account: SocialAccount & { token: string }, input: PublishInput): Promise<PublishResult>;
+  /** Publication vidéo (Reels Instagram, vidéo de Page, vidéo TikTok). */
+  publishVideoPost?(account: SocialAccount & { token: string }, input: PublishVideoInput): Promise<PublishResult>;
   listCampaigns(adAccount: SocialAccount & { token: string }): Promise<ExternalCampaign[]>;
   getCampaignSpend(adAccount: SocialAccount & { token: string }, externalCampaignId: string, since: Date, until: Date): Promise<SpendRow[]>;
 }

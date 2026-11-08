@@ -83,6 +83,18 @@ export const tiktokConnector: SocialConnector = {
     return { externalPostId: id, externalUrl: account.username ? `https://www.tiktok.com/@${account.username}` : null };
   },
 
+  async publishVideoPost(account, input) {
+    if (account.kind !== "TIKTOK") throw new SocialApiError("Seul un compte TikTok peut publier");
+    // PULL_FROM_URL : le domaine de la vidéo doit être vérifié dans le portail développeur TikTok
+    const r = await post<{ data?: { publish_id?: string } }>(`${OPEN}/post/publish/video/init/`, {
+      post_info: { title: input.text.slice(0, 2200), privacy_level: "PUBLIC_TO_EVERYONE", disable_comment: false, disable_duet: false, disable_stitch: false },
+      source_info: { source: "PULL_FROM_URL", video_url: input.videoUrl },
+    }, account.token);
+    const id = r.data?.publish_id;
+    if (!id) throw new SocialApiError("TikTok : identifiant de publication manquant");
+    return { externalPostId: id, externalUrl: account.username ? `https://www.tiktok.com/@${account.username}` : null };
+  },
+
   async listCampaigns(adAccount) {
     const u = new URL(`${BUSINESS}/campaign/get/`);
     u.searchParams.set("advertiser_id", adAccount.externalId);

@@ -100,6 +100,29 @@ export const metaConnector: SocialConnector = {
     throw new SocialApiError("Ce type de compte ne permet pas la publication");
   },
 
+  async publishVideoPost(account, input) {
+    if (account.kind === "INSTAGRAM") {
+      // Reels : création du conteneur, attente du traitement par Instagram, puis publication
+      const container = await graph<{ id: string }>(`${account.externalId}/media`, { media_type: "REELS", video_url: input.videoUrl, caption: input.text, cover_url: input.coverUrl ?? undefined, share_to_feed: "true" }, { method: "POST", token: account.token });
+      for (let i = 0; i < 30; i++) {
+        const st = await graph<{ status_code?: string; status?: string }>(`${container.id}`, { fields: "status_code,status" }, { token: account.token });
+        if (st.status_code === "FINISHED") break;
+        if (st.status_code === "ERROR" || st.status_code === "EXPIRED") throw new SocialApiError(`Instagram n'a pas pu traiter la vidéo (${st.status ?? st.status_code})`);
+        if (i === 29) throw new SocialApiError("Instagram traite encore la vidéo : réessayez dans quelques minutes");
+        await new Promise((r) => setTimeout(r, 5000));
+      }
+      const published = await graph<{ id: string }>(`${account.externalId}/media_publish`, { creation_id: container.id }, { method: "POST", token: account.token });
+      const info = await graph<{ permalink?: string }>(`${published.id}`, { fields: "permalink" }, { token: account.token }).catch(() => ({ permalink: undefined }));
+      return { externalPostId: published.id, externalUrl: info.permalink ?? null };
+    }
+    if (account.kind === "PAGE") {
+      const description = input.linkUrl ? `${input.text}\n\n${input.linkUrl}` : input.text;
+      const r = await graph<{ id: string }>(`${account.externalId}/videos`, { file_url: input.videoUrl, description }, { method: "POST", token: account.token });
+      return { externalPostId: r.id, externalUrl: `https://www.facebook.com/${account.externalId}/videos/${r.id}` };
+    }
+    throw new SocialApiError("Ce type de compte ne permet pas la publication vidéo");
+  },
+
   async listCampaigns(adAccount) {
     const r = await graph<{ data: Array<{ id: string; name: string; status?: string }> }>(`${adAccount.externalId}/campaigns`, { fields: "id,name,status", limit: "100" }, { token: adAccount.token });
     return (r.data ?? []).map((c): ExternalCampaign => ({ id: c.id, name: c.name, status: c.status }));

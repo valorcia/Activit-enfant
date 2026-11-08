@@ -29,7 +29,13 @@ export async function publishSocialPost(postId: string, db: PrismaClient = defau
   try {
     const connector = getConnector(post.provider);
     const text = composePostText({ hook: post.hook, body: post.body, cta: post.cta, hashtags: post.hashtags, linkUrl: post.linkUrl }, channelOfPost(post));
-    const result = await connector.publishPhotoPost(withToken(post.account), { text, imageUrls: post.imageUrls.map(absolute), linkUrl: post.linkUrl });
+    let result;
+    if (post.videoUrl) {
+      if (!connector.publishVideoPost) throw new SocialApiError("Publication vidéo non prise en charge pour ce réseau : publiez-la manuellement");
+      result = await connector.publishVideoPost(withToken(post.account), { text, videoUrl: absolute(post.videoUrl), coverUrl: post.imageUrls[0] ? absolute(post.imageUrls[0]) : null, linkUrl: post.linkUrl });
+    } else {
+      result = await connector.publishPhotoPost(withToken(post.account), { text, imageUrls: post.imageUrls.map(absolute), linkUrl: post.linkUrl });
+    }
     await db.socialPost.update({ where: { id: postId }, data: { status: "PUBLISHED", publishedAt: new Date(), externalPostId: result.externalPostId, externalUrl: result.externalUrl ?? null } });
     return { ok: true };
   } catch (e) {

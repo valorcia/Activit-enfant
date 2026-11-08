@@ -6,7 +6,7 @@ import type { StorageDriver } from "./index";
 
 const MIME_BY_EXT: Record<string, string> = {
   ".pdf": "application/pdf", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
-  ".webp": "image/webp", ".gif": "image/gif", ".svg": "image/svg+xml", ".mp4": "video/mp4", ".zip": "application/zip",
+  ".webp": "image/webp", ".gif": "image/gif", ".svg": "image/svg+xml", ".mp4": "video/mp4", ".webm": "video/webm", ".mov": "video/quicktime", ".zip": "application/zip",
 };
 
 function resolveKey(key: string): string {

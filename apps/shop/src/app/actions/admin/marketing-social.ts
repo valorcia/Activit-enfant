@@ -171,7 +171,7 @@ async function briefFor(productId: string, campaignId?: string | null): Promise<
   };
 }
 
-const genSchema = z.object({ productId: z.string().min(1), campaignId: z.string().optional().nullable(), channels: z.array(z.enum(CHANNELS)).min(1), variants: z.coerce.number().int().min(1).max(5).default(3) });
+const genSchema = z.object({ productId: z.string().min(1), campaignId: z.string().optional().nullable(), channels: z.array(z.enum(CHANNELS)).min(1), variants: z.coerce.number().int().min(1).max(5).default(3), videoUrl: z.string().max(600).optional().nullable() });
 
 /** Prépare la génération : renvoie le prompt (pour le mode copier-coller) et indique si l'API Claude est disponible. */
 export async function prepareGenerationAction(raw: unknown): Promise<Result<{ prompt: string; apiAvailable: boolean }>> {
@@ -185,13 +185,18 @@ export async function prepareGenerationAction(raw: unknown): Promise<Result<{ pr
 }
 
 function toProvider(channel: Channel): "META" | "TIKTOK" { return channel === "tiktok" ? "TIKTOK" : "META"; }
-function toFormat(channel: Channel): "FEED_IMAGE" | "TIKTOK_PHOTO" | "AD_PRIMARY_TEXT" { return channel === "tiktok" ? "TIKTOK_PHOTO" : channel === "meta_ad" ? "AD_PRIMARY_TEXT" : "FEED_IMAGE"; }
+function toFormat(channel: Channel, video = false): "FEED_IMAGE" | "TIKTOK_PHOTO" | "AD_PRIMARY_TEXT" | "REEL_COVER" | "TIKTOK_VIDEO" {
+  if (channel === "meta_ad") return "AD_PRIMARY_TEXT";
+  if (channel === "tiktok") return video ? "TIKTOK_VIDEO" : "TIKTOK_PHOTO";
+  return video ? "REEL_COVER" : "FEED_IMAGE";
+}
 
-async function saveVariants(userId: string, productId: string, campaignId: string | null | undefined, variants: PostVariant[], generatedBy: "api" | "manual") {
+/** `videoUrl` : vidéo publicitaire du produit à joindre (Reel / TikTok) ; la publicité Meta reste en texte + image. */
+async function saveVariants(userId: string, productId: string, campaignId: string | null | undefined, variants: PostVariant[], generatedBy: "api" | "manual", videoUrl?: string | null) {
   const { images, linkUrl } = await briefFor(productId, campaignId);
   const created = await prisma.$transaction(variants.map((v) => prisma.socialPost.create({
     data: {
-      productId, campaignId: campaignId || null, provider: toProvider(v.channel), format: toFormat(v.channel), status: "DRAFT",
+      productId, campaignId: campaignId || null, provider: toProvider(v.channel), format: toFormat(v.channel, !!videoUrl && v.channel !== "meta_ad"), status: "DRAFT", videoUrl: videoUrl && v.channel !== "meta_ad" ? videoUrl : null,
       hook: v.hook, body: v.body, cta: v.cta, headline: v.headline ?? null, hashtags: v.hashtags, imageUrls: v.imageIndex != null && images[v.imageIndex] ? [images[v.imageIndex]] : images.slice(0, 1),
       linkUrl, generatedBy, variantLabel: v.label, createdById: userId,
     },
@@ -210,19 +215,19 @@ export async function generateWithApiAction(raw: unknown): Promise<Result<{ ids:
     if (!(await isClaudeConfigured())) return fail("Clé Claude non configurée : utilisez le mode copier-coller ou renseignez-la dans Paramètres → Intégrations");
     const { brief } = await briefFor(parsed.data.productId, parsed.data.campaignId);
     const variants = await generateWithClaude(buildCopywriterPrompt(brief, parsed.data.channels as Channel[], parsed.data.variants));
-    const ids = await saveVariants(user.id, parsed.data.productId, parsed.data.campaignId, variants, "api");
+    const ids = await saveVariants(user.id, parsed.data.productId, parsed.data.campaignId, variants, "api", parsed.data.videoUrl);
     return { ok: true, data: { ids } };
   } catch (e) { return handle(e); }
 }
 
 /** Mode copier-coller : valide le JSON collé et enregistre les brouillons. */
-export async function importPastedVariantsAction(raw: { productId: string; campaignId?: string | null; pasted: string }): Promise<Result<{ ids: string[] }>> {
+export async function importPastedVariantsAction(raw: { productId: string; campaignId?: string | null; pasted: string; videoUrl?: string | null }): Promise<Result<{ ids: string[] }>> {
   try {
     const user = await assertPermission("marketing:write");
     if (!raw.productId) return fail("Produit manquant");
     let variants: PostVariant[];
     try { variants = parseCopywriterOutput(raw.pasted); } catch (e) { return fail(`Réponse non reconnue : ${e instanceof Error ? e.message : "JSON invalide"}`); }
-    const ids = await saveVariants(user.id, raw.productId, raw.campaignId, variants, "manual");
+    const ids = await saveVariants(user.id, raw.productId, raw.campaignId, variants, "manual", raw.videoUrl);
     return { ok: true, data: { ids } };
   } catch (e) { return handle(e); }
 }
@@ -238,6 +243,7 @@ const postSchema = z.object({
   headline: z.string().max(80).optional().nullable(),
   hashtags: z.preprocess((v) => (typeof v === "string" ? v.split(/[\s,]+/).filter(Boolean) : v ?? []), z.array(z.string().max(40)).max(30)),
   imageUrls: z.array(z.string().max(600)).max(10).default([]),
+  videoUrl: z.string().max(600).optional().nullable(),
   accountId: z.string().optional().nullable(),
   campaignId: z.string().optional().nullable(),
   scheduledAt: optionalDate,
@@ -254,7 +260,7 @@ export async function updatePostAction(id: string, raw: unknown): Promise<Result
     const linkUrl = campaign ? withUtm(campaign.landingUrl, { utm_source: campaign.utmSource, utm_medium: campaign.utmMedium, utm_campaign: campaign.utmCampaign, utm_content: id }) : post.linkUrl;
     await prisma.socialPost.update({
       where: { id },
-      data: { hook: d.hook ?? null, body: d.body, cta: d.cta ?? null, headline: d.headline ?? null, hashtags: d.hashtags.map((h) => (h.startsWith("#") ? h : `#${h}`)), imageUrls: d.imageUrls, accountId: d.accountId || null, campaignId: d.campaignId || null, linkUrl, scheduledAt: d.scheduledAt ?? null, status: post.status === "PUBLISHED" ? post.status : d.scheduledAt ? "SCHEDULED" : "DRAFT", error: null },
+      data: { hook: d.hook ?? null, body: d.body, cta: d.cta ?? null, headline: d.headline ?? null, hashtags: d.hashtags.map((h) => (h.startsWith("#") ? h : `#${h}`)), imageUrls: d.imageUrls, ...(d.videoUrl !== undefined ? { videoUrl: d.videoUrl || null } : {}), accountId: d.accountId || null, campaignId: d.campaignId || null, linkUrl, scheduledAt: d.scheduledAt ?? null, status: post.status === "PUBLISHED" ? post.status : d.scheduledAt ? "SCHEDULED" : "DRAFT", error: null },
     });
     await audit({ userId: user.id, action: "social.post.update", entity: "socialPost", entityId: id });
     revalidate();
