@@ -5,7 +5,7 @@ const hex = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Couleur hexadécimale attendu
 export const brandSettingsSchema = z.object({
   name: z.string().min(1).max(60).default("La Malle à Jeux"),
   tagline: z.string().max(160).default("Des aventures extraordinaires à vivre à la maison"),
-  logoUrl: z.string().max(500).optional().nullable(),
+  logoUrl: z.string().max(500).optional().nullable().default("/images/brand/logo-la-malle-a-jeux.webp"),
   logoText: z.string().max(40).optional().nullable(),
   faviconUrl: z.string().max(500).optional().nullable(),
   contactEmail: z.string().max(120).optional().nullable(),
@@ -146,7 +146,7 @@ export const seoSettingsSchema = z.object({
   defaultTitle: z.string().max(70).default("La Malle à Jeux — Chasses au trésor et activités à imprimer"),
   titleTemplate: z.string().max(70).default("%s | La Malle à Jeux"),
   defaultDescription: z.string().max(170).default("Chasses au trésor, cahiers d'activités, kits d'anniversaire et histoires à imprimer pour les enfants de 3 à 12 ans. Téléchargement immédiat."),
-  ogImageUrl: z.string().max(500).optional().nullable(),
+  ogImageUrl: z.string().max(500).optional().nullable().default("/images/brand/banniere-la-malle-a-jeux.webp"),
   robotsIndex: z.boolean().default(true),
 });
 export type SeoSettings = z.infer<typeof seoSettingsSchema>;

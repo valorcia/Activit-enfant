@@ -123,12 +123,37 @@ async function main() {
   });
   console.log(`Produit : ${coquelicot.name} (${coquelicot.status})`);
 
+  // --- Illustrations fournies (servies depuis /public, versionnées avec le code) --
+  // Seules les images « seed » (/images/seed/…) sont gérées ici : celles ajoutées
+  // depuis l'admin ne sont jamais touchées.
+  const seedImages = [
+    { url: "/images/seed/coquelicot-couverture.webp", role: "MAIN" as const, alt: "Le trésor de la Capitaine Coquelicot : des enfants pirates découvrent un coffre au trésor sur la plage", width: 1254, height: 1254, position: 0 },
+    { url: "/images/seed/coquelicot-capitaine-plage.webp", role: "ILLUSTRATION" as const, alt: "La Capitaine Coquelicot et son perroquet devant un coffre au trésor, un bateau pirate au loin", width: 1086, height: 1448, position: 1 },
+    { url: "/images/seed/coquelicot-planche-personnages.webp", role: "GALLERY" as const, alt: "Planche des personnages : la Capitaine Coquelicot, son perroquet, le bateau et la carte", width: 1536, height: 1024, position: 2 },
+    { url: "/images/seed/coquelicot-capitaine-plage.webp", role: "GALLERY" as const, alt: "La Capitaine Coquelicot sur la plage au trésor", width: 1086, height: 1448, position: 3 },
+  ];
+  await prisma.productImage.deleteMany({ where: { productId: coquelicot.id, url: { startsWith: "/images/seed/" } } });
+  await prisma.productImage.createMany({ data: seedImages.map((img) => ({ ...img, productId: coquelicot.id })) });
+  await prisma.product.update({ where: { id: coquelicot.id }, data: { ogImageUrl: "/images/seed/coquelicot-couverture.webp" } });
+  await prisma.category.update({ where: { slug: "chasses-au-tresor" }, data: { illustrationUrl: "/images/seed/carte-au-tresor.webp" } });
+
   // --- Paramètres du site (valeurs par défaut explicites) ----------------------
   await prisma.siteSetting.upsert({
     where: { key: "homepage" },
-    create: { key: "homepage", value: { featuredProductIds: [coquelicot.id] } },
+    create: { key: "homepage", value: { featuredProductIds: [coquelicot.id], hero: { imageUrl: "/images/brand/banniere-la-malle-a-jeux.webp" } } },
     update: {},
   });
+  // Logo et image de partage : complétés s'ils manquent (sans écraser un choix fait dans l'admin)
+  const brandRow = await prisma.siteSetting.findUnique({ where: { key: "brand" } });
+  const brandValue = (brandRow?.value as Record<string, unknown> | null) ?? {};
+  if (!brandValue.logoUrl) {
+    await prisma.siteSetting.upsert({ where: { key: "brand" }, create: { key: "brand", value: { ...brandValue, logoUrl: "/images/brand/logo-la-malle-a-jeux.webp" } }, update: { value: { ...brandValue, logoUrl: "/images/brand/logo-la-malle-a-jeux.webp" } } });
+  }
+  const seoRow = await prisma.siteSetting.findUnique({ where: { key: "seo" } });
+  const seoValue = (seoRow?.value as Record<string, unknown> | null) ?? {};
+  if (!seoValue.ogImageUrl) {
+    await prisma.siteSetting.upsert({ where: { key: "seo" }, create: { key: "seo", value: { ...seoValue, ogImageUrl: "/images/brand/banniere-la-malle-a-jeux.webp" } }, update: { value: { ...seoValue, ogImageUrl: "/images/brand/banniere-la-malle-a-jeux.webp" } } });
+  }
 
   // --- Pages juridiques (brouillons : à valider avant mise en production) -------
   const pages = [
