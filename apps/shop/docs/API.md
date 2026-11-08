@@ -92,6 +92,43 @@ multipart/form-data : `file` (PDF ou ZIP, 100 Mo max), `kind` (`MAIN_PDF`, `EXTR
 - `{}` → publication immédiate, **uniquement** avec le scope `products:publish` (sinon `403`).
 - `409` si aucun fichier numérique n'est attaché.
 
+### `POST /products/:id/marketing/autopilot` — campagne et publications automatiques
+
+Scope `products:write`. Crée **une** campagne tracée (`utm_campaign` unique) et les publications du produit pour chaque canal demandé. Les textes sont générés par Claude (clé dans Paramètres → Intégrations) ou fournis dans `copy` (mode copier-coller du studio).
+
+```json
+{
+  "channels": ["instagram", "facebook", "tiktok"],
+  "variantsPerChannel": 2,
+  "videoUrls": ["https://…/pub-story.mp4"],
+  "copy": null,
+  "campaign": { "name": "Lancement dinosaures", "dailyBudgetCents": 500, "startsAt": "2026-12-01T09:00:00Z", "objective": "conversions" },
+  "schedule": { "mode": "draft", "startAt": null, "spacingHours": 24 }
+}
+```
+
+- `channels` : au moins un parmi `instagram`, `facebook`, `tiktok`. `variantsPerChannel` : 1 à 3 (défaut 2).
+- `videoUrls` : facultatif. Sinon, la vidéo la plus récente du produit par format (`ProductImage` VIDEO). La vidéo **story** (9:16) va aux Reels Instagram et à TikTok ; Facebook reste en image + lien.
+- `copy` : JSON du copywriter `{"variants":[{"channel","label","hook","body","cta","headline","hashtags","imageIndex"}]}`. Fourni → aucun appel IA.
+- `schedule.mode` : `draft` (défaut, validation humaine dans Admin → Marketing social → Autopilote) ou `auto` : les posts dont le canal a un compte connecté passent en `SCHEDULED` à `startAt` (défaut : maintenant + 1 h) puis tous les `spacingHours`. Les autres restent en brouillon. Produit non publié → tout reste en brouillon.
+- Campagne : `Campaign.source = "api"`, `channel` = `META` (Instagram/Facebook seuls), `TIKTOK` (TikTok seul) ou `OTHER` (mixte). Chaque post a son lien `utm_source=<canal>&utm_content=<id du post>`.
+
+Réponse `201` :
+```json
+{ "data": { "campaignId": "…", "campaignSlug": "lancement-dinosaures", "landingUrl": "https://…/aventures/…?utm_source=instagram&utm_medium=paid&utm_campaign=lancement-dinosaures",
+  "adminUrl": "https://…/admin/marketing/campagnes/…", "generatedBy": "api",
+  "posts": [ { "id": "…", "channel": "instagram", "format": "REEL_COVER", "status": "DRAFT", "scheduledAt": null, "accountName": null } ] } }
+```
+
+Erreurs :
+- `409` `{"error":"copywriter_unavailable","details":{"prompt":"…","schema":"…"}}` : aucune clé Claude et pas de `copy`. Faites coller `prompt` dans Claude/ChatGPT puis renvoyez la réponse dans `copy`.
+- `422` : corps invalide, ou `copy` ne respectant pas le schéma (`details.issues`).
+- `404` produit inconnu, `403` scope manquant.
+
+### `GET /products/:id/marketing` — campagnes du produit
+
+Scope `products:read`. `{"data":{"campaigns":[{"id","slug","name","status","source","channel","landingUrl","posts":[{"id","provider","format","status","label","hook","linkUrl","videoUrl","scheduledAt","publishedAt","externalUrl","accountName","error"}],"stats":{"orders","revenueCents","revenueHtCents","spendCents","roas"}}]}}` (statistiques sur toute la période, ventes attribuées par `utm_campaign`).
+
 ### `GET /categories`, `GET /collections`
 
 ## Flux recommandé pour un agent IA

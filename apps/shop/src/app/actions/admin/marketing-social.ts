@@ -5,13 +5,12 @@ import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { assertPermission } from "@/lib/auth/session";
 import { env } from "@/lib/env";
-import { getSetting } from "@/lib/settings";
-import { effectivePrice } from "@/lib/pricing";
-import { formatPrice } from "@/lib/utils";
 import { slugifyUtm, withUtm } from "@/lib/social/attribution";
 import { buildCopywriterPrompt, CHANNELS, parseCopywriterOutput, type Channel, type ProductBrief, type PostVariant } from "@/lib/social/copywriter";
 import { generateWithClaude, isClaudeConfigured } from "@/lib/social/copywriter-claude";
 import { publishSocialPost, syncCampaignSpend } from "@/lib/social/publish";
+import { buildProductBrief, productLandingBase } from "@/lib/social/brief";
+import { approveCampaignPosts } from "@/lib/social/autopilot";
 
 type Result<T = undefined> = { ok: true; data: T } | { ok: false; error: string; fields?: Record<string, string> };
 
@@ -149,26 +148,11 @@ export async function syncSpendAction(campaignId: string, days = 30): Promise<Re
 // ---------------------------------------------------------------------------
 
 async function briefFor(productId: string, campaignId?: string | null): Promise<{ brief: ProductBrief; images: string[]; linkUrl: string }> {
-  const product = await prisma.product.findUniqueOrThrow({ where: { id: productId }, include: { images: { orderBy: { position: "asc" } } } });
-  const brand = await getSetting("brand");
+  const product = await prisma.product.findUniqueOrThrow({ where: { id: productId }, select: { slug: true } });
   const campaign = campaignId ? await prisma.campaign.findUnique({ where: { id: campaignId } }) : null;
-  const baseUrl = `${env.appUrl}/aventures/${product.slug}`;
-  const linkUrl = campaign ? campaign.landingUrl : withUtm(baseUrl, { utm_source: "social", utm_medium: "social", utm_campaign: "organique" });
-  const price = effectivePrice(product);
-  const kit = Array.isArray(product.kitContents) ? (product.kitContents as Array<{ title: string; quantity?: number | null }>) : [];
-  const images = product.images.filter((i) => i.role !== "VIDEO");
-  return {
-    brief: {
-      name: product.name, tagline: product.tagline, shortDescription: product.shortDescription, longDescription: product.longDescription,
-      ageMin: product.ageMin, ageMax: product.ageMax, playersMin: product.playersMin, playersMax: product.playersMax, durationMinutes: product.durationMinutes, pageCount: product.pageCount,
-      priceLabel: `${formatPrice(price.priceCents, product.currency)} TTC${price.compareAtCents ? ` (au lieu de ${formatPrice(price.compareAtCents, product.currency)})` : ""}`,
-      kitContents: kit.map((k) => ({ title: k.title, quantity: k.quantity ?? null })),
-      images: images.map((i, index) => ({ index, alt: i.alt, role: i.role })),
-      url: linkUrl, brandName: brand.name,
-    },
-    images: images.map((i) => i.url),
-    linkUrl,
-  };
+  const linkUrl = campaign ? campaign.landingUrl : withUtm(productLandingBase(product.slug), { utm_source: "social", utm_medium: "social", utm_campaign: "organique" });
+  const { brief, images } = await buildProductBrief(productId, linkUrl);
+  return { brief, images, linkUrl };
 }
 
 const genSchema = z.object({ productId: z.string().min(1), campaignId: z.string().optional().nullable(), channels: z.array(z.enum(CHANNELS)).min(1), variants: z.coerce.number().int().min(1).max(5).default(3), videoUrl: z.string().max(600).optional().nullable() });
@@ -296,5 +280,23 @@ export async function deletePostAction(id: string): Promise<Result> {
     await audit({ userId: user.id, action: "social.post.delete", entity: "socialPost", entityId: id });
     revalidate();
     return { ok: true, data: undefined };
+  } catch (e) { return handle(e); }
+}
+
+// ---------------------------------------------------------------------------
+// Autopilote : validation humaine des campagnes créées par l'API
+// ---------------------------------------------------------------------------
+
+/** Passe les posts brouillons d'une campagne autopilote en programmés (comptes connectés uniquement). */
+export async function approveAutopilotCampaignAction(campaignId: string, raw: { startAt?: string | null; spacingHours?: number } = {}): Promise<Result<{ scheduled: number; skipped: number; reason: string | null }>> {
+  try {
+    const user = await assertPermission("marketing:write");
+    const startAt = raw.startAt ? new Date(raw.startAt) : null;
+    if (startAt && Number.isNaN(startAt.getTime())) return fail("Date de début invalide");
+    const r = await approveCampaignPosts(campaignId, { startAt, spacingHours: raw.spacingHours });
+    await audit({ userId: user.id, action: "campaign.autopilot_approve", entity: "campaign", entityId: campaignId, data: { scheduled: r.scheduled, skipped: r.skipped } });
+    revalidate();
+    revalidatePath("/admin/marketing/autopilote");
+    return { ok: true, data: { scheduled: r.scheduled, skipped: r.skipped, reason: r.reason } };
   } catch (e) { return handle(e); }
 }

@@ -48,6 +48,18 @@ Les jetons OAuth et les clés d'intégration sont chiffrés en base (AES-256-GCM
 - Le prompt impose : aucun chiffre de ventes, aucun avis ni témoignage, aucune garantie non présente dans la fiche. Tout reste en brouillon jusqu'à votre relecture.
 - Formats : Instagram (≤ 2 200 caractères, hashtags), Facebook (texte + lien), TikTok (court, hashtags), publicité Meta (texte principal ≤ 125, titre ≤ 40).
 
+## Autopilote (création automatique à la sortie d'un e-book)
+
+Le studio appelle `POST /api/v1/products/:id/marketing/autopilot` (voir `docs/API.md`) dès qu'un e-book est publié :
+
+1. Une campagne tracée est créée (`source = api`, un seul `utm_campaign` même si plusieurs réseaux), avec 1 à 3 variantes de textes par canal (Instagram, Facebook, TikTok).
+2. Les textes viennent de Claude si la clé est saisie dans Paramètres → Intégrations ; sinon l'API renvoie le prompt (409) que le studio fait coller dans Claude/ChatGPT, puis renvoie la réponse.
+3. La vidéo story du produit est jointe aux Reels et aux TikTok ; Facebook reçoit l'image principale et le lien.
+4. Mode `draft` (par défaut) : tout attend la **validation humaine** dans **Marketing social → Autopilote**. Le bouton « Valider et programmer » programme les brouillons sur les comptes connectés (date de début et écart réglables) ; les posts sans compte connecté restent prêts à copier.
+5. Mode `auto` : les posts des comptes connectés sont programmés directement ; la tâche planifiée marketing les publie à l'heure prévue.
+
+Les ventes sont attribuées à la campagne et au canal grâce aux UTM ; la rentabilité apparaît dans l'onglet Rentabilité et dans `GET /api/v1/products/:id/marketing`.
+
 ## Tâches planifiées
 
 `/api/cron/marketing` (quotidien sur le plan Hobby) : publication des posts programmés dont l'heure est passée, synchronisation des dépenses des campagnes actives liées à un compte (J-2 → J), envoi des conversions serveur. Le bouton *Publier maintenant* reste immédiat.

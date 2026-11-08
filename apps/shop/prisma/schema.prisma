@@ -862,6 +862,7 @@ model Campaign {
   utmCampaign        String
   utmContent         String?
   notes              String?
+  source             String          @default("admin") // admin | api (autopilote)
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
 
@@ -870,6 +871,7 @@ model Campaign {
 
   @@index([status])
   @@index([productId])
+  @@index([source])
 }
 
 model SocialPost {
