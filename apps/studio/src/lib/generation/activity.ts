@@ -16,7 +16,7 @@ export async function generateActivityContent(activityId: string, opts?: { jobId
     ? concept.data
     : { title: activity.title, summary: activity.title, category: activity.category, finalObject: activity.title, mainConcept: activity.category, difficulty: activity.difficulty, durationMinutes: activity.durationMinutes, keyMaterials: ["carton", "ciseaux", "colle"] };
   const settings = await getAiSettings();
-  const provider = getTextProvider(settings);
+  const provider = getTextProvider(settings, { activityId, bookId: opts?.bookId, jobId: opts?.jobId });
   const bookTitle = activity.books[0]?.book.title;
 
   const prompt = activityPrompt({ concept: base, ageRange: activity.ageRange, bookTitle }) + "\n\n" + contextBlock("activity", { ...base, keyMaterials: base.keyMaterials.join(", "), ageRange: activity.ageRange });

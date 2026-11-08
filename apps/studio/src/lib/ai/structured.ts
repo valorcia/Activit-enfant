@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import { prisma } from "../db";
 import type { GenerationPurpose, StructuredResult, TextProvider } from "./types";
+import { isManualInputRequired } from "./manual-core";
 
 /**
  * Appelle un fournisseur texte en demandant du JSON, valide avec Zod et tente
@@ -37,6 +38,7 @@ export async function generateStructured<T>(opts: {
       lastError = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
       prompt = `${opts.prompt}\n\nTa réponse précédente ne respectait pas le schéma. Erreurs : ${lastError}\nRéponse précédente :\n${text.slice(0, 6000)}\n\nCorrige et renvoie l'objet JSON complet et valide.`;
     } catch (err) {
+      if (isManualInputRequired(err)) throw err; // mode copier-coller : pas un échec, une réponse à coller
       const message = err instanceof Error ? err.message : String(err);
       await log({ ...opts, provider: opts.provider.name, model: opts.model, usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 }, durationMs: Date.now() - started, success: false, error: message });
       throw err;

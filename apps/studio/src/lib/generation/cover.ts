@@ -8,7 +8,7 @@ import { SYSTEM_EDITOR, coverPrompt } from "./prompts";
 export async function generateCoverTexts(bookId: string, opts?: { jobId?: string }) {
   const book = await prisma.book.findUniqueOrThrow({ where: { id: bookId }, include: { activities: { include: { activity: true }, orderBy: { position: "asc" } } } });
   const settings = await getAiSettings();
-  const provider = getTextProvider(settings);
+  const provider = getTextProvider(settings, { bookId, jobId: opts?.jobId });
   const titles = book.activities.map((a) => a.activity.title);
   const prompt =
     coverPrompt({ title: book.title, subtitle: book.subtitle ?? undefined, ageRange: book.ageRange, count: titles.length, activityTitles: titles, collection: book.collection ?? undefined, bookType: book.bookType }) +

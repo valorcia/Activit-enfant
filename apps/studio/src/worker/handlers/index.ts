@@ -14,8 +14,18 @@ import { getShopSettings } from "@/lib/settings";
 import { ShopListingSchema } from "@/lib/schemas/settings";
 import { getAiSettings } from "@/lib/settings";
 import type { IllustrationKind } from "@prisma/client";
+import { isManualInputRequired } from "@/lib/ai/manual-core";
+import { markWaitingInput } from "@/lib/manual/requests";
 
 type Handler = (data: JobPayload) => Promise<unknown>;
+
+/** Signal interne : la tâche s'est mise en attente de réponses à coller (déjà marquée WAITING_INPUT). */
+export class WaitingInputSignal extends Error {
+  constructor(public readonly count: number) {
+    super(`En attente de ${count} réponse(s) à coller`);
+    this.name = "WaitingInputSignal";
+  }
+}
 
 async function spentOnBook(bookId: string) {
   const agg = await prisma.generationLog.aggregate({ where: { bookId }, _sum: { costUsd: true } });
@@ -64,6 +74,7 @@ export const handlers: Record<string, Handler> = {
     const plan: { kind: IllustrationKind; stepIndex?: number }[] = [{ kind: "FINAL" }];
     if (settings.stepIllustrations) content.steps.slice(0, settings.maxStepIllustrations).forEach((_, i) => plan.push({ kind: "STEP", stepIndex: i }));
     let cost = 0;
+    let waiting = 0;
     for (let i = 0; i < plan.length; i++) {
       if (!(await gate(jobId))) return;
       if (bookId && (await spentOnBook(bookId)) > settings.maxBudgetPerBookUsd) {
@@ -74,14 +85,25 @@ export const handlers: Record<string, Handler> = {
       // Ne régénère pas une illustration déjà acceptée
       const existing = await prisma.illustration.findFirst({ where: { activityId, kind: p.kind, stepIndex: p.stepIndex ?? null, isCurrent: true, status: "ACCEPTED", isDemo: false } });
       if (existing) continue;
+      // Mode copier-coller : une image déjà collée (non encore validée) n'est pas redemandée
+      const pasted = await prisma.illustration.findFirst({ where: { activityId, kind: p.kind, stepIndex: p.stepIndex ?? null, isCurrent: true, status: "GENERATED", provider: "manual" } });
+      if (pasted) continue;
       await setJob(jobId, { step: p.kind === "FINAL" ? "Illustration du résultat final" : `Illustration de l'étape ${p.stepIndex! + 1}`, progress: 10 + Math.round((i / plan.length) * 85) });
       try {
         const r = await generateIllustration({ activityId, bookId, kind: p.kind, stepIndex: p.stepIndex, jobId });
         cost += r.costUsd;
         await setJob(jobId, { costUsd: r.costUsd });
       } catch (err) {
+        if (isManualInputRequired(err)) {
+          waiting++;
+          continue;
+        }
         await jobLog(jobId, `Échec illustration ${p.kind} ${p.stepIndex ?? ""} : ${err instanceof Error ? err.message : err}`, "error");
       }
+    }
+    if (waiting > 0) {
+      await markWaitingInput(jobId, waiting);
+      throw new WaitingInputSignal(waiting);
     }
     await runActivityChecks(activityId!, { requireSteps: settings.stepIllustrations });
     await setJob(jobId, { status: "COMPLETED", progress: 100, step: "Illustrations générées", result: { costUsd: cost } });
@@ -99,14 +121,26 @@ export const handlers: Record<string, Handler> = {
     const r = await generateCoverTexts(bookId!, { jobId });
     await setJob(jobId, { progress: 40, step: "Illustration de couverture", costUsd: r.usage.costUsd });
     const n = Math.max(1, Math.min(4, Number(variants ?? 2)));
+    let waiting = 0;
     for (let v = 0; v < n; v++) {
       if (!(await gate(jobId))) return;
+      // Mode copier-coller : variante déjà collée → on ne la redemande pas
+      const pasted = await prisma.illustration.findFirst({ where: { bookId, kind: "COVER", isCurrent: true, status: { in: ["GENERATED", "ACCEPTED"] }, provider: "manual" }, skip: v });
+      if (pasted) continue;
       try {
         const ill = await generateIllustration({ bookId, kind: "COVER", jobId, coverVariant: v });
         await setJob(jobId, { progress: 40 + Math.round(((v + 1) / n) * 55), costUsd: ill.costUsd });
       } catch (err) {
+        if (isManualInputRequired(err)) {
+          waiting++;
+          continue;
+        }
         await jobLog(jobId, `Échec couverture variante ${v + 1} : ${err instanceof Error ? err.message : err}`, "error");
       }
+    }
+    if (waiting > 0) {
+      await markWaitingInput(jobId, waiting);
+      throw new WaitingInputSignal(waiting);
     }
     await setJob(jobId, { status: "COMPLETED", progress: 100, step: "Couverture générée" });
   },
@@ -146,20 +180,29 @@ export const handlers: Record<string, Handler> = {
     const links = await prisma.bookActivity.findMany({ where: { bookId: bookId! }, include: { activity: true }, orderBy: { position: "asc" } });
     const total = links.length;
     const errors: string[] = [];
+    let waiting = 0; // mode copier-coller : réponses à coller avant de continuer
 
-    // 1. Fiches
+    // 1. Fiches (idempotent : une fiche déjà rédigée est conservée, une référence visuelle manquante est complétée)
     for (let i = 0; i < links.length; i++) {
       if (!(await gate(jobId))) return finish(jobId, bookId!, "CANCELLED");
       const a = links[i].activity;
-      if (a.currentVersionId && a.status !== "CONCEPT") continue; // déjà rédigée : on conserve
+      const hasContent = Boolean(a.currentVersionId && a.status !== "CONCEPT");
+      const hasReference = hasContent && Boolean(await getVisualReference(a.id));
+      if (hasContent && hasReference) continue;
       await setJob(jobId, { step: `Rédaction ${i + 1}/${total} : ${a.title}`, progress: 2 + Math.round((i / total) * 30) });
       const child = await prisma.job.create({ data: { type: QUEUES.activityGenerate, status: "RUNNING", bookId, activityId: a.id, parentId: jobId, startedAt: new Date() } });
       try {
-        const r = await generateActivityContent(a.id, { jobId: child.id, bookId });
-        const v = await generateVisualReference(a.id, { jobId: child.id, bookId });
-        await setJob(child.id, { status: "COMPLETED", progress: 100, step: "Fiche rédigée", costUsd: r.usage.costUsd + v.usage.costUsd });
-        await setJob(jobId, { costUsd: r.usage.costUsd + v.usage.costUsd });
+        let cost = 0;
+        if (!hasContent) cost += (await generateActivityContent(a.id, { jobId: child.id, bookId })).usage.costUsd;
+        if (!hasReference) cost += (await generateVisualReference(a.id, { jobId: child.id, bookId })).usage.costUsd;
+        await setJob(child.id, { status: "COMPLETED", progress: 100, step: "Fiche rédigée", costUsd: cost });
+        await setJob(jobId, { costUsd: cost });
       } catch (err) {
+        if (isManualInputRequired(err)) {
+          waiting++;
+          await setJob(child.id, { status: "WAITING_INPUT", step: "Réponse à coller" });
+          continue;
+        }
         const m = err instanceof Error ? err.message : String(err);
         errors.push(`${a.title} : ${m}`);
         await setJob(child.id, { status: "FAILED", error: m });
@@ -185,6 +228,10 @@ export const handlers: Record<string, Handler> = {
           const c = await prisma.job.findUnique({ where: { id: child.id } });
           await setJob(jobId, { costUsd: Number(c?.costUsd ?? 0) });
         } catch (err) {
+          if (err instanceof WaitingInputSignal) {
+            waiting += err.count;
+            continue;
+          }
           const m = err instanceof Error ? err.message : String(err);
           errors.push(`${a.title} (illustrations) : ${m}`);
           await setJob(child.id, { status: "FAILED", error: m });
@@ -200,10 +247,20 @@ export const handlers: Record<string, Handler> = {
       try {
         await handlers[QUEUES.bookCover]({ jobId: child.id, bookId, variants: 2 });
       } catch (err) {
+        if (err instanceof WaitingInputSignal) {
+          waiting += err.count;
+        } else {
         const m = err instanceof Error ? err.message : String(err);
         errors.push(`Couverture : ${m}`);
         await setJob(child.id, { status: "FAILED", error: m });
+        }
       }
+    }
+
+    // Mode copier-coller : on s'arrête ici, la tâche reprendra automatiquement une fois les réponses collées
+    if (waiting > 0) {
+      await markWaitingInput(jobId, waiting);
+      return;
     }
 
     // 4. Pages + contrôles

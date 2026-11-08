@@ -1,6 +1,10 @@
 import { z } from "zod";
 
 export const AiSettingsSchema = z.object({
+  /** api : appels aux API (clés requises) · manual : copier-coller des prompts dans Claude / ChatGPT, sans clé */
+  mode: z.enum(["api", "manual"]).default("api"),
+  /** Périmètre du mode copier-coller : tout, ou seulement les images (ex. clé Claude pour le texte, ChatGPT pour les images) */
+  manualFor: z.enum(["all", "images", "text"]).default("all"),
   textProvider: z.enum(["anthropic", "openai", "mock"]).default("mock"),
   textModel: z.string().default("claude-opus-5-5"),
   imageProvider: z.enum(["openai", "mock"]).default("mock"),

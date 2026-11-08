@@ -26,6 +26,25 @@ export function SettingsForm({ initial, availability }: { initial: AiSettings; a
         });
       }}
     >
+      <div className={`rounded-lg border p-4 text-sm ${s.mode === "manual" ? "border-amber-300 bg-amber-50" : "border-slate-200 bg-slate-50"}`}>
+        <div className="grid md:grid-cols-2 gap-5">
+          <Field label="Mode de génération" hint={s.mode === "manual" ? "Aucune clé API nécessaire : les prompts sont à copier dans l'assistant de votre choix (Claude, ChatGPT…) depuis la page « À coller », les réponses y sont collées et les images téléversées. Les tâches reprennent automatiquement." : "Les textes et images sont produits par les API configurées ci-dessous (clés requises). Le bouton de la barre latérale permet de basculer à tout moment."}>
+            <Select value={s.mode} onChange={(e) => set("mode", e.target.value as AiSettings["mode"])}>
+              <option value="api">API (automatique, clés requises)</option>
+              <option value="manual">Copier-coller (sans clé API)</option>
+            </Select>
+          </Field>
+          {s.mode === "manual" && (
+            <Field label="Périmètre du copier-coller" hint="Mode mixte possible : par exemple Claude via API pour les textes, et ChatGPT en copier-coller pour les images.">
+              <Select value={s.manualFor} onChange={(e) => set("manualFor", e.target.value as AiSettings["manualFor"])}>
+                <option value="all">Textes et images</option>
+                <option value="images">Images seulement (textes via API)</option>
+                <option value="text">Textes seulement (images via API)</option>
+              </Select>
+            </Field>
+          )}
+        </div>
+      </div>
       <div className="grid md:grid-cols-2 gap-5">
         <Field label="Fournisseur de génération de texte" hint={s.textProvider !== "mock" && !availability[s.textProvider] ? "Clé API absente côté serveur : les générations échoueront." : undefined}>
           <Select value={s.textProvider} onChange={(e) => { const p = e.target.value as AiSettings["textProvider"]; set("textProvider", p); set("textModel", TEXT_MODELS[p]?.[0]?.value ?? ""); }}>

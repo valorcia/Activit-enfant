@@ -6,6 +6,7 @@ import { getActivityContent } from "./activity";
 import { getVisualReference, bookArtStyle } from "./visualReference";
 import { finalIllustrationPrompt, stepIllustrationPrompt, coverIllustrationPrompt, negativeFor } from "./prompts";
 import type { IllustrationKind } from "@prisma/client";
+import { isManualInputRequired } from "../ai/manual-core";
 
 /**
  * Génère (ou régénère) UNE illustration : résultat final, étape ou couverture.
@@ -22,7 +23,7 @@ export async function generateIllustration(opts: {
   coverVariant?: number;
 }) {
   const settings = await getAiSettings();
-  const provider = getImageProvider(settings);
+  const provider = getImageProvider(settings, { activityId: opts.activityId, bookId: opts.bookId, jobId: opts.jobId });
   const model = effectiveImageModel(settings);
 
   let prompt = "";
@@ -103,6 +104,12 @@ export async function generateIllustration(opts: {
     });
     return { illustrationId: record.id, assetId: asset.id, isDemo: result.isDemo, costUsd: result.costUsd };
   } catch (err) {
+    if (isManualInputRequired(err)) {
+      // Mode copier-coller : la demande est enregistrée, on retire la version provisoire et on rétablit la précédente
+      await prisma.illustration.delete({ where: { id: record.id } });
+      if (previous) await prisma.illustration.update({ where: { id: previous.id }, data: { isCurrent: true } });
+      throw err;
+    }
     const message = err instanceof Error ? err.message : String(err);
     await prisma.illustration.update({ where: { id: record.id }, data: { status: "FAILED", error: message } });
     await prisma.generationLog.create({

@@ -15,6 +15,7 @@ export const TEXT_PRICES: Record<string, { input: number; output: number }> = {
   "gpt-4.1": { input: 2, output: 8 },
   "gpt-4.1-mini": { input: 0.4, output: 1.6 },
   mock: { input: 0, output: 0 },
+  manual: { input: 0, output: 0 },
 };
 
 export const IMAGE_PRICES: Record<string, Record<string, number>> = {
@@ -22,6 +23,7 @@ export const IMAGE_PRICES: Record<string, Record<string, number>> = {
   "gpt-image-1": { low: 0.011, medium: 0.042, high: 0.167 },
   "gpt-image-1-mini": { low: 0.005, medium: 0.011, high: 0.036 },
   mock: { low: 0, medium: 0, high: 0 },
+  manual: { low: 0, medium: 0, high: 0 },
 };
 
 export function textCost(model: string, inputTokens: number, outputTokens: number) {

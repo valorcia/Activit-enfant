@@ -10,7 +10,7 @@ export async function generateVisualReference(activityId: string, opts?: { jobId
   const content = await getActivityContent(activityId);
   if (!content) throw new Error("La fiche de l'activité doit être rédigée avant la fiche de référence visuelle");
   const settings = await getAiSettings();
-  const provider = getTextProvider(settings);
+  const provider = getTextProvider(settings, { activityId, bookId: opts?.bookId, jobId: opts?.jobId });
   const artStyle = opts?.artStyle ?? (await bookArtStyle(activityId));
   const prompt =
     visualReferencePrompt(content, artStyle) +

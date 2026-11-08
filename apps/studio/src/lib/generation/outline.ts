@@ -9,7 +9,7 @@ import { slugify } from "../utils";
 export async function generateOutline(bookId: string, opts?: { jobId?: string }): Promise<BookOutline> {
   const book = await prisma.book.findUniqueOrThrow({ where: { id: bookId } });
   const settings = await getAiSettings();
-  const provider = getTextProvider(settings);
+  const provider = getTextProvider(settings, { bookId, jobId: opts?.jobId });
   const category = BOOK_TYPES.find((t) => t.key === book.bookType)?.category ?? book.bookType;
   const existing = await prisma.activity.findMany({ where: { status: { in: ["VALIDATED", "REVIEW"] } }, select: { title: true }, take: 100 });
 

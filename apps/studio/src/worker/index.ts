@@ -8,7 +8,9 @@ import { getBoss, stopBoss, QUEUES } from "@/lib/queue/boss";
 import type { Job } from "pg-boss";
 import { setJob, jobLog, type JobPayload } from "@/lib/queue/jobs";
 import { getAiSettings } from "@/lib/settings";
-import { handlers } from "./handlers";
+import { handlers, WaitingInputSignal } from "./handlers";
+import { isManualInputRequired } from "@/lib/ai/manual-core";
+import { markWaitingInput } from "@/lib/manual/requests";
 import { closeBrowser } from "@/lib/pdf/browser";
 import { prisma } from "@/lib/db";
 
@@ -31,6 +33,16 @@ async function main() {
         try {
           await handler(data);
         } catch (err) {
+          // Mode copier-coller : pas un échec, la tâche attend des réponses et sera relancée automatiquement
+          if (err instanceof WaitingInputSignal) {
+            console.log(`[worker] ${queue} #${data.jobId} en attente de ${err.count} réponse(s) à coller`);
+            continue;
+          }
+          if (isManualInputRequired(err)) {
+            await markWaitingInput(data.jobId, 1);
+            console.log(`[worker] ${queue} #${data.jobId} en attente d'une réponse à coller : ${err.title}`);
+            continue;
+          }
           const message = err instanceof Error ? err.message : String(err);
           console.error(`[worker] échec ${queue} #${data.jobId}: ${message}`);
           await jobLog(data.jobId, message, "error");

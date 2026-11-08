@@ -21,6 +21,7 @@ const JOB: Record<string, [string, "default" | "secondary" | "success" | "warnin
   QUEUED: ["En file", "secondary"],
   RUNNING: ["En cours", "warning"],
   PAUSED: ["En pause", "purple"],
+  WAITING_INPUT: ["Réponses à coller", "warning"],
   COMPLETED: ["Terminé", "success"],
   FAILED: ["Échec", "destructive"],
   CANCELLED: ["Annulé", "secondary"],

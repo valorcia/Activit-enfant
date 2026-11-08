@@ -56,8 +56,20 @@ enum JobStatus {
   QUEUED
   RUNNING
   PAUSED
+  WAITING_INPUT // mode copier-coller : réponses à coller avant de reprendre
   COMPLETED
   FAILED
+  CANCELLED
+}
+
+enum ManualRequestKind {
+  TEXT
+  IMAGE
+}
+
+enum ManualRequestStatus {
+  PENDING
+  DONE
   CANCELLED
 }
 
@@ -228,8 +240,40 @@ model Asset {
   sha256    String?
   createdAt DateTime @default(now())
 
-  illustrations Illustration[]
-  exports       Export[]
+  illustrations  Illustration[]
+  exports        Export[]
+  manualRequests ManualRequest[]
+}
+
+// ---------------------------------------------------------------------------
+// Mode copier-coller : prompts à copier dans Claude / ChatGPT, réponses à coller
+// ---------------------------------------------------------------------------
+
+model ManualRequest {
+  id             String              @id @default(cuid())
+  kind           ManualRequestKind
+  status         ManualRequestStatus @default(PENDING)
+  fingerprint    String              @unique // sha256(prompt + modèle + paramètres)
+  title          String
+  prompt         String              // texte complet à copier
+  expectedFormat String?             // aide : ce que l'assistant doit renvoyer
+  schemaName     String?             // schéma Zod de validation (texte)
+  purpose        String?             // outline | activity | visual_reference | cover | illustration
+  params         Json?               // taille, qualité, style… (image)
+  bookId         String?
+  activityId     String?
+  jobId          String?
+  responseText   String?
+  assetId        String?
+  error          String?
+  createdAt      DateTime            @default(now())
+  resolvedAt     DateTime?
+
+  asset Asset? @relation(fields: [assetId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([jobId])
+  @@index([bookId])
 }
 
 model Illustration {

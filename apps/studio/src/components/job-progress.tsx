@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Pause, Play, XCircle, RotateCcw } from "lucide-react";
+import Link from "next/link";
+import { Pause, Play, XCircle, RotateCcw, ClipboardPaste } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -78,6 +79,12 @@ export function JobProgress({ jobId, title, onDone, compact }: { jobId: string; 
         </div>
       </div>
       <Progress value={job.progress} color={job.status === "FAILED" ? "bg-red-500" : job.status === "COMPLETED" ? "bg-emerald-500" : "bg-blue-600"} />
+      {job.status === "WAITING_INPUT" && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+          <span className="flex items-center gap-2"><ClipboardPaste className="h-4 w-4" /> {job.step ?? "Réponses à coller"} — la tâche reprendra automatiquement.</span>
+          <Button asChild size="sm"><Link href="/manual">Ouvrir « À coller »</Link></Button>
+        </div>
+      )}
       {job.error && <div className="text-xs text-red-700 bg-red-50 rounded p-2 whitespace-pre-wrap">{job.error}</div>}
       {!compact && job.children && job.children.length > 0 && (
         <ul className="text-xs space-y-1 max-h-48 overflow-auto">
@@ -101,7 +108,7 @@ export function JobProgress({ jobId, title, onDone, compact }: { jobId: string; 
               <Play className="h-3.5 w-3.5" /> Reprendre
             </Button>
           )}
-          {active && (
+          {active && job.status !== "WAITING_INPUT" && (
             <Button size="sm" variant="ghost" disabled={pending} onClick={() => start(() => jobAction(job.id, "cancel"))}>
               <XCircle className="h-3.5 w-3.5" /> Annuler
             </Button>

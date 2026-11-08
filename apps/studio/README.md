@@ -13,6 +13,16 @@ Première collection visée : 365 activités créatives, scientifiques et manuel
 5. **Éditeur visuel** : texte, déplacement et redimensionnement des images, couleurs, typographies, ajout/suppression/duplication/réordonnancement de pages, changement de modèle graphique, annuler/rétablir, sauvegarde.
 6. **Export PDF** (A4 imprimable, numérique, activité seule, fiches, couverture, par lot) : chaque export de livre fige un snapshot reproductible, vérifie le nombre de pages, les images manquantes, les débordements et les polices intégrées.
 
+## Mode copier-coller (sans clé API)
+
+Le studio fonctionne aussi **sans aucune clé API** : les prompts sont copiés dans l'assistant de votre choix (Claude.ai, ChatGPT…) et les réponses collées dans le studio.
+
+- **Bascule** : bouton « Mode API / Mode copier-coller » en bas de la barre latérale (ou Paramètres → Mode de génération). Le périmètre est réglable : textes et images, images seulement (ex. Claude via API pour les textes, ChatGPT en copier-coller pour les images) ou textes seulement.
+- **Fonctionnement** : le pipeline est inchangé. Quand une génération est nécessaire, le studio enregistre une *demande à coller* (prompt complet, format attendu) et met la tâche en statut **« Réponses à coller »** sans rien perdre de ce qui est déjà produit. Chaque demande n'est créée qu'une fois (empreinte du prompt).
+- **Page « À coller »** : pour chaque demande, « Copier le prompt », « Ouvrir Claude » / « Ouvrir ChatGPT », puis zone de collage (texte, validé avec le même schéma que le mode API ; les balises ```json et le texte autour sont nettoyés) ou téléversement de l'image (PNG, JPG, WebP). « Tout copier » regroupe les demandes texte d'un livre en un seul prompt, et « Coller plusieurs réponses » accepte la réponse groupée (sections `### DEMANDE <identifiant>`).
+- **Reprise automatique** : dès que toutes les réponses d'une tâche sont fournies, elle est remise dans la file (le worker doit tourner) et continue jusqu'à la prochaine demande ou la fin. Les images collées ont le statut « À vérifier » comme toute illustration générée ; le coût enregistré est 0.
+- **Annuler une demande** laisse la tâche en attente avec un message explicite ; la relancer recrée la demande.
+
 ## Pile technique
 
 | Couche | Choix |

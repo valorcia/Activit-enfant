@@ -38,7 +38,7 @@ export default async function BookPage({ params, searchParams }: { params: Promi
   const spent = await prisma.generationLog.aggregate({ where: { bookId: id }, _sum: { costUsd: true } });
   const ctx = await buildContextForBook(id);
   const cover = await getCover(id);
-  const activeJob = book.jobs.find((j) => ["QUEUED", "RUNNING", "PAUSED"].includes(j.status));
+  const activeJob = book.jobs.find((j) => ["QUEUED", "RUNNING", "PAUSED", "WAITING_INPUT"].includes(j.status));
   const shopSettings = await getShopSettings();
   const shopConfigured = Boolean(shopSettings.shopApiUrl && shopSettings.shopApiKey);
   const listingParsed = ShopListingSchema.safeParse(book.shopListing ?? {});

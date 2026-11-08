@@ -9,7 +9,8 @@ export function JobActions({ id, status }: { id: string; status: string }) {
     <div className="flex gap-1 justify-end">
       {status === "RUNNING" && <Button size="sm" variant="ghost" disabled={pending} onClick={() => start(() => jobAction(id, "pause"))}>Pause</Button>}
       {status === "PAUSED" && <Button size="sm" variant="ghost" disabled={pending} onClick={() => start(() => jobAction(id, "resume"))}>Reprendre</Button>}
-      {["QUEUED", "RUNNING", "PAUSED"].includes(status) && <Button size="sm" variant="ghost" disabled={pending} onClick={() => start(() => jobAction(id, "cancel"))}>Annuler</Button>}
+      {status === "WAITING_INPUT" && <Button asChild size="sm" variant="secondary"><a href="/manual">À coller</a></Button>}
+      {["QUEUED", "RUNNING", "PAUSED", "WAITING_INPUT"].includes(status) && <Button size="sm" variant="ghost" disabled={pending} onClick={() => start(() => jobAction(id, "cancel"))}>Annuler</Button>}
       {status === "FAILED" && <Button size="sm" variant="secondary" disabled={pending} onClick={() => start(() => jobAction(id, "retry"))}>Relancer</Button>}
     </div>
   );
