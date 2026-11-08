@@ -8,6 +8,8 @@ import { ReadingProgress } from "@/components/storefront/reading-progress";
 import { CartDrawer } from "@/components/storefront/cart-drawer";
 import { ConsentBanner } from "@/components/storefront/consent-banner";
 import { AnalyticsScripts } from "@/components/storefront/analytics-scripts";
+import { UtmCapture } from "@/components/storefront/utm-capture";
+import { publicAnalytics } from "@/lib/settings";
 import { ExitPopup } from "@/components/storefront/exit-popup";
 
 const getFooterPages = unstable_cache(
@@ -50,7 +52,8 @@ export default async function LandingLayout({ children }: { children: React.Reac
       <LandingFooter brand={settings.brand} legalPages={pages} />
       <CartDrawer withdrawalNotice={settings.commerce.withdrawalNotice} />
       <ConsentBanner enabled={settings.analytics.consentBannerEnabled} />
-      <AnalyticsScripts analytics={settings.analytics} />
+      <AnalyticsScripts analytics={publicAnalytics(settings.analytics)} />
+      <UtmCapture />
       <ExitPopup config={settings.conversion.exitPopup} />
     </div>
   );

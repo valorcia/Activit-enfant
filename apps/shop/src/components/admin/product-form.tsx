@@ -37,7 +37,7 @@ export const TEMPLATES: Array<{ value: string; label: string; description: strin
 const FIELD_TABS: Record<string, string> = {
   name: "general", slug: "general", tagline: "general", shortDescription: "general", longDescription: "general", story: "general", template: "general", categoryId: "general", universe: "general",
   ageMin: "general", ageMax: "general", playersMin: "general", playersMax: "general", durationMinutes: "general", difficulty: "general", pageCount: "general", fileFormat: "general",
-  priceCents: "prix", salePriceCents: "prix", saleStartsAt: "prix", saleEndsAt: "prix", currency: "prix", taxRateBp: "prix",
+  priceCents: "prix", salePriceCents: "prix", creationCostCents: "prix", saleStartsAt: "prix", saleEndsAt: "prix", currency: "prix", taxRateBp: "prix",
   kitContents: "contenu", faq: "contenu", sellingPoints: "contenu",
   seoTitle: "marketing", seoDescription: "marketing", keywords: "marketing", ogImageUrl: "marketing", promoText: "marketing", recommendedProductIds: "marketing",
   status: "publication", scheduledAt: "publication",
@@ -63,7 +63,7 @@ function toPayload(f: ProductFormData) {
     name: f.name, slug: f.slug ? slugify(f.slug) : undefined, tagline: f.tagline || null, shortDescription: f.shortDescription || null, longDescription: f.longDescription || null, story: f.story || null,
     template: f.template, categoryId: f.categoryId || null, collectionIds: f.collectionIds, universe: f.universe || null, tags: list(f.tags), badges: list(f.badges), heroBadges: list(f.heroBadges),
     ageMin: f.ageMin, ageMax: f.ageMax, playersMin: f.playersMin, playersMax: f.playersMax, durationMinutes: f.durationMinutes, difficulty: f.difficulty, pageCount: f.pageCount, fileFormat: f.fileFormat || "PDF", materials: list(f.materials),
-    priceCents: eurosToCents(f.price) ?? -1, salePriceCents: eurosToCents(f.salePrice), saleStartsAt: f.saleStartsAt || undefined, saleEndsAt: f.saleEndsAt || undefined, currency: f.currency || "EUR", taxRateBp: Number.isFinite(taxBp) ? taxBp : 2000,
+    priceCents: eurosToCents(f.price) ?? -1, salePriceCents: eurosToCents(f.salePrice), saleStartsAt: f.saleStartsAt || undefined, saleEndsAt: f.saleEndsAt || undefined, currency: f.currency || "EUR", taxRateBp: Number.isFinite(taxBp) ? taxBp : 2000, creationCostCents: eurosToCents(f.creationCost),
     kitContents: f.kitContents, faq: f.faq, sellingPoints: f.sellingPoints,
     seoTitle: f.seoTitle || null, seoDescription: f.seoDescription || null, keywords: list(f.keywords), ogImageUrl: f.ogImageUrl || null, promoText: f.promoText || null, recommendedProductIds: f.recommendedProductIds,
     status: f.status, scheduledAt: f.scheduledAt || undefined, isFeatured: f.isFeatured,
@@ -279,6 +279,7 @@ export function ProductForm({ initial, images, files, categories, collections, p
               <FormField label="TVA applicable (%)" htmlFor="taxRate" error={err("taxRateBp")}><Input id="taxRate" inputMode="decimal" value={form.taxRate} onChange={(e) => set("taxRate", e.target.value)} /></FormField>
               <FormField label="Début de promotion" htmlFor="saleStartsAt" error={err("saleStartsAt")}><Input id="saleStartsAt" type="datetime-local" value={form.saleStartsAt} onChange={(e) => set("saleStartsAt", e.target.value)} /></FormField>
               <FormField label="Fin de promotion" htmlFor="saleEndsAt" error={err("saleEndsAt")}><Input id="saleEndsAt" type="datetime-local" value={form.saleEndsAt} onChange={(e) => set("saleEndsAt", e.target.value)} /></FormField>
+              <FormField label="Coût de création (interne, €)" htmlFor="creationCost" error={err("creationCostCents")} hint="IA, illustrations, temps… Jamais affiché ; sert au calcul de la rentabilité (Marketing social)."><Input id="creationCost" inputMode="decimal" value={form.creationCost} onChange={(e) => set("creationCost", e.target.value)} placeholder="6,50" /></FormField>
             </div>
           </FormSection>
         </TabsContent>

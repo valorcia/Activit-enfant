@@ -11,6 +11,7 @@ import { formatPrice } from "@/lib/utils";
 import { PlaceholderArt } from "./placeholder-art";
 import { startCheckoutAction } from "@/app/actions/checkout";
 import { trackEvent } from "@/lib/analytics/client";
+import { currentUtm } from "@/lib/analytics/utm";
 import { CartTrust, EmptyCartSuggestion, OrderBump, useCartBump } from "./order-bump";
 
 export function CartDrawer({ withdrawalNotice }: { withdrawalNotice: string }) {
@@ -36,13 +37,12 @@ export function CartDrawer({ withdrawalNotice }: { withdrawalNotice: string }) {
   function checkout() {
     start(async () => {
       trackEvent("begin_checkout", { value: subtotal / 100, currency: "EUR" });
-      const utm = Object.fromEntries(new URLSearchParams(window.location.search).entries());
       const res = await startCheckoutAction({
         lines: items.map((i) => ({ kind: i.kind, id: i.id, quantity: i.quantity })),
         email: email || null,
         couponCode: coupon || null,
         marketingConsent: consent,
-        utm: Object.fromEntries(Object.entries(utm).filter(([k]) => k.startsWith("utm_"))),
+        utm: currentUtm(),
       });
       if (res.ok) {
         setCoupon(coupon || null);

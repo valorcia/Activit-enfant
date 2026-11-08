@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { BarChart3, BookOpen, Boxes, FileText, Gift, Home, Import, KeyRound, LayoutGrid, LogOut, Mail, Menu, MessageSquareQuote, Package, Palette, Settings, ShoppingCart, Tags, TicketPercent, Users, X, ExternalLink } from "lucide-react";
+import { Megaphone, BarChart3, BookOpen, Boxes, FileText, Gift, Home, Import, KeyRound, LayoutGrid, LogOut, Mail, Menu, MessageSquareQuote, Package, Palette, Settings, ShoppingCart, Tags, TicketPercent, Users, X, ExternalLink } from "lucide-react";
 import { signOutAction } from "@/app/actions/auth";
 import { roleCan, type Permission, ROLE_LABELS } from "@/lib/auth/permissions";
 import type { AdminUser } from "@/lib/auth/session";
@@ -24,6 +24,7 @@ const NAV: Array<{ title: string; items: NavItem[] }> = [
     { href: "/admin/import", label: "Importation", icon: Import, permission: "products:import" },
   ] },
   { title: "Marketing", items: [
+    { href: "/admin/marketing", label: "Marketing social", icon: Megaphone, permission: "marketing:write" },
     { href: "/admin/codes-promo", label: "Codes promo", icon: TicketPercent, permission: "coupons:write" },
     { href: "/admin/avis", label: "Avis clients", icon: MessageSquareQuote, permission: "reviews:moderate" },
     { href: "/admin/newsletter", label: "Newsletter", icon: Mail, permission: "newsletter:read" },

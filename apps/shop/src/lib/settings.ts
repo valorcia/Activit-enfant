@@ -57,3 +57,8 @@ export async function saveSetting<K extends SettingsKey>(key: K, value: unknown)
   revalidateTag(SETTINGS_TAG, "max");
   return parsed;
 }
+
+/** Paramètres analytics sans les jetons serveur (à passer aux composants client). */
+export function publicAnalytics(a: SettingsMap["analytics"]): SettingsMap["analytics"] {
+  return { ...a, metaCapiToken: null, tiktokEventsToken: null };
+}

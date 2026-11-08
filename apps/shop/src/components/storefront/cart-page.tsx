@@ -1,4 +1,5 @@
 "use client";
+import { currentUtm } from "@/lib/analytics/utm";
 import Image from "next/image";
 import Link from "next/link";
 import { useState, useTransition } from "react";
@@ -29,7 +30,7 @@ export function CartPage({ cancelled, withdrawalNotice }: { cancelled: boolean; 
     start(async () => {
       trackEvent("begin_checkout", { value: subtotal / 100, currency: "EUR" });
       const sp = new URLSearchParams(window.location.search);
-      const utm = Object.fromEntries([...sp.entries()].filter(([k]) => k.startsWith("utm_")));
+      const utm = currentUtm();
       const res = await startCheckoutAction({ lines: items.map((i) => ({ kind: i.kind, id: i.id, quantity: i.quantity })), email: email || null, couponCode: coupon || null, marketingConsent: consent, utm });
       if (res.ok) { setCoupon(coupon || null); window.location.href = res.url; } else toast.error(res.error);
     });

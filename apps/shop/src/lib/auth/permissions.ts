@@ -13,6 +13,7 @@ export const PERMISSIONS = {
   "customers:read": ["ADMIN", "SUPPORT", "MARKETING"],
   "reviews:moderate": ["ADMIN", "SUPPORT", "MARKETING"],
   "coupons:write": ["ADMIN", "MARKETING"],
+  "marketing:write": ["ADMIN", "MARKETING"],
   "blog:write": ["ADMIN", "EDITOR", "MARKETING"],
   "newsletter:read": ["ADMIN", "MARKETING"],
   "appearance:write": ["ADMIN", "MARKETING"],

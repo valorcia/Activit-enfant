@@ -114,6 +114,10 @@ Les pages publiques sont statiques/ISR (`revalidate = 300`) et invalidées par t
 - Pages juridiques (mentions légales, CGV, confidentialité, cookies, rétractation) créées en **brouillon** : à rédiger et valider avant mise en production.
 - Les commandes historiques sont conservées lorsqu'un produit est archivé (jamais de suppression d'un produit vendu).
 
+## Marketing social
+
+Admin → Marketing social : connexion Meta (Pages, Instagram, comptes pub) et TikTok, génération de posts et publicités par e-book (API Claude ou copier-coller), publication/programmation, attribution des ventes par UTM, conversions serveur et rentabilité par e-book et par campagne. Voir `docs/MARKETING.md` (prérequis, validation des apps, mode dégradé).
+
 ## API d'importation
 
 Voir `docs/API.md`. Un produit créé par l'API est enregistré en brouillon avec « validation humaine requise » ; il n'est publié qu'après revue dans l'admin (ou immédiatement si la clé possède le scope `products:publish`).

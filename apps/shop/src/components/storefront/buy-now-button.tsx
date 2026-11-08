@@ -6,6 +6,7 @@ import { Button, type ButtonProps } from "@/components/ui/button";
 import { startCheckoutAction } from "@/app/actions/checkout";
 import { trackEvent } from "@/lib/analytics/client";
 import { useCart } from "@/lib/cart/store";
+import { currentUtm } from "@/lib/analytics/utm";
 
 /**
  * Achat en un clic : crée directement la session Stripe Checkout pour cet article
@@ -25,7 +26,7 @@ export function BuyNowButton({ kind, id, name, priceCents, currency = "EUR", lab
       onClick={() => start(async () => {
         trackEvent("begin_checkout", { item_id: id, item_name: name, value: priceCents / 100, currency });
         const others = includeCart ? items.filter((i) => !(i.kind === kind && i.id === id)).map((i) => ({ kind: i.kind, id: i.id, quantity: i.quantity })) : [];
-        const utm = Object.fromEntries([...new URLSearchParams(window.location.search).entries()].filter(([k]) => k.startsWith("utm_")));
+        const utm = currentUtm();
         const res = await startCheckoutAction({ lines: [{ kind, id, quantity: 1 }, ...others], couponCode, utm });
         if (!res.ok) { toast.error(res.error); return; }
         window.location.href = res.url;

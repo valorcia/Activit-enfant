@@ -4,6 +4,8 @@ import { env } from "@/lib/env";
 import { sendEmail } from "@/lib/email";
 import { abandonedCartEmail, newProductEmail } from "@/lib/email/templates";
 import { getSetting } from "@/lib/settings";
+import { sendPurchaseConversions } from "@/lib/social/conversions";
+import { runSocialJobs } from "@/lib/social/jobs";
 
 export interface Brand { name: string; appUrl: string; contactEmail?: string | null; color?: string }
 
@@ -95,8 +97,27 @@ export async function processProductPublishedEvents(db: PrismaClient = defaultPr
   return { events: processed, emails };
 }
 
+/** (c) Conversions serveur (Meta CAPI, TikTok Events) pour les commandes payées non encore traitées. */
+export async function processOrderPaidEvents(db: PrismaClient = defaultPrisma, now = new Date(), max = 100): Promise<{ events: number; sent: number }> {
+  const events = await db.marketingEvent.findMany({ where: { type: "order.paid", processedAt: null }, orderBy: { createdAt: "asc" }, take: max });
+  let sent = 0;
+  for (const ev of events) {
+    const payload = (ev.payload ?? {}) as { orderId?: string };
+    let error: string | undefined;
+    if (payload.orderId) {
+      const r = await sendPurchaseConversions(payload.orderId, db);
+      if (r.meta === "SENT" || r.tiktok === "SENT") sent++;
+      if (r.meta === "FAILED" || r.tiktok === "FAILED") error = "conversion en échec (voir ConversionEvent)";
+    } else error = "payload invalide";
+    await db.marketingEvent.update({ where: { id: ev.id }, data: { processedAt: now, error } });
+  }
+  return { events: events.length, sent };
+}
+
 export async function runMarketingJobs(db: PrismaClient = defaultPrisma) {
   const abandoned = await processAbandonedCarts(db);
   const published = await processProductPublishedEvents(db);
-  return { abandoned, published };
+  const conversions = await processOrderPaidEvents(db);
+  const social = await runSocialJobs(db);
+  return { abandoned, published, conversions, social };
 }

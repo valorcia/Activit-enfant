@@ -71,6 +71,7 @@ const productBaseSchema = z.object({
   saleEndsAt: optionalDate,
   currency: z.string().length(3).default("EUR"),
   taxRateBp: z.coerce.number().int().min(0).max(10000).default(2000),
+  creationCostCents: optionalInt, // coût de création interne (IA, illustrations) pour la rentabilité
 
   kitContents: z.array(kitItemSchema).optional().default([]),
   faq: z.array(faqItemSchema).optional().default([]),

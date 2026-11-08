@@ -132,6 +132,8 @@ model User {
   auditLogs       AuditLog[]
   imports         ImportJob[]
   refunds         Refund[]
+  socialAccounts  SocialAccount[]
+  socialPosts     SocialPost[]
 }
 
 // Clés d'API pour l'importation / automatisation (hash uniquement)
@@ -271,6 +273,9 @@ model Product {
   isFeatured       Boolean         @default(false)
   needsReview      Boolean         @default(false) // créé via API : validation humaine requise
 
+  // Coût de création interne (IA, illustrations) pour le calcul de rentabilité
+  creationCostCents Int?
+
   // Statistiques dénormalisées
   salesCount       Int             @default(0)
   viewCount        Int             @default(0)
@@ -292,6 +297,8 @@ model Product {
   orderItems       OrderItem[]
   entitlements     DownloadEntitlement[]
   reviews          Review[]
+  campaigns        Campaign[]
+  socialPosts      SocialPost[]
 
   @@index([status, publishedAt])
   @@index([categoryId, status])
@@ -368,6 +375,7 @@ model Bundle {
   salesCount     Int           @default(0)
   items          BundleItem[]
   orderItems     OrderItem[]
+  campaigns      Campaign[]
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
@@ -439,6 +447,7 @@ model Order {
   entitlements DownloadEntitlement[]
   refunds      Refund[]
   reviews      Review[]
+  conversions  ConversionEvent[]
 
   @@index([status, createdAt])
   @@index([email])
@@ -728,4 +737,188 @@ model DailyStat {
   checkoutsStarted Int      @default(0)
   ordersPaid       Int      @default(0)
   revenueCents     Int      @default(0)
+}
+
+// ---------------------------------------------------------------------------
+// Marketing social : comptes connectés, campagnes, posts, dépenses, conversions
+// ---------------------------------------------------------------------------
+
+enum SocialProvider {
+  META
+  TIKTOK
+}
+
+enum SocialAccountKind {
+  PAGE
+  INSTAGRAM
+  TIKTOK
+  AD_ACCOUNT
+}
+
+enum CampaignChannel {
+  META
+  TIKTOK
+  OTHER
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  ENDED
+}
+
+enum SocialPostFormat {
+  FEED_IMAGE
+  STORY
+  REEL_COVER
+  CAROUSEL
+  TIKTOK_PHOTO
+  TIKTOK_VIDEO
+  AD_PRIMARY_TEXT
+}
+
+enum SocialPostStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHING
+  PUBLISHED
+  FAILED
+}
+
+enum AdSpendSource {
+  API
+  MANUAL
+}
+
+enum ConversionStatus {
+  SENT
+  FAILED
+}
+
+// Compte connecté via OAuth (jetons chiffrés AES-256-GCM, jamais en clair)
+model SocialAccount {
+  id              String            @id @default(cuid())
+  provider        SocialProvider
+  kind            SocialAccountKind
+  externalId      String
+  name            String
+  username        String?
+  avatarUrl       String?
+  accessTokenEnc  String
+  refreshTokenEnc String?
+  tokenExpiresAt  DateTime?
+  scopes          String[]          @default([])
+  metadata        Json?
+  parentId        String?
+  parent          SocialAccount?    @relation("SocialAccountTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children        SocialAccount[]   @relation("SocialAccountTree")
+  connectedById   String?
+  connectedBy     User?             @relation(fields: [connectedById], references: [id], onDelete: SetNull)
+  isActive        Boolean           @default(true)
+  needsReconnect  Boolean           @default(false)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  posts SocialPost[]
+
+  @@unique([provider, kind, externalId])
+}
+
+model Campaign {
+  id                 String          @id @default(cuid())
+  name               String
+  slug               String          @unique // = utm_campaign
+  productId          String?
+  product            Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
+  bundleId           String?
+  bundle             Bundle?         @relation(fields: [bundleId], references: [id], onDelete: SetNull)
+  objective          String?         // ventes, trafic, notoriété…
+  channel            CampaignChannel @default(META)
+  status             CampaignStatus  @default(DRAFT)
+  startsAt           DateTime?
+  endsAt             DateTime?
+  dailyBudgetCents   Int?
+  externalCampaignId String?
+  externalAdSetId    String?
+  adAccountId        String?         // SocialAccount AD_ACCOUNT (id interne) pour la synchronisation des dépenses
+  landingUrl         String
+  utmSource          String
+  utmMedium          String
+  utmCampaign        String
+  utmContent         String?
+  notes              String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  posts  SocialPost[]
+  spends AdSpend[]
+
+  @@index([status])
+  @@index([productId])
+}
+
+model SocialPost {
+  id             String           @id @default(cuid())
+  campaignId     String?
+  campaign       Campaign?        @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  productId      String?
+  product        Product?         @relation(fields: [productId], references: [id], onDelete: SetNull)
+  accountId      String?
+  account        SocialAccount?   @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  provider       SocialProvider
+  format         SocialPostFormat @default(FEED_IMAGE)
+  status         SocialPostStatus @default(DRAFT)
+  hook           String?
+  body           String
+  cta            String?
+  headline       String?          // titre de publicité (Meta ≤ 40 caractères)
+  hashtags       String[]         @default([])
+  imageUrls      String[]         @default([])
+  videoUrl       String?
+  linkUrl        String?
+  scheduledAt    DateTime?
+  publishedAt    DateTime?
+  externalPostId String?
+  externalUrl    String?
+  error          String?
+  generatedBy    String           @default("manual") // api | manual
+  variantLabel   String?
+  createdById    String?
+  createdBy      User?            @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([status, scheduledAt])
+  @@index([campaignId])
+  @@index([productId])
+}
+
+model AdSpend {
+  id          String        @id @default(cuid())
+  campaignId  String
+  campaign    Campaign      @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  date        DateTime      @db.Date
+  spendCents  Int
+  impressions Int?
+  clicks      Int?
+  source      AdSpendSource @default(MANUAL)
+  raw         Json?
+  createdAt   DateTime      @default(now())
+
+  @@unique([campaignId, date, source])
+}
+
+// Événements de conversion envoyés côté serveur (Meta CAPI, TikTok Events API)
+model ConversionEvent {
+  id        String           @id @default(cuid())
+  orderId   String
+  order     Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  provider  SocialProvider
+  eventName String           @default("Purchase")
+  status    ConversionStatus
+  response  Json?
+  createdAt DateTime         @default(now())
+
+  @@unique([orderId, provider, eventName])
 }

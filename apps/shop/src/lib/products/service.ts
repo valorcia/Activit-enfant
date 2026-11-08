@@ -50,6 +50,7 @@ function toData(input: ProductInput): Omit<Prisma.ProductUncheckedCreateInput, "
     saleEndsAt: input.saleEndsAt ?? null,
     currency: input.currency.toUpperCase(),
     taxRateBp: input.taxRateBp,
+    creationCostCents: input.creationCostCents ?? null,
     kitContents: input.kitContents as unknown as Prisma.InputJsonValue,
     faq: input.faq as unknown as Prisma.InputJsonValue,
     sellingPoints: input.sellingPoints as unknown as Prisma.InputJsonValue,

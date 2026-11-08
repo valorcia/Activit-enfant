@@ -121,6 +121,10 @@ export const analyticsSettingsSchema = z.object({
   googleAdsId: z.string().max(40).optional().nullable(),
   pinterestTagId: z.string().max(40).optional().nullable(),
   consentBannerEnabled: z.boolean().default(true),
+  // Envoi serveur des conversions (jetons masqués dans l'admin, jamais exposés côté client)
+  metaCapiToken: z.string().max(400).optional().nullable(),
+  tiktokPixelId: z.string().max(60).optional().nullable(),
+  tiktokEventsToken: z.string().max(400).optional().nullable(),
 });
 export type AnalyticsSettings = z.infer<typeof analyticsSettingsSchema>;
 
