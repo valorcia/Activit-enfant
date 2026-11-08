@@ -1,6 +1,7 @@
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/db";
 import { getSettings } from "@/lib/settings";
+import { siteFromParams } from "@/lib/sites";
 import { getNewProducts, cardPrice } from "@/lib/catalog";
 import { LandingHeader, type LandingProduct } from "@/components/storefront/landing-header";
 import { LandingFooter } from "@/components/storefront/landing-footer";
@@ -13,7 +14,7 @@ import { publicAnalytics } from "@/lib/settings";
 import { ExitPopup } from "@/components/storefront/exit-popup";
 
 const getFooterPages = unstable_cache(
-  async () => prisma.staticPage.findMany({ where: { status: "PUBLISHED", showInFooter: true }, orderBy: { position: "asc" }, select: { slug: true, title: true } }),
+  async (siteId: string) => prisma.staticPage.findMany({ where: { siteId, status: "PUBLISHED", showInFooter: true }, orderBy: { position: "asc" }, select: { slug: true, title: true } }),
   ["footer-pages"],
   { tags: ["pages"], revalidate: 600 },
 );
@@ -25,8 +26,9 @@ const THIRTY_DAYS = 30 * 24 * 3600 * 1000;
  * e-book indépendant (en-tête fin sans navigation complète, pied de page
  * compact) avec un sélecteur discret vers les autres aventures publiées.
  */
-export default async function LandingLayout({ children }: { children: React.ReactNode }) {
-  const [settings, products, pages] = await Promise.all([getSettings(), getNewProducts(12), getFooterPages()]);
+export default async function LandingLayout({ children, params }: { children: React.ReactNode; params: Promise<{ site: string }> }) {
+  const site = await siteFromParams(params);
+  const [settings, products, pages] = await Promise.all([getSettings(site), getNewProducts(site.id, 12), getFooterPages(site.id)]);
   const now = Date.now();
   const others: LandingProduct[] = products.map((p) => {
     const price = cardPrice(p);

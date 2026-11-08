@@ -6,7 +6,7 @@ import { ViewTracker } from "../view-tracker";
 import { Breadcrumbs } from "@/components/storefront/breadcrumbs";
 import type { ProductPageData } from "@/lib/catalog";
 import { effectivePrice } from "@/lib/pricing";
-import { absoluteUrl } from "@/lib/utils";
+import { siteAbsoluteUrl } from "@/lib/sites";
 import { TEMPLATE_THEMES } from "../theme";
 
 export function galleryMedia(product: ProductPageData): GalleryMedia[] {
@@ -22,11 +22,11 @@ export function TemplateHead({ product }: { product: ProductPageData }) {
     <>
       <ViewTracker productId={product.id} name={product.name} priceCents={effectivePrice(product).priceCents} currency={product.currency} />
       <div className="container-shell pt-5">
-        <Breadcrumbs items={[...(product.category ? [{ label: product.category.name, href: `/categories/${product.category.slug}` }] : [{ label: "Boutique", href: "/boutique" }]), { label: product.name }]} />
+        <Breadcrumbs baseUrl={siteAbsoluteUrl(product.site, "").replace(/\/$/, "")} items={[...(product.category ? [{ label: product.category.name, href: `/categories/${product.category.slug}` }] : [{ label: "Boutique", href: "/boutique" }]), { label: product.name }]} />
       </div>
       <ProductHero product={product} />
       <div className="container-shell -mt-2 pb-4">
-        <ShareButtons url={absoluteUrl(`/aventures/${product.slug}`)} title={product.name} imageUrl={img?.url} />
+        <ShareButtons url={siteAbsoluteUrl(product.site, `/aventures/${product.slug}`)} title={product.name} imageUrl={img?.url} />
       </div>
     </>
   );

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { cardPrice, getBestsellers, productCardSelect, type ProductCardData } from "@/lib/catalog";
 import { getSetting } from "@/lib/settings";
+import { getRequestSite } from "@/lib/sites";
 
 export const runtime = "nodejs";
 
@@ -24,15 +25,16 @@ function toPayload(p: ProductCardData) {
  * GET /api/cart/bump?exclude=id1,id2
  */
 export async function GET(req: NextRequest) {
-  const conversion = await getSetting("conversion");
+  const site = await getRequestSite();
+  const conversion = await getSetting("conversion", site);
   const exclude = new Set((req.nextUrl.searchParams.get("exclude") ?? "").split(",").map((s) => s.trim()).filter(Boolean));
 
   let product: ProductCardData | null = null;
   if (conversion.orderBump.productId && !exclude.has(conversion.orderBump.productId)) {
-    product = await prisma.product.findFirst({ where: { id: conversion.orderBump.productId, status: "PUBLISHED" }, select: productCardSelect });
+    product = await prisma.product.findFirst({ where: { id: conversion.orderBump.productId, siteId: site.id, status: "PUBLISHED" }, select: productCardSelect });
   }
   if (!product) {
-    const best = await getBestsellers(12);
+    const best = await getBestsellers(site.id, 12);
     product = best.find((p) => !exclude.has(p.id)) ?? null;
   }
 
@@ -42,5 +44,5 @@ export async function GET(req: NextRequest) {
     buyNowLabel: conversion.buyNowLabel,
     product: product ? toPayload(product) : null,
   };
-  return NextResponse.json(payload, { headers: { "cache-control": "public, s-maxage=300, stale-while-revalidate=600" } });
+  return NextResponse.json(payload, { headers: { "cache-control": "public, s-maxage=300, stale-while-revalidate=600", vary: "Host, Cookie" } });
 }

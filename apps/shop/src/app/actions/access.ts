@@ -6,6 +6,7 @@ import { brandForEmail } from "@/lib/orders/notify";
 import { sendEmail } from "@/lib/email";
 import { accessLinkEmail } from "@/lib/email/templates";
 import { getSetting } from "@/lib/settings";
+import { getRequestSite } from "@/lib/sites";
 
 export type AccessState = { ok?: boolean; error?: string; message?: string };
 
@@ -31,10 +32,11 @@ export async function requestAccessLinkAction(_prev: AccessState | undefined, fo
     return { ok: true, message: NEUTRAL };
   }
   try {
-    const commerce = await getSetting("commerce");
-    const link = await createAccessLink(email, commerce.downloadLinkValidityHours);
+    const site = await getRequestSite();
+    const commerce = await getSetting("commerce", site);
+    const brand = await brandForEmail(site.id);
+    const link = await createAccessLink(email, commerce.downloadLinkValidityHours, undefined, brand.appUrl);
     if (link) {
-      const brand = await brandForEmail();
       await sendEmail({ to: email, ...accessLinkEmail(brand, { accessUrl: link.url, expiresHours: commerce.downloadLinkValidityHours }) });
     }
   } catch (e) {

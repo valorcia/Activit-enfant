@@ -21,7 +21,7 @@ export function ActivityTemplate({ product }: { product: ProductPageData }) {
       <TemplateGallery product={product} />
       <ProductStory product={product} />
       <KitContents product={product} />
-      <GuaranteeBlock />
+      <GuaranteeBlock siteId={product.siteId} />
       <SellingPoints product={product} />
       <PracticalInfo product={product} />
       <LongDescription product={product} />

@@ -6,6 +6,11 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   const auth = await authenticateApiKey(req, "products:read");
   if (!auth.ok) return apiError(auth.status, auth.error);
-  const rows = await prisma.collection.findMany({ orderBy: { position: "asc" }, select: { id: true, slug: true, name: true, description: true, color: true, isVisible: true } });
+  const siteSlug = new URL(req.url).searchParams.get("site");
+  const rows = await prisma.collection.findMany({
+    where: siteSlug ? { site: { slug: siteSlug } } : {},
+    orderBy: [{ siteId: "asc" }, { position: "asc" }],
+    select: { id: true, slug: true, name: true, description: true, color: true, isVisible: true, site: { select: { slug: true } } },
+  });
   return apiOk(rows);
 }

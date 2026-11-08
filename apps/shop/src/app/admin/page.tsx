@@ -4,6 +4,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { getDashboardStats, PERIODS, type Period } from "@/lib/admin/stats";
 import { AdminPageHeader, AdminCard, StatusPill } from "@/components/admin/page-header";
 import { cn, formatDateTime, formatPrice } from "@/lib/utils";
+import { getAdminSite } from "@/lib/sites";
 
 export const metadata = { title: "Tableau de bord" };
 export const dynamic = "force-dynamic";
@@ -55,7 +56,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   await requirePermission("dashboard:view");
   const sp = await searchParams;
   const period = (PERIODS.some((p) => p.value === sp.periode) ? sp.periode : "30j") as Period;
-  const s = await getDashboardStats(period);
+  const adminSite = await getAdminSite();
+  const s = await getDashboardStats(period, new Date(), adminSite?.id);
   const totalCatalog = Object.values(s.catalog.byStatus).reduce((a, b) => a + b, 0);
   const alerts = [
     s.catalog.needsReview > 0 && { href: "/admin/produits?validation=1", icon: AlertTriangle, text: `${s.catalog.needsReview} produit(s) créé(s) via l'API en attente de validation` },
@@ -65,7 +67,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
   return (
     <div>
-      <AdminPageHeader title="Tableau de bord" description="Vue d'ensemble des ventes et du catalogue."
+      <AdminPageHeader title="Tableau de bord" description={`Vue d'ensemble des ventes et du catalogue — ${adminSite ? `univers : ${adminSite.name}` : "tous les univers"}.`}
         actions={<nav className="inline-flex rounded-full bg-white p-1 shadow-sm" aria-label="Période">{PERIODS.map((p) => <Link key={p.value} href={`/admin?periode=${p.value}`} className={cn("rounded-full px-3 py-1.5 text-xs font-bold", period === p.value ? "bg-ink text-white" : "text-ink/70 hover:bg-ink/5")}>{p.label}</Link>)}</nav>} />
 
       {alerts.length > 0 && (

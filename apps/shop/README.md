@@ -56,7 +56,7 @@ pnpm dev                      # http://localhost:3000 — admin : http://localho
 
 ```
 prisma/                      schéma, migrations, seed
-src/app/(storefront)/        vitrine : accueil, boutique, catégories, collections, packs, aventures/[slug] (landing page produit),
+src/app/s/[site]/(storefront)/ vitrine (par univers, via la réécriture du proxy) : accueil, boutique, catégories, collections, packs, aventures/[slug] (landing page produit),
                              panier, commande (confirmation, accès, facture), mes-achats, newsletter, blog, pages
 src/app/admin/               back-office : tableau de bord, produits, catégories, collections, packs, import,
                              commandes, clients, avis, codes promo, newsletter, blog, apparence, pages, paramètres,
@@ -94,6 +94,19 @@ Les pages publiques sont statiques/ISR (`revalidate = 300`) et invalidées par t
 | Avis, codes promo, newsletter, blog | ✓ | blog | ✓ | avis |
 | Apparence | ✓ | – | ✓ | – |
 | Paramètres, utilisateurs, clés API | ✓ | – | – | – |
+
+## Multi-univers
+
+La boutique est une **plateforme** : des **audiences** (Familles & enfants, Maison & jardin, Cuisine, Vie pratique), chacune avec son identité sociale (pages Facebook/Instagram/TikTok, compte publicitaire, pixel), et dans chaque audience des **univers** : des sites avec leur nom, leurs domaines, leur thème, leur ton et leur catalogue. La Malle à Jeux est l'univers par défaut (audience Familles & enfants) ; toutes les données existantes lui appartiennent.
+
+- **Modèle** : `Audience` → `Site` (slug, domaines, domaine principal, préréglage, statut `ACTIVE`/`TEST`/`ARCHIVED`, réglages JSON). Catégories, collections, produits, packs, commandes, articles, pages, abonnés et campagnes portent un `siteId` ; les slugs de catégories, collections, articles et pages sont uniques **par univers**, ceux des produits, packs et campagnes restent globaux (URLs `/aventures/<slug>`, `utm_campaign`). Migration `20261108220000_multi_univers`.
+- **Résolution** (`src/proxy.ts`, `src/lib/sites/host.ts`) : domaine exact → `<slug>.<HUB_DOMAIN>` → aperçu `/?site=<slug>` (cookie `site_preview`) → univers par défaut. Les pages publiques sont réécrites vers `src/app/s/[site]/…` (segment interne, inaccessible directement) ; sitemap, robots, manifest, métadonnées et Open Graph sont propres à l'univers.
+- **Préréglages** (`src/lib/sites/presets.ts`) : `kit-enfants`, `guide-expert`, `recettes`, `sciences-enfants` — thème, polices, textes d'accueil, libellés, ton, modèle de fiche (`GUIDE`, `RECIPES`…) et catégories de départ.
+- **Réglages** : identité (marque, thème, accueil, navigation, SEO, analytics, conversion) = défauts ← préréglage ← surcharges de l'univers ; commerce = défauts ← réglages communs ← surcharges de l'univers. L'identité d'un univers ne fuit jamais vers un autre.
+- **Commandes** : `Order.siteId`, `metadata.siteId` Stripe, libellé bancaire au nom de l'univers, URLs de retour, emails, liens de téléchargement et conversions serveur sur le domaine de l'univers.
+- **Administration** : sélecteur d'univers en haut du menu (cookie `admin_site`, « Tous les univers » par défaut) qui filtre les listes, le tableau de bord et la rentabilité et cible Apparence/Paramètres ; page **Univers & domaines** pour créer/modifier univers et audiences. Comptes sociaux rattachés à une audience (Connecteurs).
+- **API** : `GET /api/v1/sites`, `siteSlug` sur `POST`/`PATCH /products` (voir `docs/API.md`).
+- **Domaines** : procédure Vercel + DNS + Meta dans `docs/DOMAINES.md`.
 
 ## Déploiement sur Vercel
 

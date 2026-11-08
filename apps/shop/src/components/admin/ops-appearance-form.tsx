@@ -14,8 +14,8 @@ import type { SettingsKey } from "@/lib/schemas/settings";
 
 const SECTION_LABELS: Record<HomepageSection, string> = { hero: "Hero", "funnel-offer": "Offre produit phare (ce que vous recevez)", categories: "Catégories", bestsellers: "Meilleures ventes", "how-it-works": "Fonctionnement", new: "Nouveautés", bundles: "Packs", reviews: "Avis clients", guarantee: "Garantie", faq: "FAQ / objections", newsletter: "Newsletter", blog: "Blog", "final-cta": "Appel à l'action final" };
 const COLOR_LABELS: Record<keyof ThemeSettings["colors"], string> = { cream: "Crème (fond)", coral: "Corail (action)", honey: "Jaune miel", sage: "Vert sauge", sky: "Bleu ciel", lavender: "Lavande", ink: "Texte" };
-const HEADING_FONTS = ["Fredoka", "Baloo 2", "Nunito", "Quicksand", "Comfortaa"] as const;
-const BODY_FONTS = ["Nunito", "Quicksand", "Inter", "Mulish", "Poppins"] as const;
+const HEADING_FONTS = ["Fredoka", "Baloo 2", "Nunito", "Quicksand", "Comfortaa", "Manrope", "Fraunces", "Inter"] as const;
+const BODY_FONTS = ["Nunito", "Quicksand", "Inter", "Mulish", "Poppins", "Manrope"] as const;
 
 function useSave() {
   const [pending, start] = useTransition();

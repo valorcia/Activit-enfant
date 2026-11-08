@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { getSettings } from "@/lib/settings";
 import { effectivePrice } from "@/lib/pricing";
 import { formatAgeRange, formatPrice } from "@/lib/utils";
+import { getSiteBySlug } from "@/lib/sites";
 
 export const runtime = "nodejs";
 export const alt = "Aperçu du produit";
@@ -10,11 +11,12 @@ export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
 /** Image Open Graph générée pour chaque fiche produit (utilisée quand aucune image OG n'est définie). */
-export default async function OgImage({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params;
+export default async function OgImage({ params }: { params: Promise<{ site: string; slug: string }> }) {
+  const { slug, site: siteSlug } = await params;
+  const site = await getSiteBySlug(siteSlug);
   const [product, { brand, theme }] = await Promise.all([
-    prisma.product.findFirst({ where: { slug, status: "PUBLISHED" }, select: { name: true, tagline: true, ageMin: true, ageMax: true, priceCents: true, salePriceCents: true, saleStartsAt: true, saleEndsAt: true, currency: true, category: { select: { name: true } } } }),
-    getSettings(),
+    prisma.product.findFirst({ where: { slug, status: "PUBLISHED", ...(site ? { siteId: site.id } : {}) }, select: { name: true, tagline: true, ageMin: true, ageMax: true, priceCents: true, salePriceCents: true, saleStartsAt: true, saleEndsAt: true, currency: true, category: { select: { name: true } } } }),
+    getSettings(site),
   ]);
   const c = theme.colors;
   const price = product ? effectivePrice(product) : null;

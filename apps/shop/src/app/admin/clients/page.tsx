@@ -6,6 +6,7 @@ import { DataTable, AdminPagination } from "@/components/admin/data-table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { formatDate, formatPrice } from "@/lib/utils";
+import { adminSiteWhere } from "@/lib/sites";
 
 export const metadata = { title: "Clients" };
 export const dynamic = "force-dynamic";
@@ -15,9 +16,14 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
   const sp = await searchParams;
   const page = Math.max(1, Number(sp.page) || 1);
   const perPage = 30;
-  const where = sp.q ? { OR: [{ email: { contains: sp.q, mode: "insensitive" as const } }, { name: { contains: sp.q, mode: "insensitive" as const } }] } : {};
+  const siteWhere = await adminSiteWhere();
+  // Univers sélectionné : clients ayant au moins une commande dans cet univers
+  const where = {
+    ...(sp.q ? { OR: [{ email: { contains: sp.q, mode: "insensitive" as const } }, { name: { contains: sp.q, mode: "insensitive" as const } }] } : {}),
+    ...(siteWhere.siteId ? { orders: { some: { siteId: siteWhere.siteId } } } : {}),
+  };
   const [customers, total] = await Promise.all([
-    prisma.customer.findMany({ where, orderBy: { createdAt: "desc" }, skip: (page - 1) * perPage, take: perPage, include: { orders: { where: { status: { in: ["PAID", "PARTIALLY_REFUNDED"] } }, select: { totalCents: true, refundedCents: true } } } }),
+    prisma.customer.findMany({ where, orderBy: { createdAt: "desc" }, skip: (page - 1) * perPage, take: perPage, include: { orders: { where: { ...siteWhere, status: { in: ["PAID", "PARTIALLY_REFUNDED"] } }, select: { totalCents: true, refundedCents: true } } } }),
     prisma.customer.count({ where }),
   ]);
   return (

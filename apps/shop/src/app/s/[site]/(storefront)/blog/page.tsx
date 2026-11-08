@@ -7,23 +7,26 @@ import { SectionHeading } from "@/components/storefront/section-heading";
 import { Pagination } from "@/components/storefront/pagination";
 import { PlaceholderArt } from "@/components/storefront/placeholder-art";
 import { formatDate } from "@/lib/utils";
+import { siteFromParams } from "@/lib/sites";
+import { getPreset } from "@/lib/sites/presets";
 
 export const revalidate = 300;
 
-export const metadata: Metadata = {
-  title: "Blog — idées d'activités et conseils pour les familles",
-  description: "Idées d'activités, conseils d'organisation de chasses au trésor, anniversaires et moments en famille.",
-  alternates: { canonical: "/blog" },
-};
+export async function generateMetadata({ params }: { params: Promise<{ site: string }> }): Promise<Metadata> {
+  const labels = getPreset((await siteFromParams(params)).preset).labels;
+  return { title: `Blog — ${labels.blogTitle.toLowerCase()}`, description: labels.blogDescription, alternates: { canonical: "/blog" } };
+}
 
-export default async function BlogIndexPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
+export default async function BlogIndexPage({ params, searchParams }: { params: Promise<{ site: string }>; searchParams: Promise<{ page?: string }> }) {
+  const site = await siteFromParams(params);
+  const labels = getPreset(site.preset).labels;
   const { page: pageParam } = await searchParams;
   const page = Math.max(1, Number(pageParam) || 1);
-  const { items, pages } = await getBlogPosts(page, 12);
+  const { items, pages } = await getBlogPosts(site.id, page, 12);
   return (
     <div className="container-shell py-10 sm:py-14">
       <Breadcrumbs items={[{ label: "Accueil", href: "/" }, { label: "Blog" }]} />
-      <SectionHeading as="h1" eyebrow="Le blog" title="Idées, conseils et inspirations pour les familles" description="Des articles pour préparer vos chasses au trésor, animer un anniversaire ou occuper les enfants les jours de pluie." className="mt-6" />
+      <SectionHeading as="h1" eyebrow="Le blog" title={labels.blogTitle} description={labels.blogDescription} className="mt-6" />
       {items.length === 0 ? (
         <p className="mt-10 rounded-3xl border border-dashed border-line bg-white/60 p-10 text-center text-ink-soft">Les premiers articles arrivent bientôt.</p>
       ) : (

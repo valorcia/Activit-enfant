@@ -23,8 +23,8 @@ export type FlagshipProduct = Prisma.ProductGetPayload<{ select: typeof flagship
  * avant (Apparence) → meilleure vente publiée. Null si rien n'est publié.
  */
 export const getFlagshipProduct = unstable_cache(
-  async (flagshipId: string | null | undefined, featuredIds: string[]): Promise<FlagshipProduct | null> => {
-    const published = { status: "PUBLISHED" as const };
+  async (siteId: string, flagshipId: string | null | undefined, featuredIds: string[]): Promise<FlagshipProduct | null> => {
+    const published = { status: "PUBLISHED" as const, siteId };
     if (flagshipId) {
       const p = await prisma.product.findFirst({ where: { id: flagshipId, ...published }, select: flagshipSelect });
       if (p) return p;

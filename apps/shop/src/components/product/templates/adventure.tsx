@@ -20,7 +20,7 @@ export function AdventureTemplate({ product }: { product: ProductPageData }) {
       <WhatYouGet product={product} />
       <ProductStory product={product} />
       <KitContents product={product} />
-      <GuaranteeBlock />
+      <GuaranteeBlock siteId={product.siteId} />
       <TemplateGallery product={product} />
       <PracticalInfo product={product} />
       <SellingPoints product={product} />

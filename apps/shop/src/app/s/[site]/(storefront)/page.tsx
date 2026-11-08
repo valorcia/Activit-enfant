@@ -3,7 +3,6 @@ import Link from "next/link";
 import { ArrowRight, Quote, Clock, Users, FileText, Layers } from "lucide-react";
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/db";
-import { env } from "@/lib/env";
 import { getSettings } from "@/lib/settings";
 import { getApprovedReviews, getBestsellers, getCategories, getFeaturedProducts, getNewProducts, getPublishedBundles } from "@/lib/catalog";
 import type { HomepageSection } from "@/lib/schemas/settings";
@@ -27,29 +26,32 @@ import { BuyNowButton } from "@/components/storefront/buy-now-button";
 import { TrustBadges } from "@/components/storefront/trust-badges";
 import { HomeStickyCta } from "@/components/storefront/home-sticky-cta";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { siteFromParams, siteUrl } from "@/lib/sites";
 
 export const revalidate = 300;
 
 const getLatestPosts = unstable_cache(
-  async () => prisma.blogPost.findMany({ where: { status: "PUBLISHED" }, orderBy: { publishedAt: "desc" }, take: 3, select: { slug: true, title: true, excerpt: true, coverImageUrl: true, publishedAt: true } }),
+  async (siteId: string) => prisma.blogPost.findMany({ where: { siteId, status: "PUBLISHED" }, orderBy: { publishedAt: "desc" }, take: 3, select: { slug: true, title: true, excerpt: true, coverImageUrl: true, publishedAt: true } }),
   ["home-latest-posts"],
   { tags: ["blog"], revalidate: 600 },
 );
 
 const CATEGORY_TINTS = ["bg-coral-light", "bg-sage-light", "bg-honey-light", "bg-lavender-light", "bg-sky-light"];
 
-export default async function HomePage() {
-  const settings = await getSettings();
+export default async function HomePage({ params }: { params: Promise<{ site: string }> }) {
+  const site = await siteFromParams(params);
+  const baseUrl = siteUrl(site);
+  const settings = await getSettings(site);
   const { homepage, brand, navigation, conversion } = settings;
   const [categories, bestsellers, featured, newest, bundles, reviews, posts, flagship] = await Promise.all([
-    getCategories(),
-    getBestsellers(8),
-    getFeaturedProducts(homepage.featuredProductIds, 4),
-    getNewProducts(8),
-    getPublishedBundles(3),
-    getApprovedReviews(6),
-    homepage.sectionsOrder.includes("blog") ? getLatestPosts() : Promise.resolve([]),
-    getFlagshipProduct(conversion.flagshipProductId, homepage.featuredProductIds),
+    getCategories(site.id),
+    getBestsellers(site.id, 8),
+    getFeaturedProducts(site.id, homepage.featuredProductIds, 4),
+    getNewProducts(site.id, 8),
+    getPublishedBundles(site.id, 3),
+    getApprovedReviews(site.id, 6),
+    homepage.sectionsOrder.includes("blog") ? getLatestPosts(site.id) : Promise.resolve([]),
+    getFlagshipProduct(site.id, conversion.flagshipProductId, homepage.featuredProductIds),
   ]);
 
   const funnel = conversion.heroMode === "funnel" && !!flagship;
@@ -414,8 +416,8 @@ export default async function HomePage() {
   return (
     <>
       <JsonLd data={[
-        { "@context": "https://schema.org", "@type": "Organization", name: brand.name, url: env.appUrl, ...(brand.logoUrl ? { logo: brand.logoUrl } : {}), ...(brand.contactEmail ? { email: brand.contactEmail } : {}), ...(socialLinks.length ? { sameAs: socialLinks } : {}) },
-        { "@context": "https://schema.org", "@type": "WebSite", name: brand.name, url: env.appUrl, inLanguage: "fr-FR", potentialAction: { "@type": "SearchAction", target: { "@type": "EntryPoint", urlTemplate: `${env.appUrl}/boutique?q={search_term_string}` }, "query-input": "required name=search_term_string" } },
+        { "@context": "https://schema.org", "@type": "Organization", name: brand.name, url: baseUrl, ...(brand.logoUrl ? { logo: brand.logoUrl } : {}), ...(brand.contactEmail ? { email: brand.contactEmail } : {}), ...(socialLinks.length ? { sameAs: socialLinks } : {}) },
+        { "@context": "https://schema.org", "@type": "WebSite", name: brand.name, url: baseUrl, inLanguage: "fr-FR", potentialAction: { "@type": "SearchAction", target: { "@type": "EntryPoint", urlTemplate: `${baseUrl}/boutique?q={search_term_string}` }, "query-input": "required name=search_term_string" } },
       ]} />
       {homepage.sectionsOrder.map((key) => sections[key])}
     </>

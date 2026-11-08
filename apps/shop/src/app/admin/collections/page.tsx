@@ -3,13 +3,14 @@ import { prisma } from "@/lib/db";
 import { AdminPageHeader } from "@/components/admin/page-header";
 import { TaxonomyManager } from "@/components/admin/taxonomy-manager";
 import { saveCollectionAction, deleteCollectionAction, reorderCollectionsAction } from "@/app/actions/admin/categories";
+import { adminSiteWhere } from "@/lib/sites";
 
 export const metadata = { title: "Collections" };
 export const dynamic = "force-dynamic";
 
 export default async function CollectionsPage() {
   await requirePermission("products:read");
-  const rows = await prisma.collection.findMany({ orderBy: { position: "asc" }, include: { _count: { select: { products: true } } } });
+  const rows = await prisma.collection.findMany({ where: await adminSiteWhere(), orderBy: { position: "asc" }, include: { _count: { select: { products: true } } } });
   return (
     <div>
       <AdminPageHeader title="Collections" description="Regroupements transversaux (univers, tranche d'âge, saison…). Un produit peut appartenir à plusieurs collections." />

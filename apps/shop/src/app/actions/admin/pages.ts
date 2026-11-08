@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { assertPermission } from "@/lib/auth/session";
 import { slugify } from "@/lib/utils";
+import { adminDefaultSiteId } from "@/lib/sites";
 
 export const staticPageSchema = z.object({
   title: z.string().min(2).max(120),
@@ -30,9 +31,10 @@ export async function saveStaticPageAction(id: string | null, raw: unknown): Pro
     }
     const d = parsed.data;
     const slug = slugify(d.slug || d.title) || "page";
-    const existing = await prisma.staticPage.findUnique({ where: { slug }, select: { id: true } });
+    const siteId = id ? (await prisma.staticPage.findUniqueOrThrow({ where: { id }, select: { siteId: true } })).siteId : await adminDefaultSiteId();
+    const existing = await prisma.staticPage.findFirst({ where: { siteId, slug }, select: { id: true } });
     if (existing && existing.id !== id) return { ok: false, error: "Ce slug existe déjà", fields: { slug: "Slug déjà utilisé" } };
-    const data = { title: d.title, slug, content: d.content, status: d.status, showInFooter: d.showInFooter, position: d.position, seoTitle: d.seoTitle ?? null, seoDescription: d.seoDescription ?? null };
+    const data = { title: d.title, slug, siteId, content: d.content, status: d.status, showInFooter: d.showInFooter, position: d.position, seoTitle: d.seoTitle ?? null, seoDescription: d.seoDescription ?? null };
     const page = id ? await prisma.staticPage.update({ where: { id }, data }) : await prisma.staticPage.create({ data });
     await audit({ userId: user.id, action: id ? "page.update" : "page.create", entity: "staticPage", entityId: page.id, data: { slug, status: d.status } });
     revalidateTag("pages", "max");

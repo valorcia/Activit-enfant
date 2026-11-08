@@ -31,6 +31,8 @@ export const TEMPLATES: Array<{ value: string; label: string; description: strin
   { value: "STORY", label: "Histoire / e-book", description: "Présentation éditoriale, extrait de l'histoire, galerie de pages." },
   { value: "EVENT", label: "Kit événement", description: "Anniversaire, Noël, Pâques… : contenu du kit de fête et organisation." },
   { value: "CLASSIC", label: "Fiche classique", description: "Présentation standard, polyvalente." },
+  { value: "GUIDE", label: "Guide pratique", description: "Problème → méthode → sommaire, couverture en perspective, ton d'expert (adultes)." },
+  { value: "RECIPES", label: "Recettes", description: "Sommaire des recettes, galerie gourmande, ton chaleureux." },
 ];
 
 /** Onglet contenant chaque champ (pour afficher l'erreur au bon endroit). */
@@ -61,7 +63,7 @@ function toPayload(f: ProductFormData) {
   const taxBp = Math.round(Number(String(f.taxRate).replace(",", ".")) * 100);
   return {
     name: f.name, slug: f.slug ? slugify(f.slug) : undefined, tagline: f.tagline || null, shortDescription: f.shortDescription || null, longDescription: f.longDescription || null, story: f.story || null,
-    template: f.template, categoryId: f.categoryId || null, collectionIds: f.collectionIds, universe: f.universe || null, tags: list(f.tags), badges: list(f.badges), heroBadges: list(f.heroBadges),
+    siteId: f.siteId || undefined, template: f.template, categoryId: f.categoryId || null, collectionIds: f.collectionIds, universe: f.universe || null, tags: list(f.tags), badges: list(f.badges), heroBadges: list(f.heroBadges),
     ageMin: f.ageMin, ageMax: f.ageMax, playersMin: f.playersMin, playersMax: f.playersMax, durationMinutes: f.durationMinutes, difficulty: f.difficulty, pageCount: f.pageCount, fileFormat: f.fileFormat || "PDF", materials: list(f.materials),
     priceCents: eurosToCents(f.price) ?? -1, salePriceCents: eurosToCents(f.salePrice), saleStartsAt: f.saleStartsAt || undefined, saleEndsAt: f.saleEndsAt || undefined, currency: f.currency || "EUR", taxRateBp: Number.isFinite(taxBp) ? taxBp : 2000, creationCostCents: eurosToCents(f.creationCost),
     kitContents: f.kitContents, faq: f.faq, sellingPoints: f.sellingPoints,
@@ -74,13 +76,14 @@ interface Props {
   initial: ProductFormData;
   images: ProductFormImage[];
   files: ProductFormFile[];
-  categories: Array<{ id: string; name: string }>;
-  collections: Array<{ id: string; name: string }>;
+  categories: Array<{ id: string; name: string; siteId: string }>;
+  collections: Array<{ id: string; name: string; siteId: string }>;
   products: Array<{ id: string; name: string; slug: string }>;
-  siteUrl: string;
+  /** Univers disponibles (URL publique de chacun) */
+  sites: Array<{ id: string; name: string; url: string }>;
 }
 
-export function ProductForm({ initial, images, files, categories, collections, products, siteUrl }: Props) {
+export function ProductForm({ initial, images, files, categories: allCategories, collections: allCollections, products, sites }: Props) {
   const router = useRouter();
   const [form, setForm] = useState<ProductFormData>(initial);
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -93,6 +96,10 @@ export function ProductForm({ initial, images, files, categories, collections, p
   const set = <K extends keyof ProductFormData>(key: K, value: ProductFormData[K]) => setForm((f) => ({ ...f, [key]: value }));
   const err = (k: string) => errors[k];
   const productOptions: SelectOption[] = useMemo(() => products.filter((p) => p.id !== form.id).map((p) => ({ value: p.id, label: p.name, hint: p.slug })), [products, form.id]);
+  // Catégories et collections de l'univers du produit uniquement
+  const categories = useMemo(() => allCategories.filter((c) => c.siteId === form.siteId), [allCategories, form.siteId]);
+  const collections = useMemo(() => allCollections.filter((c) => c.siteId === form.siteId), [allCollections, form.siteId]);
+  const siteUrl = sites.find((s) => s.id === form.siteId)?.url ?? sites[0]?.url ?? "";
   const collectionOptions: SelectOption[] = useMemo(() => collections.map((c) => ({ value: c.id, label: c.name })), [collections]);
 
   const priceCents = eurosToCents(form.price) ?? 0;
@@ -226,6 +233,13 @@ export function ProductForm({ initial, images, files, categories, collections, p
           </FormSection>
 
           <FormSection title="Classement">
+            {sites.length > 1 && (
+              <FormField label="Univers (boutique)" htmlFor="siteId" hint="Changer d'univers retire la catégorie et les collections (propres à chaque univers)." error={err("siteId")}>
+                <NativeSelect id="siteId" value={form.siteId} onChange={(e) => setForm((f) => ({ ...f, siteId: e.target.value, ...(e.target.value !== f.siteId ? { categoryId: "", collectionIds: [] } : {}) }))}>
+                  {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </NativeSelect>
+              </FormField>
+            )}
             <div className="grid gap-4 md:grid-cols-2">
               <FormField label="Catégorie" htmlFor="categoryId" error={err("categoryId")}>
                 <NativeSelect id="categoryId" value={form.categoryId} onChange={(e) => set("categoryId", e.target.value)}>

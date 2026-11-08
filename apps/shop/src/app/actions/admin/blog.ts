@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { assertPermission } from "@/lib/auth/session";
 import { slugify } from "@/lib/utils";
+import { adminDefaultSiteId } from "@/lib/sites";
 
 const stringList = z.preprocess((v) => (typeof v === "string" ? v.split(/[,\n]/).map((s) => s.trim()).filter(Boolean) : v ?? []), z.array(z.string().max(60)).max(30));
 const optionalDate = z.preprocess((v) => (v === "" || v == null ? undefined : v), z.coerce.date().optional());
@@ -25,11 +26,11 @@ export const blogPostSchema = z.object({
 
 export type BlogResult = { ok: true; id: string } | { ok: false; error: string; fields?: Record<string, string> };
 
-async function uniquePostSlug(base: string, excludeId?: string) {
+async function uniquePostSlug(base: string, siteId: string, excludeId?: string) {
   const root = slugify(base) || "article";
   let slug = root;
   for (let i = 2; i < 200; i++) {
-    const ex = await prisma.blogPost.findUnique({ where: { slug }, select: { id: true } });
+    const ex = await prisma.blogPost.findFirst({ where: { siteId, slug }, select: { id: true } });
     if (!ex || ex.id === excludeId) return slug;
     slug = `${root}-${i}`;
   }
@@ -47,8 +48,10 @@ export async function saveBlogPostAction(id: string | null, raw: unknown): Promi
     }
     const d = parsed.data;
     const before = id ? await prisma.blogPost.findUnique({ where: { id } }) : null;
-    const slug = await uniquePostSlug(d.slug || d.title, id ?? undefined);
+    const siteId = before?.siteId ?? (await adminDefaultSiteId());
+    const slug = await uniquePostSlug(d.slug || d.title, siteId, id ?? undefined);
     const data = {
+      siteId,
       title: d.title, slug, excerpt: d.excerpt ?? null, content: d.content, coverImageUrl: d.coverImageUrl ?? null, tags: d.tags,
       seoTitle: d.seoTitle ?? null, seoDescription: d.seoDescription ?? null, relatedProductIds: d.relatedProductIds, status: d.status,
       scheduledAt: d.status === "SCHEDULED" ? d.scheduledAt ?? null : null,

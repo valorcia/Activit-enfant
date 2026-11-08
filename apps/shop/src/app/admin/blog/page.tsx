@@ -6,13 +6,14 @@ import { AdminPageHeader, StatusPill } from "@/components/admin/page-header";
 import { DataTable } from "@/components/admin/data-table";
 import { Button } from "@/components/ui/button";
 import { formatDateTime } from "@/lib/utils";
+import { adminSiteWhere } from "@/lib/sites";
 
 export const metadata = { title: "Blog" };
 export const dynamic = "force-dynamic";
 
 export default async function BlogAdminPage() {
   await requirePermission("blog:write");
-  const posts = await prisma.blogPost.findMany({ orderBy: { updatedAt: "desc" }, include: { author: { select: { name: true, email: true } } } });
+  const posts = await prisma.blogPost.findMany({ where: await adminSiteWhere(), orderBy: { updatedAt: "desc" }, include: { author: { select: { name: true, email: true } } } });
   return (
     <div>
       <AdminPageHeader title="Blog" description={`${posts.length} article${posts.length > 1 ? "s" : ""}`} actions={<Button asChild variant="admin" size="sm"><Link href="/admin/blog/nouveau"><Plus className="size-4" /> Nouvel article</Link></Button>} />

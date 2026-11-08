@@ -26,8 +26,9 @@
   --shadow-lift: 0 22px 44px -16px rgb(41 50 65 / 0.28);
 }
 
-:root[data-radius="soft"] { --radius-card: 1rem; --radius-button: 0.75rem; }
-:root[data-radius="pill"] { --radius-card: 2rem; --radius-button: 999px; }
+:root[data-radius="soft"], [data-radius="soft"] { --radius-card: 1rem; --radius-button: 0.75rem; }
+:root[data-radius="pill"], [data-radius="pill"] { --radius-card: 2rem; --radius-button: 999px; }
+[data-radius="round"] { --radius-card: 1.5rem; --radius-button: 999px; }
 
 @theme inline {
   --color-cream: var(--brand-cream);
@@ -101,7 +102,7 @@
     background-size: 14px 14px, 38px 38px;
     background-position: 0 0, 7px 7px;
   }
-  :root[data-texture="off"] .bg-paper-texture { background-image: none; }
+  :root[data-texture="off"] .bg-paper-texture, [data-texture="off"].bg-paper-texture, [data-texture="off"] .bg-paper-texture { background-image: none; }
 
   .container-shell { @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8; }
 
@@ -152,3 +153,7 @@
 @utility text-balance { text-wrap: balance; }
 @utility text-pretty { text-wrap: pretty; }
 @utility scrollbar-none { scrollbar-width: none; &::-webkit-scrollbar { display: none; } }
+
+/* Modèle « guide » : couverture présentée en perspective dans le hero */
+.guide-template .product-hero-cover { transform: perspective(1400px) rotateY(-14deg) rotateX(2deg); box-shadow: 24px 30px 50px -20px rgb(15 23 42 / 0.45); border-radius: 0.5rem; }
+@media (prefers-reduced-motion: no-preference) { .guide-template .product-hero-cover { transition: transform 0.4s ease; } .guide-template .product-hero-cover:hover { transform: perspective(1400px) rotateY(-6deg); } }

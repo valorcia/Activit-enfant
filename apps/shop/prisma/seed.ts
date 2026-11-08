@@ -17,9 +17,28 @@ import { PrismaClient, type ProductTemplate } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { resolveDbSchema, withDbSchema } from "../src/lib/db-url";
 
+/** Identifiant fixe de l'univers par défaut (voir src/lib/sites/constants.ts). */
+const DEFAULT_SITE_ID = "site-default";
+
 const prisma = new PrismaClient({ datasourceUrl: withDbSchema(process.env.DATABASE_URL, resolveDbSchema()) });
 
 async function main() {
+
+  // --- Audiences et univers par défaut (créés par la migration ; recréés ici si la base
+  // a été synchronisée sans migration, ex. baseline P3005) ----------------------------
+  const audiences = [
+    { id: "aud-familles-enfants", slug: "familles-enfants", name: "Familles & enfants", description: "Parents d'enfants de 3 à 10 ans : jeux, sciences, histoires, cuisine avec les enfants.", color: "#FF826F" },
+    { id: "aud-maison-jardin", slug: "maison-jardin", name: "Maison & jardin", description: "Propriétaires : piscine, jardin, entretien, bricolage.", color: "#0E7490" },
+    { id: "aud-cuisine", slug: "cuisine", name: "Cuisine", description: "Amateurs de cuisine du quotidien et de recettes.", color: "#C2410C" },
+    { id: "aud-vie-pratique", slug: "vie-pratique", name: "Vie pratique", description: "Bonnes pratiques au quotidien : organisation, budget, santé, administratif.", color: "#7C3AED" },
+  ];
+  for (const a of audiences) await prisma.audience.upsert({ where: { slug: a.slug }, create: a, update: {} });
+  const hasDefault = await prisma.site.findFirst({ where: { isDefault: true }, select: { id: true } });
+  await prisma.site.upsert({
+    where: { id: DEFAULT_SITE_ID },
+    create: { id: DEFAULT_SITE_ID, slug: "la-malle-a-jeux", name: "La Malle à Jeux", audienceId: "aud-familles-enfants", preset: "kit-enfants", status: "ACTIVE", isDefault: !hasDefault },
+    update: {},
+  });
   const adminEmail = (process.env.ADMIN_EMAIL ?? "admin@example.com").toLowerCase();
   const adminPassword = process.env.ADMIN_PASSWORD ?? "ChangezMoi123!";
   const existingAdmins = await prisma.user.count({ where: { role: "ADMIN" } });
@@ -48,7 +67,7 @@ async function main() {
   ];
   const catBySlug: Record<string, string> = {};
   for (const c of categories) {
-    const row = await prisma.category.upsert({ where: { slug: c.slug }, create: c, update: { name: c.name, description: c.description, color: c.color, icon: c.icon, position: c.position } });
+    const row = await prisma.category.upsert({ where: { siteId_slug: { siteId: DEFAULT_SITE_ID, slug: c.slug } }, create: c, update: { name: c.name, description: c.description, color: c.color, icon: c.icon, position: c.position } });
     catBySlug[c.slug] = row.id;
   }
 
@@ -62,7 +81,7 @@ async function main() {
   await prisma.collection.updateMany({ where: { slug: "8-12-ans" }, data: { slug: "8-10-ans", name: "8–10 ans" } });
   const colBySlug: Record<string, string> = {};
   for (const c of collections) {
-    const row = await prisma.collection.upsert({ where: { slug: c.slug }, create: c, update: { name: c.name, description: c.description, color: c.color, position: c.position } });
+    const row = await prisma.collection.upsert({ where: { siteId_slug: { siteId: DEFAULT_SITE_ID, slug: c.slug } }, create: c, update: { name: c.name, description: c.description, color: c.color, position: c.position } });
     colBySlug[c.slug] = row.id;
   }
 
@@ -178,7 +197,7 @@ async function main() {
   await prisma.productImage.deleteMany({ where: { productId: coquelicot.id, url: { startsWith: "/images/seed/" } } });
   await prisma.productImage.createMany({ data: seedImages.map((img) => ({ ...img, productId: coquelicot.id })) });
   await prisma.product.update({ where: { id: coquelicot.id }, data: { ogImageUrl: "/images/seed/coquelicot-couverture.webp" } });
-  await prisma.category.update({ where: { slug: "chasses-au-tresor" }, data: { illustrationUrl: "/images/seed/carte-au-tresor.webp" } });
+  await prisma.category.update({ where: { siteId_slug: { siteId: DEFAULT_SITE_ID, slug: "chasses-au-tresor" } }, data: { illustrationUrl: "/images/seed/carte-au-tresor.webp" } });
 
   // --- Paramètres du site (valeurs par défaut explicites) ----------------------
   await prisma.siteSetting.upsert({
@@ -210,7 +229,7 @@ async function main() {
   ];
   for (const p of pages) {
     await prisma.staticPage.upsert({
-      where: { slug: p.slug },
+      where: { siteId_slug: { siteId: DEFAULT_SITE_ID, slug: p.slug } },
       create: {
         ...p,
         status: "DRAFT",

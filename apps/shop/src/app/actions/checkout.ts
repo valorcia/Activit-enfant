@@ -4,6 +4,7 @@ import { CheckoutError, createCheckoutSession } from "@/lib/orders/checkout";
 import { isStripeConfigured } from "@/lib/stripe";
 import { prisma } from "@/lib/db";
 import { NEWSLETTER_CONSENT_TEXT } from "@/lib/marketing/newsletter";
+import { getRequestSite } from "@/lib/sites";
 
 const schema = z.object({
   lines: z.array(z.object({ kind: z.enum(["product", "bundle"]), id: z.string().min(1), quantity: z.number().int().min(1).max(10) })).min(1).max(50),
@@ -25,7 +26,8 @@ export async function startCheckoutAction(raw: unknown): Promise<CheckoutActionR
     if (email && input.marketingConsent) {
       await prisma.marketingConsent.create({ data: { email: email.toLowerCase(), channel: "email", purpose: "promotions", granted: true, text: NEWSLETTER_CONSENT_TEXT, source: "checkout" } });
     }
-    const { url } = await createCheckoutSession({ lines: input.lines, email, couponCode: input.couponCode, utm: input.utm, marketingConsent: input.marketingConsent, consentText: input.marketingConsent ? NEWSLETTER_CONSENT_TEXT : null });
+    const site = await getRequestSite();
+    const { url } = await createCheckoutSession({ site, lines: input.lines, email, couponCode: input.couponCode, utm: input.utm, marketingConsent: input.marketingConsent, consentText: input.marketingConsent ? NEWSLETTER_CONSENT_TEXT : null });
     return { ok: true, url };
   } catch (e) {
     if (e instanceof CheckoutError) return { ok: false, error: e.message };

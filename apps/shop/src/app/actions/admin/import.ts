@@ -4,6 +4,7 @@ import { assertPermission } from "@/lib/auth/session";
 import { audit } from "@/lib/audit";
 import { importProducts, parseProductsCsv, type ParsedCsvRow } from "@/lib/import/csv";
 import { handleActionError, succeed, fail, type ActionResult } from "@/lib/admin/action-result";
+import { adminDefaultSiteId } from "@/lib/sites";
 
 export interface CsvPreview { columns: string[]; total: number; valid: number; invalid: number; sample: Array<{ line: number; name: string; price: string; status: string; errors: string[] }>; text: string; fileName: string }
 
@@ -30,7 +31,7 @@ export async function runImportAction(text: string, fileName: string): Promise<A
     const user = await assertPermission("products:import");
     const { rows } = parseProductsCsv(text);
     const valid: ParsedCsvRow[] = rows;
-    const result = await importProducts(valid, { userId: user.id, actor: user.email, source: "csv" }, { source: "CSV", fileName });
+    const result = await importProducts(valid, { userId: user.id, actor: user.email, source: "csv" }, { source: "CSV", fileName, siteId: await adminDefaultSiteId() });
     await audit({ userId: user.id, action: "import.csv", entity: "import", entityId: result.jobId, data: { created: result.created, updated: result.updated, failed: result.failed } });
     revalidatePath("/admin/import");
     revalidatePath("/admin/produits");

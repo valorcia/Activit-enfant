@@ -6,6 +6,7 @@ import { getStripe } from "@/lib/stripe";
 import { getSetting } from "@/lib/settings";
 import { applyCoupon, computeTotals, effectivePrice, type CartLineInput, type PricedLine } from "@/lib/pricing";
 import { nextOrderNumber } from "./numbers";
+import { siteBaseUrl, statementDescriptorSuffix } from "@/lib/sites/host";
 
 export class CheckoutError extends Error {
   constructor(message: string, public code = "CHECKOUT_ERROR") {
@@ -20,21 +21,23 @@ export interface CheckoutInput {
   utm?: Record<string, string> | null;
   marketingConsent?: boolean;
   consentText?: string | null;
+  /** Univers de la boutique où a lieu l'achat (défaut : univers par défaut). */
+  site?: { id: string; name: string; primaryDomain: string | null; domains: string[] } | null;
 }
 
 /**
  * Valide le panier côté serveur (prix recalculés depuis la base, jamais depuis
  * le client), crée la commande en attente et la session Stripe Checkout.
  */
-export async function priceCart(lines: CartLineInput[], now = new Date()): Promise<PricedLine[]> {
+export async function priceCart(lines: CartLineInput[], now = new Date(), siteId?: string): Promise<PricedLine[]> {
   if (lines.length === 0) throw new CheckoutError("Votre panier est vide", "EMPTY_CART");
   if (lines.length > 50) throw new CheckoutError("Trop d'articles dans le panier", "TOO_MANY_ITEMS");
   const productIds = lines.filter((l) => l.kind === "product").map((l) => l.id);
   const bundleIds = lines.filter((l) => l.kind === "bundle").map((l) => l.id);
 
   const [products, bundles] = await Promise.all([
-    productIds.length ? prisma.product.findMany({ where: { id: { in: productIds }, status: "PUBLISHED" } }) : [],
-    bundleIds.length ? prisma.bundle.findMany({ where: { id: { in: bundleIds }, status: "PUBLISHED" }, include: { items: true } }) : [],
+    productIds.length ? prisma.product.findMany({ where: { id: { in: productIds }, status: "PUBLISHED", ...(siteId ? { siteId } : {}) } }) : [],
+    bundleIds.length ? prisma.bundle.findMany({ where: { id: { in: bundleIds }, status: "PUBLISHED", ...(siteId ? { siteId } : {}) }, include: { items: true } }) : [],
   ]);
 
   const priced: PricedLine[] = [];
@@ -56,9 +59,12 @@ export async function priceCart(lines: CartLineInput[], now = new Date()): Promi
 
 export async function createCheckoutSession(input: CheckoutInput): Promise<{ url: string; orderId: string }> {
   const stripe = await getStripe();
-  const commerce = await getSetting("commerce");
+  const site = input.site ?? null;
+  const commerce = await getSetting("commerce", site?.id);
+  const baseUrl = site ? siteBaseUrl(site, env.appUrl) : env.appUrl;
   const now = new Date();
-  const lines = await priceCart(input.lines, now);
+  // Seuls les produits de l'univers courant sont vendus sur son domaine
+  const lines = await priceCart(input.lines, now, site?.id);
 
   // Coupon interne (optionnel)
   let coupon = null;
@@ -83,6 +89,7 @@ export async function createCheckoutSession(input: CheckoutInput): Promise<{ url
     return tx.order.create({
       data: {
         number,
+        ...(site ? { siteId: site.id } : {}),
         email: email ?? "",
         status: "PENDING",
         currency: commerce.currency,
@@ -149,10 +156,14 @@ export async function createCheckoutSession(input: CheckoutInput): Promise<{ url
     ...(commerce.collectTermsConsent
       ? { consent_collection: { terms_of_service: "required" as const }, custom_text: { terms_of_service_acceptance: { message: commerce.withdrawalNotice }, submit: { message: commerce.withdrawalNotice } } }
       : { custom_text: { submit: { message: commerce.withdrawalNotice } } }),
-    success_url: `${env.appUrl}/commande/confirmation?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${env.appUrl}/panier?annule=1`,
-    metadata: { orderId: order.id, orderNumber: order.number },
-    payment_intent_data: { metadata: { orderId: order.id, orderNumber: order.number } },
+    success_url: `${baseUrl}/commande/confirmation?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${baseUrl}/panier?annule=1`,
+    metadata: { orderId: order.id, orderNumber: order.number, siteId: order.siteId },
+    payment_intent_data: {
+      metadata: { orderId: order.id, orderNumber: order.number, siteId: order.siteId },
+      // Libellé bancaire : nom court de l'univers (« BOUTIQUE* LA MALLE A JEUX »)
+      ...(site ? { statement_descriptor_suffix: statementDescriptorSuffix(site.name) } : {}),
+    },
     expires_at: Math.floor(Date.now() / 1000) + 60 * 60, // 1 h
   });
 

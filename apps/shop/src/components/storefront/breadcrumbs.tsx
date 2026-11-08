@@ -6,12 +6,12 @@ import { JsonLd } from "./json-ld";
 export interface BreadcrumbItem { label: string; href?: string }
 
 /** Fil d'Ariane accessible + données structurées BreadcrumbList. */
-export function Breadcrumbs({ items, className }: { items: BreadcrumbItem[]; className?: string }) {
+export function Breadcrumbs({ items, className, baseUrl }: { items: BreadcrumbItem[]; className?: string; baseUrl?: string }) {
   const all: BreadcrumbItem[] = [{ label: "Accueil", href: "/" }, ...items];
   const data = {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
-    itemListElement: all.map((it, i) => ({ "@type": "ListItem", position: i + 1, name: it.label, ...(it.href ? { item: absoluteUrl(it.href) } : {}) })),
+    itemListElement: all.map((it, i) => ({ "@type": "ListItem", position: i + 1, name: it.label, ...(it.href ? { item: baseUrl && !it.href.startsWith("http") ? `${baseUrl}${it.href}` : absoluteUrl(it.href) } : {}) })),
   };
   return (
     <nav aria-label="Fil d'Ariane" className={cn("text-sm text-ink-soft", className)}>

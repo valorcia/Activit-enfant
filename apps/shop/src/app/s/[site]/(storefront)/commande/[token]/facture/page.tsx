@@ -13,7 +13,8 @@ export default async function InvoicePage({ params }: { params: Promise<{ token:
   const { token } = await params;
   const orderId = verifyOrderAccessToken(token);
   if (!orderId) notFound();
-  const [order, brand] = await Promise.all([prisma.order.findUnique({ where: { id: orderId }, include: { items: true, customer: true } }), getSetting("brand")]);
+  const order = await prisma.order.findUnique({ where: { id: orderId }, include: { items: true, customer: true } });
+  const brand = await getSetting("brand", order?.siteId);
   if (!order || (order.status !== "PAID" && order.status !== "PARTIALLY_REFUNDED" && order.status !== "REFUNDED")) notFound();
   const addr = (order.billingAddress ?? null) as null | { line1?: string; line2?: string; postal_code?: string; city?: string; country?: string };
   const ht = order.totalCents - order.taxCents;

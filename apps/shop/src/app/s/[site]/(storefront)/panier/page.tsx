@@ -2,11 +2,13 @@ import type { Metadata } from "next";
 import { getSetting } from "@/lib/settings";
 import { Breadcrumbs } from "@/components/storefront/breadcrumbs";
 import { CartPage } from "@/components/storefront/cart-page";
+import { siteFromParams } from "@/lib/sites";
 
 export const metadata: Metadata = { title: "Mon panier", robots: { index: false, follow: true } };
 
-export default async function PanierPage({ searchParams }: { searchParams: Promise<{ annule?: string }> }) {
-  const [{ annule }, commerce] = await Promise.all([searchParams, getSetting("commerce")]);
+export default async function PanierPage({ params, searchParams }: { params: Promise<{ site: string }>; searchParams: Promise<{ annule?: string }> }) {
+  const site = await siteFromParams(params);
+  const [{ annule }, commerce] = await Promise.all([searchParams, getSetting("commerce", site)]);
   return (
     <div className="container-shell py-8 sm:py-12">
       <Breadcrumbs items={[{ label: "Panier" }]} className="mb-6" />

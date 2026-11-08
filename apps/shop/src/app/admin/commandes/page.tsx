@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input, NativeSelect } from "@/components/ui/input";
 import { formatDateTime, formatPrice } from "@/lib/utils";
 import { buildOrderWhere, ORDER_STATUSES as STATUSES } from "@/lib/admin/orders-query";
+import { adminSiteWhere } from "@/lib/sites";
 
 export const metadata = { title: "Commandes" };
 export const dynamic = "force-dynamic";
@@ -17,7 +18,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
   const sp = await searchParams;
   const page = Math.max(1, Number(sp.page) || 1);
   const perPage = 25;
-  const where = buildOrderWhere(sp);
+  const where = { ...buildOrderWhere(sp), ...(await adminSiteWhere()) };
   const [orders, total] = await Promise.all([
     prisma.order.findMany({ where, orderBy: { createdAt: "desc" }, skip: (page - 1) * perPage, take: perPage, include: { _count: { select: { items: true } } } }),
     prisma.order.count({ where }),

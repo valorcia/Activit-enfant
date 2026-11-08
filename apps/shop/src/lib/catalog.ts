@@ -32,9 +32,9 @@ export function cardPrice(p: ProductCardData) {
 const publishedWhere: Prisma.ProductWhereInput = { status: "PUBLISHED" };
 
 export const getCategories = unstable_cache(
-  async () =>
+  async (siteId: string) =>
     prisma.category.findMany({
-      where: { isVisible: true },
+      where: { siteId, isVisible: true },
       orderBy: { position: "asc" },
       include: { _count: { select: { products: { where: publishedWhere } } } },
     }),
@@ -43,41 +43,41 @@ export const getCategories = unstable_cache(
 );
 
 export const getCollections = unstable_cache(
-  async () => prisma.collection.findMany({ where: { isVisible: true }, orderBy: { position: "asc" } }),
+  async (siteId: string) => prisma.collection.findMany({ where: { siteId, isVisible: true }, orderBy: { position: "asc" } }),
   ["collections"],
   { tags: [CATALOG_TAG], revalidate: 600 },
 );
 
 export const getBestsellers = unstable_cache(
-  async (limit = 8) =>
-    prisma.product.findMany({ where: publishedWhere, orderBy: [{ salesCount: "desc" }, { publishedAt: "desc" }], take: limit, select: productCardSelect }),
+  async (siteId: string, limit = 8) =>
+    prisma.product.findMany({ where: { ...publishedWhere, siteId }, orderBy: [{ salesCount: "desc" }, { publishedAt: "desc" }], take: limit, select: productCardSelect }),
   ["bestsellers"],
   { tags: [CATALOG_TAG], revalidate: 300 },
 );
 
 export const getNewProducts = unstable_cache(
-  async (limit = 8) =>
-    prisma.product.findMany({ where: publishedWhere, orderBy: { publishedAt: "desc" }, take: limit, select: productCardSelect }),
+  async (siteId: string, limit = 8) =>
+    prisma.product.findMany({ where: { ...publishedWhere, siteId }, orderBy: { publishedAt: "desc" }, take: limit, select: productCardSelect }),
   ["new-products"],
   { tags: [CATALOG_TAG], revalidate: 300 },
 );
 
 export const getFeaturedProducts = unstable_cache(
-  async (ids: string[], limit = 8) => {
+  async (siteId: string, ids: string[], limit = 8) => {
     if (ids.length) {
-      const rows = await prisma.product.findMany({ where: { ...publishedWhere, id: { in: ids } }, select: productCardSelect });
+      const rows = await prisma.product.findMany({ where: { ...publishedWhere, siteId, id: { in: ids } }, select: productCardSelect });
       return ids.map((id) => rows.find((r) => r.id === id)).filter(Boolean) as ProductCardData[];
     }
-    return prisma.product.findMany({ where: { ...publishedWhere, isFeatured: true }, orderBy: { salesCount: "desc" }, take: limit, select: productCardSelect });
+    return prisma.product.findMany({ where: { ...publishedWhere, siteId, isFeatured: true }, orderBy: { salesCount: "desc" }, take: limit, select: productCardSelect });
   },
   ["featured-products"],
   { tags: [CATALOG_TAG], revalidate: 300 },
 );
 
 export const getPublishedBundles = unstable_cache(
-  async (limit = 6) =>
+  async (siteId: string, limit = 6) =>
     prisma.bundle.findMany({
-      where: { status: "PUBLISHED" },
+      where: { siteId, status: "PUBLISHED" },
       orderBy: [{ isFeatured: "desc" }, { salesCount: "desc" }],
       take: limit,
       include: { items: { orderBy: { position: "asc" }, include: { product: { select: productCardSelect } } } },
@@ -94,9 +94,9 @@ export function bundleSavings(b: BundleWithItems) {
 }
 
 export const getBundleBySlug = unstable_cache(
-  async (slug: string) =>
+  async (siteId: string, slug: string) =>
     prisma.bundle.findFirst({
-      where: { slug, status: "PUBLISHED" },
+      where: { siteId, slug, status: "PUBLISHED" },
       include: { items: { orderBy: { position: "asc" }, include: { product: { select: productCardSelect } } } },
     }),
   ["bundle-by-slug"],
@@ -104,6 +104,7 @@ export const getBundleBySlug = unstable_cache(
 );
 
 export interface CatalogQuery {
+  siteId: string;
   q?: string;
   category?: string;      // slug
   collection?: string;    // slug
@@ -129,7 +130,7 @@ export const DURATION_BUCKETS: Record<string, { min?: number; max?: number; labe
 };
 
 export function buildCatalogWhere(q: CatalogQuery): Prisma.ProductWhereInput {
-  const where: Prisma.ProductWhereInput = { ...publishedWhere };
+  const where: Prisma.ProductWhereInput = { ...publishedWhere, siteId: q.siteId };
   if (q.q) {
     where.OR = [
       { name: { contains: q.q, mode: "insensitive" } },
@@ -178,8 +179,8 @@ export async function searchCatalog(q: CatalogQuery) {
 }
 
 export const getUniverses = unstable_cache(
-  async () => {
-    const rows = await prisma.product.findMany({ where: { ...publishedWhere, universe: { not: null } }, select: { universe: true }, distinct: ["universe"] });
+  async (siteId: string) => {
+    const rows = await prisma.product.findMany({ where: { ...publishedWhere, siteId, universe: { not: null } }, select: { universe: true }, distinct: ["universe"] });
     return rows.map((r) => r.universe as string).filter(Boolean).sort((a, b) => a.localeCompare(b, "fr"));
   },
   ["universes"],
@@ -189,6 +190,7 @@ export const getUniverses = unstable_cache(
 /** Fiche produit complète (landing page). Les fichiers payants ne sont jamais inclus. */
 export const productPageInclude = {
   category: true,
+  site: { select: { id: true, slug: true, name: true, primaryDomain: true, domains: true } },
   images: { orderBy: { position: "asc" } },
   files: { select: { id: true, name: true, kind: true, sizeBytes: true, position: true, description: true }, orderBy: { position: "asc" } },
   collections: { include: { collection: true } },
@@ -198,10 +200,10 @@ export const productPageInclude = {
 
 export type ProductPageData = Prisma.ProductGetPayload<{ include: typeof productPageInclude }>;
 
-export const getProductBySlug = (slug: string) =>
+export const getProductBySlug = (siteId: string, slug: string) =>
   unstable_cache(
-    async () => prisma.product.findFirst({ where: { slug, status: "PUBLISHED" }, include: productPageInclude }),
-    ["product", slug],
+    async () => prisma.product.findFirst({ where: { slug, siteId, status: "PUBLISHED" }, include: productPageInclude }),
+    ["product", siteId, slug],
     { tags: [CATALOG_TAG, productTag(slug)], revalidate: 300 },
   )();
 
@@ -213,6 +215,7 @@ export async function getRelatedProducts(product: ProductPageData, limit = 4): P
   const auto = await prisma.product.findMany({
     where: {
       ...publishedWhere,
+      siteId: product.siteId,
       id: { notIn: exclude },
       OR: [{ categoryId: product.categoryId ?? undefined }, { universe: product.universe ?? undefined }],
     },
@@ -227,16 +230,16 @@ export function parseKitContents(v: unknown): KitItem[] { return Array.isArray(v
 export function parseFaq(v: unknown): FaqItem[] { return Array.isArray(v) ? (v as FaqItem[]) : []; }
 export function parseSellingPoints(v: unknown): SellingPoint[] { return Array.isArray(v) ? (v as SellingPoint[]) : []; }
 
-export const getCategoryBySlug = (slug: string) =>
-  unstable_cache(async () => prisma.category.findFirst({ where: { slug, isVisible: true } }), ["category", slug], { tags: [CATALOG_TAG], revalidate: 600 })();
+export const getCategoryBySlug = (siteId: string, slug: string) =>
+  unstable_cache(async () => prisma.category.findFirst({ where: { siteId, slug, isVisible: true } }), ["category", siteId, slug], { tags: [CATALOG_TAG], revalidate: 600 })();
 
-export const getCollectionBySlug = (slug: string) =>
-  unstable_cache(async () => prisma.collection.findFirst({ where: { slug, isVisible: true } }), ["collection", slug], { tags: [CATALOG_TAG], revalidate: 600 })();
+export const getCollectionBySlug = (siteId: string, slug: string) =>
+  unstable_cache(async () => prisma.collection.findFirst({ where: { siteId, slug, isVisible: true } }), ["collection", siteId, slug], { tags: [CATALOG_TAG], revalidate: 600 })();
 
 export const getApprovedReviews = unstable_cache(
-  async (limit = 6) =>
+  async (siteId: string, limit = 6) =>
     prisma.review.findMany({
-      where: { status: "APPROVED" },
+      where: { status: "APPROVED", product: { siteId } },
       orderBy: { createdAt: "desc" },
       take: limit,
       select: { id: true, authorName: true, rating: true, title: true, body: true, createdAt: true, isVerifiedPurchase: true, product: { select: { name: true, slug: true } } },

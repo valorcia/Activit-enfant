@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Image from "next/image";
 import { prisma } from "@/lib/db";
-import { env } from "@/lib/env";
+import { siteFromParams, siteUrl, getSites } from "@/lib/sites";
 import { getCategories, getCategoryBySlug } from "@/lib/catalog";
 import { Icon } from "@/components/ui/icon";
 import { Breadcrumbs } from "@/components/storefront/breadcrumbs";
@@ -11,38 +11,42 @@ import { JsonLd } from "@/components/storefront/json-ld";
 
 export const revalidate = 300;
 
-export async function generateStaticParams() {
-  const cats = await prisma.category.findMany({ where: { isVisible: true }, select: { slug: true } });
+export async function generateStaticParams({ params }: { params: { site: string } }) {
+  const site = (await getSites()).find((s) => s.slug === params.site);
+  if (!site) return [];
+  const cats = await prisma.category.findMany({ where: { siteId: site.id, isVisible: true }, select: { slug: true } });
   return cats.map((c) => ({ slug: c.slug }));
 }
 
-export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+export async function generateMetadata({ params }: { params: Promise<{ site: string; slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
-  const cat = await getCategoryBySlug(slug);
+  const site = await siteFromParams(params);
+  const cat = await getCategoryBySlug(site.id, slug);
   if (!cat) return {};
   return {
     title: cat.seoTitle ?? `${cat.name} à imprimer`,
     description: cat.seoDescription ?? cat.description ?? undefined,
-    alternates: { canonical: `${env.appUrl}/categories/${cat.slug}` },
+    alternates: { canonical: `/categories/${cat.slug}` },
     openGraph: { title: cat.seoTitle ?? cat.name, description: cat.seoDescription ?? cat.description ?? undefined, images: cat.illustrationUrl ? [cat.illustrationUrl] : undefined },
   };
 }
 
-export default async function CategoryPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<CatalogSearchParams> }) {
+export default async function CategoryPage({ params, searchParams }: { params: Promise<{ site: string; slug: string }>; searchParams: Promise<CatalogSearchParams> }) {
   const [{ slug }, sp] = await Promise.all([params, searchParams]);
-  const cat = await getCategoryBySlug(slug);
+  const site = await siteFromParams(params);
+  const cat = await getCategoryBySlug(site.id, slug);
   if (!cat) notFound();
-  const siblings = (await getCategories()).filter((c) => c.slug !== cat.slug);
+  const siblings = (await getCategories(site.id)).filter((c) => c.slug !== cat.slug);
   const tint = cat.color ?? "var(--brand-coral)";
 
   return (
     <div>
-      <JsonLd data={{ "@context": "https://schema.org", "@type": "CollectionPage", name: cat.name, description: cat.description ?? undefined, url: `${env.appUrl}/categories/${cat.slug}` }} />
+      <JsonLd data={{ "@context": "https://schema.org", "@type": "CollectionPage", name: cat.name, description: cat.description ?? undefined, url: `${siteUrl(site)}/categories/${cat.slug}` }} />
       <section className="relative overflow-hidden" style={{ background: `color-mix(in oklab, ${tint} 22%, white)` }}>
         <div className="pointer-events-none absolute -right-16 -top-16 size-72 rounded-full opacity-40 blur-3xl" style={{ background: tint }} aria-hidden />
         <div className="container-shell grid items-center gap-8 py-10 sm:py-14 lg:grid-cols-[1.3fr_1fr]">
           <div>
-            <Breadcrumbs items={[{ label: "Boutique", href: "/boutique" }, { label: cat.name }]} className="mb-4" />
+            <Breadcrumbs baseUrl={siteUrl(site)} items={[{ label: "Boutique", href: "/boutique" }, { label: cat.name }]} className="mb-4" />
             <div className="flex items-center gap-4">
               <span className="grid size-14 shrink-0 place-items-center rounded-2xl text-white shadow-soft rotate-[-4deg]" style={{ background: tint }}><Icon name={cat.icon ?? "sparkles"} className="size-7" /></span>
               <h1 className="font-heading text-4xl font-bold leading-tight sm:text-5xl">{cat.name}</h1>
@@ -64,7 +68,7 @@ export default async function CategoryPage({ params, searchParams }: { params: P
         </div>
       </section>
       <div className="container-shell py-8 sm:py-12">
-        <CatalogView searchParams={sp} basePath={`/categories/${cat.slug}`} fixed={{ category: cat.slug }} hideCategory />
+        <CatalogView siteId={site.id} searchParams={sp} basePath={`/categories/${cat.slug}`} fixed={{ category: cat.slug }} hideCategory />
       </div>
     </div>
   );

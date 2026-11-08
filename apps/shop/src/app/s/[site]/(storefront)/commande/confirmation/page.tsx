@@ -48,7 +48,7 @@ export default async function ConfirmationPage({ searchParams }: { searchParams:
         <Alert variant="info" className="mb-6">Conservez ce lien pour retrouver vos fichiers à tout moment : <Link href={accessPath} className="font-bold underline">page de ma commande</Link>. Vous pourrez aussi recevoir un nouveau lien depuis « Retrouver mes achats ».</Alert>
       )}
       <OrderSummary order={order} invoiceHref={paid ? `${accessPath}/facture` : undefined} />
-      {paid && <PostPurchase purchasedProductIds={order.entitlements.map((e) => e.productId)} email={order.email} />}
+      {paid && <PostPurchase siteId={order.siteId} purchasedProductIds={order.entitlements.map((e) => e.productId)} email={order.email} />}
     </div>
   );
 }

@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { env } from "@/lib/env";
 import { apiError, apiOk, authenticateApiKey } from "@/lib/api/auth";
 import { attachImageFromUrl } from "@/lib/api/media";
-import { apiProductSelect, resolveCategoryAndCollections, serializeProduct } from "@/lib/api/products";
+import { apiProductSelect, resolveApiSite, resolveCategoryAndCollections, serializeProduct, UnknownSiteError } from "@/lib/api/products";
 import { createProduct } from "@/lib/products/service";
 import { productApiInputSchema } from "@/lib/schemas/product";
 import { audit } from "@/lib/audit";
@@ -21,7 +21,9 @@ export async function GET(req: Request) {
   const status = url.searchParams.get("status"); // DRAFT | SCHEDULED | PUBLISHED | ARCHIVED | all (défaut : tous)
   const slug = url.searchParams.get("slug");
   const source = url.searchParams.get("source");
+  const siteSlug = url.searchParams.get("site");
   const where = {
+    ...(siteSlug ? { site: { slug: siteSlug } } : {}),
     ...(status && ["DRAFT", "SCHEDULED", "PUBLISHED", "ARCHIVED"].includes(status) ? { status: status as "DRAFT" } : {}),
     ...(slug ? { slug } : {}),
     ...(source ? { source } : {}),
@@ -41,10 +43,11 @@ export async function POST(req: Request) {
   try { body = await req.json(); } catch { return apiError(400, "Corps JSON invalide"); }
   try {
     const parsed = productApiInputSchema.parse(body);
-    const { images, categorySlug, collectionSlugs, ...rest } = parsed;
-    const { categoryId, collectionIds } = await resolveCategoryAndCollections({ categorySlug, categoryId: rest.categoryId, collectionSlugs, collectionIds: rest.collectionIds });
+    const { images, categorySlug, collectionSlugs, siteSlug, ...rest } = parsed;
+    const site = await resolveApiSite(siteSlug);
+    const { categoryId, collectionIds } = await resolveCategoryAndCollections({ siteId: site.id, categorySlug, categoryId: rest.categoryId, collectionSlugs, collectionIds: rest.collectionIds });
     // L'API crée toujours un brouillon : la publication passe par /publish ou par un humain.
-    const product = await createProduct({ ...rest, categoryId, collectionIds, status: "DRAFT", scheduledAt: undefined }, { actor: `api:${auth.key.prefix}`, source: "api" });
+    const product = await createProduct({ ...rest, siteId: site.id, categoryId, collectionIds, status: "DRAFT", scheduledAt: undefined }, { actor: `api:${auth.key.prefix}`, source: "api" });
     const imageErrors: string[] = [];
     for (const img of images) {
       try { await attachImageFromUrl(product.id, img.url, { role: img.role, alt: img.alt }); } catch (e) { imageErrors.push(`${img.url} : ${e instanceof Error ? e.message : "erreur"}`); }
@@ -53,6 +56,7 @@ export async function POST(req: Request) {
     const full = await prisma.product.findUniqueOrThrow({ where: { id: product.id }, select: apiProductSelect });
     return apiOk(serializeProduct(full, env.appUrl), 201, imageErrors.length ? { warnings: imageErrors } : {});
   } catch (e) {
+    if (e instanceof UnknownSiteError) return apiError(422, e.message);
     if (e instanceof ZodError) return apiError(422, "Données invalides", e.issues.map((i) => ({ path: i.path.join("."), message: i.message })));
     return apiError(400, e instanceof Error ? e.message : "Erreur");
   }

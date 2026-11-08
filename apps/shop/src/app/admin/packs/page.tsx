@@ -7,13 +7,14 @@ import { AdminPageHeader, StatusPill } from "@/components/admin/page-header";
 import { DataTable } from "@/components/admin/data-table";
 import { formatPrice } from "@/lib/utils";
 import { effectivePrice } from "@/lib/pricing";
+import { adminSiteWhere } from "@/lib/sites";
 
 export const metadata = { title: "Packs" };
 export const dynamic = "force-dynamic";
 
 export default async function BundlesPage() {
   await requirePermission("products:read");
-  const bundles = await prisma.bundle.findMany({ orderBy: { updatedAt: "desc" }, include: { items: { include: { product: { select: { name: true, priceCents: true, salePriceCents: true, saleStartsAt: true, saleEndsAt: true } } } } } });
+  const bundles = await prisma.bundle.findMany({ where: await adminSiteWhere(), orderBy: { updatedAt: "desc" }, include: { items: { include: { product: { select: { name: true, priceCents: true, salePriceCents: true, saleStartsAt: true, saleEndsAt: true } } } } } });
   return (
     <div>
       <AdminPageHeader title="Packs et offres groupées" description="Sélectionnez plusieurs produits et définissez un prix groupé. Le client reçoit tous les fichiers inclus."

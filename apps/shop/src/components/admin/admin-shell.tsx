@@ -1,8 +1,10 @@
 "use client";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useState } from "react";
-import { Megaphone, BarChart3, BookOpen, Boxes, FileText, Gift, Home, Import, KeyRound, LayoutGrid, LogOut, Mail, Menu, MessageSquareQuote, Package, Palette, Settings, ShoppingCart, Tags, TicketPercent, Users, X, ExternalLink } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
+import { toast } from "sonner";
+import { Megaphone, BarChart3, BookOpen, Boxes, FileText, Gift, Home, Import, KeyRound, LayoutGrid, LogOut, Mail, Menu, MessageSquareQuote, Package, Palette, Settings, ShoppingCart, Tags, TicketPercent, Users, X, ExternalLink, Globe2 } from "lucide-react";
+import { setAdminSiteAction } from "@/app/actions/admin/sites";
 import { signOutAction } from "@/app/actions/auth";
 import { roleCan, type Permission, ROLE_LABELS } from "@/lib/auth/permissions";
 import type { AdminUser } from "@/lib/auth/session";
@@ -31,6 +33,7 @@ const NAV: Array<{ title: string; items: NavItem[] }> = [
     { href: "/admin/blog", label: "Blog", icon: BookOpen, permission: "blog:write" },
   ] },
   { title: "Site", items: [
+    { href: "/admin/univers", label: "Univers & domaines", icon: Globe2, permission: "settings:write" },
     { href: "/admin/apparence", label: "Apparence", icon: Palette, permission: "appearance:write" },
     { href: "/admin/pages", label: "Pages", icon: FileText, permission: "pages:write" },
     { href: "/admin/parametres", label: "Paramètres", icon: Settings, permission: "settings:write" },
@@ -39,9 +42,32 @@ const NAV: Array<{ title: string; items: NavItem[] }> = [
   ] },
 ];
 
-export function AdminShell({ user, brandName, children }: { user: AdminUser; brandName: string; children: React.ReactNode }) {
+export interface AdminSiteOption { slug: string; name: string; status: string; url: string }
+
+/** Sélecteur d'univers : filtre les listes et cible les réglages (cookie admin_site). */
+function SiteSwitcher({ sites, current }: { sites: AdminSiteOption[]; current: string }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  return (
+    <label className="block px-5 pb-3">
+      <span className="text-[11px] font-bold uppercase tracking-wider text-ink-muted">Univers</span>
+      <select
+        className="mt-1 w-full rounded-xl border border-line bg-white px-3 py-2 text-sm font-semibold disabled:opacity-60"
+        value={current}
+        disabled={pending}
+        onChange={(e) => { const v = e.target.value; start(async () => { const r = await setAdminSiteAction(v); if (!r.ok) toast.error(r.error); router.refresh(); }); }}
+      >
+        <option value="all">Tous les univers</option>
+        {sites.map((s) => <option key={s.slug} value={s.slug}>{s.name}{s.status === "TEST" ? " (test)" : s.status === "ARCHIVED" ? " (archivé)" : ""}</option>)}
+      </select>
+    </label>
+  );
+}
+
+export function AdminShell({ user, brandName, sites = [], currentSite = "all", children }: { user: AdminUser; brandName: string; sites?: AdminSiteOption[]; currentSite?: string; children: React.ReactNode }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const viewUrl = sites.find((s) => s.slug === currentSite)?.url ?? "/";
   const isActive = (href: string) => (href === "/admin" ? pathname === "/admin" : pathname.startsWith(href));
 
   const sidebar = (
@@ -53,6 +79,7 @@ export function AdminShell({ user, brandName, children }: { user: AdminUser; bra
         </Link>
         <button className="lg:hidden rounded-full p-1.5 hover:bg-ink/5" onClick={() => setOpen(false)} aria-label="Fermer le menu"><X className="size-5" /></button>
       </div>
+      {sites.length > 0 && <SiteSwitcher sites={sites} current={currentSite} />}
       <nav className="flex-1 overflow-y-auto px-3 pb-4" aria-label="Administration">
         {NAV.map((group) => {
           const items = group.items.filter((i) => roleCan(user.role, i.permission));
@@ -77,7 +104,7 @@ export function AdminShell({ user, brandName, children }: { user: AdminUser; bra
         <p className="truncate text-sm font-bold">{user.name ?? user.email}</p>
         <p className="text-xs text-ink-muted">{ROLE_LABELS[user.role]}</p>
         <div className="mt-3 flex gap-2">
-          <Link href="/" target="_blank" className="inline-flex items-center gap-1 rounded-full bg-ink/5 px-3 py-1.5 text-xs font-bold hover:bg-ink/10"><ExternalLink className="size-3.5" /> Voir le site</Link>
+          <Link href={viewUrl} target="_blank" className="inline-flex items-center gap-1 rounded-full bg-ink/5 px-3 py-1.5 text-xs font-bold hover:bg-ink/10"><ExternalLink className="size-3.5" /> Voir le site</Link>
           <form action={signOutAction}><button className="inline-flex items-center gap-1 rounded-full bg-ink/5 px-3 py-1.5 text-xs font-bold hover:bg-red-50 hover:text-red-700"><LogOut className="size-3.5" /> Déconnexion</button></form>
         </div>
       </div>

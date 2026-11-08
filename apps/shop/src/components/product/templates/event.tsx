@@ -19,7 +19,7 @@ export function EventTemplate({ product }: { product: ProductPageData }) {
       <TemplateHead product={product} />
       <WhatYouGet product={product} />
       <KitContents product={product} />
-      <GuaranteeBlock />
+      <GuaranteeBlock siteId={product.siteId} />
       <TemplateGallery product={product} />
       <ProductStory product={product} />
       <PracticalInfo product={product} />

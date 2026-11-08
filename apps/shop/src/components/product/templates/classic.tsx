@@ -22,7 +22,7 @@ export function ClassicTemplate({ product }: { product: ProductPageData }) {
       <LongDescription product={product} />
       <ProductStory product={product} />
       <KitContents product={product} />
-      <GuaranteeBlock />
+      <GuaranteeBlock siteId={product.siteId} />
       <PracticalInfo product={product} />
       <SellingPoints product={product} />
       <OfferRecap product={product} />

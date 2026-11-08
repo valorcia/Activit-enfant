@@ -7,13 +7,14 @@ import { DataTable } from "@/components/admin/data-table";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/misc";
 import { formatDateTime } from "@/lib/utils";
+import { adminSiteWhere } from "@/lib/sites";
 
 export const metadata = { title: "Pages" };
 export const dynamic = "force-dynamic";
 
 export default async function PagesAdminPage() {
   await requirePermission("pages:write");
-  const pages = await prisma.staticPage.findMany({ orderBy: { position: "asc" } });
+  const pages = await prisma.staticPage.findMany({ where: await adminSiteWhere(), orderBy: { position: "asc" } });
   const legalDrafts = pages.filter((p) => p.status !== "PUBLISHED" && ["mentions-legales", "cgv", "confidentialite", "cookies", "retractation"].includes(p.slug));
   return (
     <div>

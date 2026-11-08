@@ -20,7 +20,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
   if (!customer) notFound();
   const [consents, subscriber, reviews] = await Promise.all([
     prisma.marketingConsent.findMany({ where: { email: customer.email }, orderBy: { createdAt: "desc" }, take: 30 }),
-    prisma.newsletterSubscriber.findUnique({ where: { email: customer.email } }),
+    prisma.newsletterSubscriber.findFirst({ where: { email: customer.email }, orderBy: { updatedAt: "desc" } }),
     prisma.review.findMany({ where: { email: customer.email }, include: { product: { select: { name: true } } }, orderBy: { createdAt: "desc" } }),
   ]);
   return (

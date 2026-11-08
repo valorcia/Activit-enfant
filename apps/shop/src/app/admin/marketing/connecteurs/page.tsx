@@ -15,18 +15,20 @@ export default async function ConnectorsPage({ searchParams }: { searchParams: P
   await requirePermission("marketing:write");
   const sp = await searchParams;
   const tokens = await getSecrets(["meta.capiToken", "tiktok.eventsToken"]);
-  const [accounts, analytics] = await Promise.all([
+  const [audiences, accounts, analytics] = await Promise.all([
+    prisma.audience.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
     prisma.socialAccount.findMany({ where: { isActive: true }, orderBy: [{ provider: "asc" }, { kind: "asc" }, { name: "asc" }] }),
     getSetting("analytics"),
   ]);
   return (
     <div>
-      <AdminPageHeader title="Connecteurs sociaux" description="Autorisez l'application à publier sur vos comptes et à lire les dépenses publicitaires. Les jetons sont chiffrés en base." />
+      <AdminPageHeader title="Connecteurs sociaux" description="Autorisez l'application à publier sur vos comptes et à lire les dépenses publicitaires. Rattachez chaque page ou compte à une audience : l'autopilote publie un produit sur les comptes de l'audience de son univers (puis sur les comptes communs). Les jetons sont chiffrés en base." />
       <MarketingNav />
       {sp.connecte && <Alert variant="success" className="mb-4">Connexion {sp.connecte} réussie : {sp.comptes ?? 0} compte(s) détecté(s).</Alert>}
       {sp.erreur && <Alert variant="danger" className="mb-4">{sp.erreur === "non-configure" ? "Application non configurée : renseignez l'identifiant et la clé secrète de l'application dans Paramètres → Intégrations." : `Connexion refusée : ${sp.erreur}`}</Alert>}
       <SocialConnectors
-        accounts={accounts.map((a) => ({ id: a.id, provider: a.provider, kind: a.kind, name: a.name, username: a.username, avatarUrl: a.avatarUrl, needsReconnect: a.needsReconnect, tokenExpiresAt: a.tokenExpiresAt?.toISOString() ?? null, parentId: a.parentId }))}
+        accounts={accounts.map((a) => ({ id: a.id, provider: a.provider, kind: a.kind, name: a.name, username: a.username, avatarUrl: a.avatarUrl, needsReconnect: a.needsReconnect, tokenExpiresAt: a.tokenExpiresAt?.toISOString() ?? null, parentId: a.parentId, audienceId: a.audienceId }))}
+        audiences={audiences}
         configured={{ META: await connectors.META.isConfigured(), TIKTOK: await connectors.TIKTOK.isConfigured() }}
         conversions={{ meta: Boolean(analytics.metaPixelId && (tokens["meta.capiToken"] || analytics.metaCapiToken)), tiktok: Boolean(analytics.tiktokPixelId && (tokens["tiktok.eventsToken"] || analytics.tiktokEventsToken)) }}
       />

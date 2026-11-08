@@ -9,18 +9,22 @@ import { JsonLd } from "@/components/storefront/json-ld";
 import { Markdown } from "@/components/markdown";
 import { ProductGrid } from "@/components/storefront/product-card";
 import { SectionHeading } from "@/components/storefront/section-heading";
-import { absoluteUrl, formatDate, stripMarkdown, truncate } from "@/lib/utils";
+import { formatDate, stripMarkdown, truncate } from "@/lib/utils";
+import { siteFromParams, siteUrl, getSites } from "@/lib/sites";
 
 export const revalidate = 300;
 
-export async function generateStaticParams() {
-  const posts = await prisma.blogPost.findMany({ where: { status: "PUBLISHED" }, select: { slug: true }, take: 200 });
+export async function generateStaticParams({ params }: { params: { site: string } }) {
+  const site = (await getSites()).find((s) => s.slug === params.site);
+  if (!site) return [];
+  const posts = await prisma.blogPost.findMany({ where: { siteId: site.id, status: "PUBLISHED" }, select: { slug: true }, take: 200 });
   return posts.map((p) => ({ slug: p.slug }));
 }
 
-export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+export async function generateMetadata({ params }: { params: Promise<{ site: string; slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
-  const data = await getBlogPostBySlug(slug);
+  const site = await siteFromParams(params);
+  const data = await getBlogPostBySlug(site.id, slug);
   if (!data) return { title: "Article introuvable" };
   const { post } = data;
   const description = post.seoDescription ?? post.excerpt ?? truncate(stripMarkdown(post.content), 160);
@@ -32,12 +36,15 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   };
 }
 
-export default async function BlogPostPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function BlogPostPage({ params }: { params: Promise<{ site: string; slug: string }> }) {
   const { slug } = await params;
-  const data = await getBlogPostBySlug(slug);
+  const site = await siteFromParams(params);
+  const base = siteUrl(site);
+  const absoluteUrl = (p: string) => (p.startsWith("http") ? p : `${base}${p}`);
+  const data = await getBlogPostBySlug(site.id, slug);
   if (!data) notFound();
   const { post, related } = data;
-  const brand = await getSetting("brand");
+  const brand = await getSetting("brand", site);
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "BlogPosting",

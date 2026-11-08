@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import { prisma as defaultPrisma } from "@/lib/db";
 import { readUtm } from "./attribution";
 
@@ -60,14 +60,25 @@ export interface ProductRoiRow extends RoiResult {
   bySource: Record<string, { orders: number; revenueHtCents: number }>;
 }
 
-export async function productRoi(period: Period, db: PrismaClient = defaultPrisma): Promise<ProductRoiRow[]> {
+/** Périmètre de rentabilité : un univers et/ou une audience (vide = toute la plateforme). */
+export interface RoiScope { siteId?: string | null; audienceId?: string | null }
+
+function siteScope(scope: RoiScope = {}): Prisma.SiteWhereInput | undefined {
+  const where: Prisma.SiteWhereInput = {};
+  if (scope.siteId) where.id = scope.siteId;
+  if (scope.audienceId) where.audienceId = scope.audienceId;
+  return Object.keys(where).length ? where : undefined;
+}
+
+export async function productRoi(period: Period, db: PrismaClient = defaultPrisma, scope: RoiScope = {}): Promise<ProductRoiRow[]> {
+  const site = siteScope(scope);
   const [products, orders, spends] = await Promise.all([
-    db.product.findMany({ select: { id: true, name: true, slug: true, creationCostCents: true }, orderBy: { name: "asc" } }),
+    db.product.findMany({ where: site ? { site } : undefined, select: { id: true, name: true, slug: true, creationCostCents: true }, orderBy: { name: "asc" } }),
     db.order.findMany({
-      where: { status: { in: ["PAID", "PARTIALLY_REFUNDED"] }, paidAt: { gte: period.from, lte: period.to } },
+      where: { status: { in: ["PAID", "PARTIALLY_REFUNDED"] }, paidAt: { gte: period.from, lte: period.to }, ...(site ? { site } : {}) },
       select: { totalCents: true, refundedCents: true, utm: true, items: { select: { productId: true, totalCents: true, taxRateBp: true, bundle: { select: { items: { select: { productId: true } } } } } } },
     }),
-    db.adSpend.findMany({ where: { date: { gte: period.from, lte: period.to } }, select: { spendCents: true, campaign: { select: { productId: true } } } }),
+    db.adSpend.findMany({ where: { date: { gte: period.from, lte: period.to }, ...(site ? { campaign: { site } } : {}) }, select: { spendCents: true, campaign: { select: { productId: true } } } }),
   ]);
   const acc = new Map<string, { ttc: number; ht: number; orders: Set<number>; bySource: Record<string, { orders: number; revenueHtCents: number }> }>();
   const get = (id: string) => acc.get(id) ?? acc.set(id, { ttc: 0, ht: 0, orders: new Set(), bySource: {} }).get(id)!;
@@ -111,8 +122,9 @@ export interface CampaignRoiRow extends RoiResult {
   impressions: number;
 }
 
-export async function campaignRoi(period: Period, db: PrismaClient = defaultPrisma, campaignId?: string): Promise<CampaignRoiRow[]> {
-  const campaigns = await db.campaign.findMany({ where: campaignId ? { id: campaignId } : undefined, include: { product: { select: { name: true } }, spends: { where: { date: { gte: period.from, lte: period.to } } } }, orderBy: { createdAt: "desc" } });
+export async function campaignRoi(period: Period, db: PrismaClient = defaultPrisma, campaignId?: string, scope: RoiScope = {}): Promise<CampaignRoiRow[]> {
+  const site = siteScope(scope);
+  const campaigns = await db.campaign.findMany({ where: { ...(campaignId ? { id: campaignId } : {}), ...(site ? { site } : {}) }, include: { product: { select: { name: true } }, spends: { where: { date: { gte: period.from, lte: period.to } } } }, orderBy: { createdAt: "desc" } });
   if (!campaigns.length) return [];
   const orders = await db.order.findMany({
     where: { status: { in: ["PAID", "PARTIALLY_REFUNDED"] }, paidAt: { gte: period.from, lte: period.to }, utm: { path: ["utm_campaign"], string_contains: "" } },

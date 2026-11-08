@@ -6,13 +6,15 @@ import { MarketingNav } from "@/components/admin/ops-marketing-nav";
 import { Button } from "@/components/ui/button";
 import { campaignRoi, periodFromKey } from "@/lib/social/roi";
 import { formatPrice } from "@/lib/utils";
+import { getAdminSite } from "@/lib/sites";
 
 export const metadata = { title: "Campagnes" };
 export const dynamic = "force-dynamic";
 
 export default async function CampaignsPage() {
   await requirePermission("marketing:write");
-  const rows = await campaignRoi(periodFromKey("tout"));
+  const site = await getAdminSite();
+  const rows = await campaignRoi(periodFromKey("tout"), undefined, undefined, { siteId: site?.id ?? null });
   return (
     <div>
       <AdminPageHeader title="Campagnes" description="Une campagne = un lien tracé (UTM) vers un e-book, ses posts et ses dépenses. Les ventes sont attribuées au premier contact."

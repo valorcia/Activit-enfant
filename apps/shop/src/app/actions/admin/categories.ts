@@ -7,15 +7,16 @@ import { revalidateCatalog } from "@/lib/catalog";
 import { handleActionError, succeed, fail, type ActionResult } from "@/lib/admin/action-result";
 import { slugify } from "@/lib/utils";
 import { categorySchema, collectionSchema } from "@/lib/schemas/catalog";
+import { adminDefaultSiteId } from "@/lib/sites";
 
 
-async function uniqueSlug(table: "category" | "collection", base: string, excludeId?: string) {
+async function uniqueSlug(table: "category" | "collection", base: string, siteId: string, excludeId?: string) {
   const root = slugify(base) || table;
   let slug = root;
   for (let i = 2; i < 200; i++) {
     const existing = table === "category"
-      ? await prisma.category.findUnique({ where: { slug }, select: { id: true } })
-      : await prisma.collection.findUnique({ where: { slug }, select: { id: true } });
+      ? await prisma.category.findFirst({ where: { siteId, slug }, select: { id: true } })
+      : await prisma.collection.findFirst({ where: { siteId, slug }, select: { id: true } });
     if (!existing || existing.id === excludeId) return slug;
     slug = `${root}-${i}`;
   }
@@ -33,8 +34,9 @@ export async function saveCategoryAction(id: string | null, raw: unknown): Promi
     const user = await assertPermission("catalog:write");
     const input = categorySchema.parse(raw);
     if (id && input.parentId === id) return fail("Une catégorie ne peut pas être sa propre parente");
-    const slug = await uniqueSlug("category", input.slug || input.name, id ?? undefined);
-    const data = { ...input, slug, parentId: input.parentId ?? null };
+    const siteId = id ? (await prisma.category.findUniqueOrThrow({ where: { id }, select: { siteId: true } })).siteId : await adminDefaultSiteId();
+    const slug = await uniqueSlug("category", input.slug || input.name, siteId, id ?? undefined);
+    const data = { ...input, slug, siteId, parentId: input.parentId ?? null };
     const row = id ? await prisma.category.update({ where: { id }, data }) : await prisma.category.create({ data });
     await audit({ userId: user.id, action: id ? "category.update" : "category.create", entity: "category", entityId: row.id });
     revalidate();
@@ -68,8 +70,9 @@ export async function saveCollectionAction(id: string | null, raw: unknown): Pro
   try {
     const user = await assertPermission("catalog:write");
     const input = collectionSchema.parse(raw);
-    const slug = await uniqueSlug("collection", input.slug || input.name, id ?? undefined);
-    const data = { ...input, slug };
+    const siteId = id ? (await prisma.collection.findUniqueOrThrow({ where: { id }, select: { siteId: true } })).siteId : await adminDefaultSiteId();
+    const slug = await uniqueSlug("collection", input.slug || input.name, siteId, id ?? undefined);
+    const data = { ...input, slug, siteId };
     const row = id ? await prisma.collection.update({ where: { id }, data }) : await prisma.collection.create({ data });
     await audit({ userId: user.id, action: id ? "collection.update" : "collection.create", entity: "collection", entityId: row.id });
     revalidate();

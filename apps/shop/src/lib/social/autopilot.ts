@@ -10,6 +10,7 @@ import { buildCopywriterPrompt, copywriterOutputSchema, type Channel, type PostV
 import { generateWithClaude, isClaudeConfigured } from "./copywriter-claude";
 import { buildProductBrief, productLandingBase } from "./brief";
 import { campaignRoi, periodFromKey } from "./roi";
+import { accountsForAudience } from "./accounts";
 
 /**
  * Autopilote marketing : crée en un appel la campagne tracée et les publications
@@ -118,7 +119,7 @@ export async function runAutopilot(productIdOrSlug: string, rawInput: unknown, c
 
   const product = await db.product.findFirst({
     where: { OR: [{ id: productIdOrSlug }, { slug: productIdOrSlug }] },
-    include: { images: { where: { role: "VIDEO" }, select: { url: true, alt: true, width: true, height: true, createdAt: true } } },
+    include: { images: { where: { role: "VIDEO" }, select: { url: true, alt: true, width: true, height: true, createdAt: true } }, site: { select: { audienceId: true, primaryDomain: true, domains: true } } },
   });
   if (!product) return { ok: false, status: 404, error: "Produit introuvable" };
   const isPublished = product.status === "PUBLISHED";
@@ -127,7 +128,7 @@ export async function runAutopilot(productIdOrSlug: string, rawInput: unknown, c
   const name = input.campaign.name?.trim() || `Lancement ${product.name}`;
   let slug = slugifyUtm(name);
   if (await db.campaign.findUnique({ where: { slug } })) slug = `${slug}-${now.getTime().toString(36).slice(-5)}`;
-  const base = productLandingBase(product.slug);
+  const base = productLandingBase(product.slug, product.site);
   const primary = input.channels[0];
   const utmMedium = "paid";
   const landingUrl = withUtm(base, { utm_source: primary, utm_medium: utmMedium, utm_campaign: slug });
@@ -152,7 +153,8 @@ export async function runAutopilot(productIdOrSlug: string, rawInput: unknown, c
   if (!selected.length) return { ok: false, status: 422, error: "Aucune variante ne correspond aux canaux demandés", details: { channels: input.channels, schema: COPY_SCHEMA_HELP } };
 
   const videos = pickVideos(input.videoUrls, product.images);
-  const accounts = await db.socialAccount.findMany({ where: { isActive: true, needsReconnect: false, kind: { in: input.channels.map((c) => ACCOUNT_KIND[c]) } }, orderBy: { createdAt: "asc" } });
+  // Comptes de l'audience de l'univers du produit (puis comptes communs)
+  const accounts = accountsForAudience(await db.socialAccount.findMany({ where: { isActive: true, needsReconnect: false, kind: { in: input.channels.map((c) => ACCOUNT_KIND[c]) } }, orderBy: { createdAt: "asc" } }), product.site.audienceId);
   const accountFor = (c: AutopilotChannel) => accounts.find((a) => a.kind === ACCOUNT_KIND[c] && a.provider === PROVIDER[c]) ?? null;
   const autoSchedule = input.schedule.mode === "auto" && isPublished;
   const firstAt = input.schedule.startAt ?? new Date(now.getTime() + 3600_000);
@@ -161,7 +163,7 @@ export async function runAutopilot(productIdOrSlug: string, rawInput: unknown, c
   const result = await db.$transaction(async (tx) => {
     const campaign = await tx.campaign.create({
       data: {
-        name, slug, productId: product.id, objective: input.campaign.objective ?? "conversions", channel: campaignChannelFor(input.channels),
+        name, slug, productId: product.id, siteId: product.siteId, objective: input.campaign.objective ?? "conversions", channel: campaignChannelFor(input.channels),
         status: autoSchedule ? "ACTIVE" : "DRAFT", startsAt: input.campaign.startsAt ?? (autoSchedule ? firstAt : null), dailyBudgetCents: input.campaign.dailyBudgetCents ?? null,
         landingUrl, utmSource: input.channels.length > 1 ? "multi" : primary, utmMedium, utmCampaign: slug, source: "api",
         notes: `Créée par l'autopilote (${generatedBy === "api" ? "textes générés par Claude" : "textes fournis par le studio"}) — canaux : ${input.channels.join(", ")}.`,
@@ -240,9 +242,9 @@ export async function productMarketing(productIdOrSlug: string, db: PrismaClient
 /** Passe les posts brouillons d'une campagne en programmés (comptes connectés uniquement). */
 export async function approveCampaignPosts(campaignId: string, opts: { startAt?: Date | null; spacingHours?: number; now?: Date } = {}, db: PrismaClient = defaultPrisma) {
   const now = opts.now ?? new Date();
-  const campaign = await db.campaign.findUniqueOrThrow({ where: { id: campaignId }, include: { posts: { where: { status: "DRAFT" }, orderBy: { createdAt: "asc" } }, product: { select: { status: true } } } });
+  const campaign = await db.campaign.findUniqueOrThrow({ where: { id: campaignId }, include: { posts: { where: { status: "DRAFT" }, orderBy: { createdAt: "asc" } }, product: { select: { status: true } }, site: { select: { audienceId: true } } } });
   if (campaign.product && campaign.product.status !== "PUBLISHED") return { scheduled: 0, skipped: campaign.posts.length, reason: "Le produit n'est pas encore publié" };
-  const accounts = await db.socialAccount.findMany({ where: { isActive: true, needsReconnect: false } });
+  const accounts = accountsForAudience(await db.socialAccount.findMany({ where: { isActive: true, needsReconnect: false } }), campaign.site.audienceId);
   // Le canal d'un post est porté par son lien tracé (utm_source) ; repli sur le format
   const kindOf = (p: { format: SocialPostFormat; provider: string; linkUrl: string | null }): SocialAccountKind => {
     if (p.provider === "TIKTOK") return "TIKTOK";

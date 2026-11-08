@@ -3,6 +3,7 @@ import { prisma as defaultPrisma } from "@/lib/db";
 import { sha256Normalized } from "@/lib/crypto";
 import { getSetting } from "@/lib/settings";
 import { getSecrets } from "@/lib/integrations/secrets";
+import { siteBaseUrl } from "@/lib/sites/host";
 
 /**
  * Envoi serveur des achats aux API de conversion (Meta Conversions API, TikTok
@@ -74,8 +75,10 @@ async function sendTikTok(p: PurchasePayload, pixelCode: string, token: string):
 export async function sendPurchaseConversions(orderId: string, db: PrismaClient = defaultPrisma): Promise<{ meta?: "SENT" | "FAILED" | "SKIPPED"; tiktok?: "SENT" | "FAILED" | "SKIPPED" }> {
   const order = await db.order.findUnique({ where: { id: orderId }, include: { items: { select: { productId: true, bundleId: true } }, conversions: true } });
   if (!order || !order.paidAt) return {};
-  const analytics = await getSetting("analytics");
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
+  // Pixel et domaine de l'univers de la commande
+  const analytics = await getSetting("analytics", order.siteId);
+  const site = await db.site.findUnique({ where: { id: order.siteId }, select: { primaryDomain: true, domains: true } });
+  const appUrl = siteBaseUrl(site ?? { primaryDomain: null, domains: [] }, process.env.NEXT_PUBLIC_APP_URL ?? "");
   const payload: PurchasePayload = {
     orderId: order.id, email: order.email || null, valueCents: order.totalCents, currency: order.currency,
     contentIds: order.items.map((i) => i.productId ?? i.bundleId ?? "").filter(Boolean), eventTime: order.paidAt, sourceUrl: `${appUrl}/commande/confirmation`,

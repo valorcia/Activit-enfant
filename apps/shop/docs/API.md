@@ -39,6 +39,7 @@ Corps JSON (champs principaux ; tous ceux du formulaire produit sont acceptés) 
   "longDescription": "markdown…",
   "story": "markdown…",
   "template": "ADVENTURE",
+  "siteSlug": "la-malle-a-jeux",
   "categorySlug": "chasses-au-tresor",
   "collectionSlugs": ["5-8-ans"],
   "universe": "Dinosaures",
@@ -57,15 +58,17 @@ Corps JSON (champs principaux ; tous ceux du formulaire produit sont acceptés) 
 }
 ```
 
-Templates : `ADVENTURE`, `ACTIVITY`, `STORY`, `EVENT`, `CLASSIC`. Rôles d'image : `MAIN`, `GALLERY`, `ILLUSTRATION`, `MOCKUP`, `PDF_PREVIEW`, `VIDEO` (URL), `OG`.
+`siteSlug` : univers (boutique) du produit, voir `GET /sites` ; absent = univers par défaut (La Malle à Jeux) ; inconnu = `422`. `categorySlug` et `collectionSlugs` sont résolus **dans cet univers** (deux univers peuvent avoir une catégorie `guides`).
 
-Réponse `201` : le produit complet, avec `editUrl` (lien d'édition dans l'administration) et `publicUrl` (null tant qu'il n'est pas publié). Les images dont le téléchargement a échoué sont listées dans `warnings`.
+Templates : `ADVENTURE`, `ACTIVITY`, `STORY`, `EVENT`, `CLASSIC`, `GUIDE` (guide pratique adulte), `RECIPES` (recettes). Rôles d'image : `MAIN`, `GALLERY`, `ILLUSTRATION`, `MOCKUP`, `PDF_PREVIEW`, `VIDEO` (URL), `OG`.
+
+Réponse `201` : le produit complet, avec `site: { slug, name, url }`, `editUrl` (lien d'édition dans l'administration) et `publicUrl` (sur le domaine de l'univers, null tant qu'il n'est pas publié). Les images dont le téléchargement a échoué sont listées dans `warnings`.
 
 ### `GET /products?page=1&perPage=25&status=PUBLISHED&slug=…&source=api`
 
 `status` : `DRAFT`, `SCHEDULED`, `PUBLISHED`, `ARCHIVED` ou `all` (défaut : tous). `perPage` ≤ 100. Chaque produit inclut `salesCount`. Réponse paginée : `{ data, page, perPage, total }`.
 
-Filtres facultatifs : `status`, `slug` (recherche exacte, utile pour retrouver un produit créé par une intégration), `source` (`admin`, `csv`, `api`, `duplicate`).
+Filtres facultatifs : `status`, `slug` (recherche exacte, utile pour retrouver un produit créé par une intégration), `source` (`admin`, `csv`, `api`, `duplicate`), `site` (slug d'univers).
 
 ### `GET /products/:id` (id ou slug)
 
@@ -129,11 +132,33 @@ Erreurs :
 
 Scope `products:read`. `{"data":{"campaigns":[{"id","slug","name","status","source","channel","landingUrl","posts":[{"id","provider","format","status","label","hook","linkUrl","videoUrl","scheduledAt","publishedAt","externalUrl","accountName","error"}],"stats":{"orders","revenueCents","revenueHtCents","spendCents","roas"}}]}}` (statistiques sur toute la période, ventes attribuées par `utm_campaign`).
 
-### `GET /categories`, `GET /collections`
+### `GET /categories?site=…`, `GET /collections?site=…`
+
+Chaque ligne indique son univers (`site.slug`) ; `site` filtre sur un univers.
+
+### `GET /sites` — univers disponibles
+
+Toute clé valide (lecture seule). Univers non archivés, univers par défaut en premier :
+
+```json
+{ "data": [{
+  "id": "…", "slug": "fini-l-eau-verte", "name": "Fini l'eau verte", "preset": "guide-expert", "status": "TEST", "isDefault": false,
+  "audience": { "slug": "maison-jardin", "name": "Maison & jardin" },
+  "primaryDomain": "finileauverte.fr", "url": "https://finileauverte.fr",
+  "categories": [{ "slug": "guides-pratiques", "name": "Guides pratiques" }]
+}] }
+```
+
+`url` est l'adresse publique (domaine principal, sinon l'URL de l'application). Un univers `TEST` est servi (sur ses domaines et en aperçu `/?site=slug`) mais jamais indexé par les moteurs : ses produits peuvent être créés et publiés pour relecture avant le passage en `ACTIVE`.
+
+### `PATCH /products/:id` avec `siteSlug`
+
+Déplace le produit dans un autre univers. Sans `categorySlug`, la catégorie et les collections sont retirées (elles appartiennent à l'ancien univers).
 
 ## Flux recommandé pour un agent IA
 
-1. `POST /products` avec textes, prix, SEO, catégorie → brouillon.
+0. `GET /sites` pour choisir l'univers (`siteSlug`) et ses catégories.
+1. `POST /products` avec `siteSlug`, textes, prix, SEO, catégorie → brouillon.
 2. `POST /products/:id/images` pour la couverture (`MAIN`), la galerie et les aperçus.
 3. `POST /products/:id/files` pour le PDF payant.
 4. `POST /products/:id/publish` avec `scheduledAt`, ou laisser un humain publier depuis l'administration.

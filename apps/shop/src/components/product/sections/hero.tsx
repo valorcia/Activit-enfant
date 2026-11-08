@@ -20,7 +20,7 @@ export function heroImage(product: ProductPageData) {
 }
 
 export async function ProductHero({ product }: { product: ProductPageData }) {
-  const conversion = await getSetting("conversion");
+  const conversion = await getSetting("conversion", product.siteId);
   const theme = TEMPLATE_THEMES[product.template];
   const price = effectivePrice(product);
   const img = heroImage(product);
@@ -35,7 +35,7 @@ export async function ProductHero({ product }: { product: ProductPageData }) {
       <div aria-hidden className="pointer-events-none absolute -bottom-20 -left-16 size-64 bg-honey/40 blob-br" />
 
       <div className="container-shell relative grid gap-8 py-8 lg:min-h-[calc(100dvh-4rem)] lg:grid-cols-2 lg:items-center lg:gap-14 lg:py-14">
-        <div className="relative aspect-[4/3] overflow-hidden rounded-[var(--radius-card)] shadow-lift lg:order-2">
+        <div className="product-hero-cover relative aspect-[4/3] overflow-hidden rounded-[var(--radius-card)] shadow-lift lg:order-2">
           {img ? (
             <Image src={img.url} alt={img.alt ?? product.name} fill priority sizes="(max-width: 1024px) 100vw, 50vw" className="object-cover" />
           ) : (

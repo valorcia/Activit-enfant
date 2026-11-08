@@ -6,6 +6,7 @@ import { MarketingNav } from "@/components/admin/ops-marketing-nav";
 import { AutopilotApprove } from "@/components/admin/ops-autopilot-approve";
 import { campaignRoi, periodFromKey } from "@/lib/social/roi";
 import { formatDateTime, formatPrice } from "@/lib/utils";
+import { adminSiteWhere } from "@/lib/sites";
 
 export const metadata = { title: "Autopilote marketing" };
 export const dynamic = "force-dynamic";
@@ -16,7 +17,7 @@ export default async function AutopilotPage() {
   await requirePermission("marketing:write");
   const [campaigns, accounts] = await Promise.all([
     prisma.campaign.findMany({
-      where: { source: "api" }, orderBy: { createdAt: "desc" }, take: 50,
+      where: { source: "api", ...(await adminSiteWhere()) }, orderBy: { createdAt: "desc" }, take: 50,
       include: { product: { select: { name: true, slug: true, status: true } }, posts: { orderBy: [{ scheduledAt: "asc" }, { createdAt: "asc" }], include: { account: { select: { name: true } } } } },
     }),
     prisma.socialAccount.count({ where: { isActive: true, needsReconnect: false, kind: { in: ["PAGE", "INSTAGRAM", "TIKTOK"] } } }),

@@ -32,23 +32,25 @@ export interface DashboardStats {
   recentOrders: Array<{ id: string; number: string; email: string; totalCents: number; status: string; createdAt: Date; itemCount: number }>;
 }
 
-export async function getDashboardStats(period: Period = "30j", now = new Date()): Promise<DashboardStats> {
+/** `siteId` : univers sélectionné dans l'admin (absent = tous les univers). */
+export async function getDashboardStats(period: Period = "30j", now = new Date(), siteId?: string): Promise<DashboardStats> {
   const start = periodStart(period, now);
   const prevStart = new Date(start.getTime() - (now.getTime() - start.getTime()));
-  const paidWhere = { status: { in: [...PAID_STATUSES] }, paidAt: { gte: start, lte: now } };
+  const sw = siteId ? { siteId } : {};
+  const paidWhere = { ...sw, status: { in: [...PAID_STATUSES] }, paidAt: { gte: start, lte: now } };
 
   const [agg, prevAgg, orders, items, catalogByStatus, needsReview, withoutFiles, pendingReviews, recentOrders, dailyStats, publishedProducts] = await Promise.all([
     prisma.order.aggregate({ where: paidWhere, _sum: { totalCents: true, refundedCents: true }, _count: true }),
-    prisma.order.aggregate({ where: { status: { in: [...PAID_STATUSES] }, paidAt: { gte: prevStart, lt: start } }, _sum: { totalCents: true, refundedCents: true }, _count: true }),
+    prisma.order.aggregate({ where: { ...sw, status: { in: [...PAID_STATUSES] }, paidAt: { gte: prevStart, lt: start } }, _sum: { totalCents: true, refundedCents: true }, _count: true }),
     prisma.order.findMany({ where: paidWhere, select: { paidAt: true, totalCents: true, refundedCents: true } }),
     prisma.orderItem.findMany({ where: { order: paidWhere }, select: { productId: true, bundleId: true, name: true, quantity: true, totalCents: true, product: { select: { id: true, name: true, slug: true, category: { select: { name: true, color: true } } } }, bundle: { select: { name: true } } } }),
-    prisma.product.groupBy({ by: ["status"], _count: true }),
-    prisma.product.count({ where: { needsReview: true } }),
-    prisma.product.count({ where: { status: "PUBLISHED", files: { none: {} } } }),
-    prisma.review.count({ where: { status: "PENDING" } }),
-    prisma.order.findMany({ where: { status: { not: "PENDING" } }, orderBy: { createdAt: "desc" }, take: 8, select: { id: true, number: true, email: true, totalCents: true, status: true, createdAt: true, _count: { select: { items: true } } } }),
+    prisma.product.groupBy({ by: ["status"], where: sw, _count: true }),
+    prisma.product.count({ where: { ...sw, needsReview: true } }),
+    prisma.product.count({ where: { ...sw, status: "PUBLISHED", files: { none: {} } } }),
+    prisma.review.count({ where: { status: "PENDING", ...(siteId ? { product: { siteId } } : {}) } }),
+    prisma.order.findMany({ where: { ...sw, status: { not: "PENDING" } }, orderBy: { createdAt: "desc" }, take: 8, select: { id: true, number: true, email: true, totalCents: true, status: true, createdAt: true, _count: { select: { items: true } } } }),
     prisma.dailyStat.aggregate({ where: { date: { gte: start } }, _sum: { productViews: true, checkoutsStarted: true, ordersPaid: true } }),
-    prisma.product.findMany({ where: { status: "PUBLISHED", publishedAt: { gte: new Date(now.getFullYear(), now.getMonth() - 11, 1) } }, select: { publishedAt: true } }),
+    prisma.product.findMany({ where: { ...sw, status: "PUBLISHED", publishedAt: { gte: new Date(now.getFullYear(), now.getMonth() - 11, 1) } }, select: { publishedAt: true } }),
   ]);
 
   const revenueCents = (agg._sum.totalCents ?? 0) - (agg._sum.refundedCents ?? 0);

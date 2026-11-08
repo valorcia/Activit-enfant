@@ -31,6 +31,18 @@ Module **Administration → Marketing social** : connexion des comptes, généra
 ### Conversions serveur
 Paramètres → Analytics : `Meta Pixel ID` et `TikTok Pixel ID` ; Paramètres → Intégrations : *Jeton Conversions API* (carte Meta) et *Jeton Events API* (carte TikTok). Chaque commande payée envoie un événement `Purchase` / `CompletePayment` avec l'email haché (SHA-256), la valeur, la devise et `event_id` = identifiant de commande (déduplication avec le pixel navigateur). Traitement par le cron marketing, idempotent (`ConversionEvent`).
 
+### Plusieurs audiences, plusieurs univers
+La plateforme regroupe des **audiences** (Familles & enfants, Maison & jardin, Cuisine, Vie pratique) ; chaque audience porte son identité sociale et contient des **univers** (boutiques, chacune avec ses domaines). Voir aussi `docs/DOMAINES.md`.
+
+- **Une page Facebook (et un compte Instagram / TikTok) par audience** : on ne publie pas un guide piscine sur la page « familles ». Créez les pages dans le même Business Manager, connectez-les (Connecteurs → Connecter détecte toutes les pages), puis rattachez chaque compte à son audience avec le sélecteur de la ligne. Un compte sans audience est **commun** : utilisé en repli par toutes les audiences.
+- **Choix automatique** : la génération de posts, l'autopilote et la validation d'une campagne prennent les comptes de l'audience de l'univers du produit, puis les comptes communs ; jamais ceux d'une autre audience.
+- **Compte publicitaire** : un par audience de préférence (budgets et audiences séparés) ; rattachez-le de la même façon et liez les campagnes externes depuis la fiche campagne.
+- **Vérification de domaine Meta (par univers)** : Business Manager → Paramètres → Brand Safety → **Domaines** → ajouter le domaine de l'univers → méthode « balise méta » → copier le code dans Admin (univers sélectionné) → Paramètres → SEO → *Vérification Meta*. Obligatoire pour configurer les événements web (Aggregated Event Measurement) d'un domaine.
+- **Pixel** : un pixel par audience (recommandé : les audiences de reciblage restent homogènes), ou un par domaine si un univers a un public très spécifique. Saisissez l'identifiant dans Paramètres → Analytics **avec l'univers sélectionné** : chaque univers injecte son pixel. Le jeton Conversions API reste commun (il est lié au Business Manager) et l'événement serveur part avec le pixel de l'univers de la commande.
+- **URLs tracées** : les liens des campagnes et des posts pointent vers le domaine de l'univers du produit.
+- **Rentabilité** : le tableau Marketing social se filtre par univers (sélecteur du menu) et par audience.
+- **OAuth** : l'administration reste sur l'adresse de l'application (`NEXT_PUBLIC_APP_URL`) ; les URI de redirection Meta/TikTok n'ont pas à changer quand on ajoute un univers.
+
 ### Sécurité
 Les jetons OAuth et les clés d'intégration sont chiffrés en base (AES-256-GCM, clé `MARKETING_ENCRYPTION_KEY`, sinon dérivée d'`AUTH_SECRET`). Aucun jeton ni aucune clé n'est envoyé au navigateur : l'administration n'affiche que les 4 derniers caractères.
 

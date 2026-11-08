@@ -10,9 +10,9 @@ import { randomToken, signPayload, verifySignedPayload } from "@/lib/tokens";
  *  - téléchargement : /api/download/[entitlementToken]/[fileId]
  */
 
-export function orderAccessUrl(orderId: string, validitySeconds = 60 * 60 * 24 * 365): string {
+export function orderAccessUrl(orderId: string, validitySeconds = 60 * 60 * 24 * 365, baseUrl: string = env.appUrl): string {
   const token = signPayload(`order:${orderId}`, Math.floor(Date.now() / 1000) + validitySeconds);
-  return `${env.appUrl}/commande/${token}`;
+  return `${baseUrl.replace(/\/$/, "")}/commande/${token}`;
 }
 
 export function verifyOrderAccessToken(token: string): string | null {
@@ -21,18 +21,18 @@ export function verifyOrderAccessToken(token: string): string | null {
   return payload.slice("order:".length);
 }
 
-export function downloadUrl(entitlementToken: string, fileId: string): string {
-  return `${env.appUrl}/api/download/${entitlementToken}/${fileId}`;
+export function downloadUrl(entitlementToken: string, fileId: string, baseUrl: string = env.appUrl): string {
+  return `${baseUrl.replace(/\/$/, "")}/api/download/${entitlementToken}/${fileId}`;
 }
 
-export async function createAccessLink(email: string, validityHours: number, db: PrismaClient = defaultPrisma): Promise<{ url: string } | null> {
+export async function createAccessLink(email: string, validityHours: number, db: PrismaClient = defaultPrisma, baseUrl: string = env.appUrl): Promise<{ url: string } | null> {
   const customer = await db.customer.findUnique({ where: { email: email.toLowerCase().trim() } });
   if (!customer) return null;
   const token = randomToken(32);
   await db.accessLink.create({
     data: { customerId: customer.id, token, expiresAt: new Date(Date.now() + validityHours * 3600 * 1000) },
   });
-  return { url: `${env.appUrl}/mes-achats/${token}` };
+  return { url: `${baseUrl.replace(/\/$/, "")}/mes-achats/${token}` };
 }
 
 export type DownloadCheck =

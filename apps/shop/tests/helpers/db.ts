@@ -7,13 +7,36 @@ export async function resetDb() {
   const tables = await db.$queryRaw<Array<{ tablename: string }>>`SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'`;
   if (tables.length === 0) return;
   await db.$executeRawUnsafe(`TRUNCATE TABLE ${tables.map((t) => `"${t.tablename}"`).join(", ")} RESTART IDENTITY CASCADE`);
+  await ensureDefaultSite();
 }
 
-export async function createProductFixture(overrides: Partial<{ slug: string; name: string; priceCents: number; status: "DRAFT" | "PUBLISHED" }> = {}, withFiles = 1) {
+export const DEFAULT_SITE_ID = "site-default";
+
+/** Univers par défaut (La Malle à Jeux) et son audience, comme après la migration multi-univers. */
+export async function ensureDefaultSite() {
+  await db.audience.upsert({ where: { id: "aud-familles-enfants" }, create: { id: "aud-familles-enfants", slug: "familles-enfants", name: "Familles & enfants" }, update: {} });
+  await db.site.upsert({
+    where: { id: DEFAULT_SITE_ID },
+    create: { id: DEFAULT_SITE_ID, slug: "la-malle-a-jeux", name: "La Malle à Jeux", audienceId: "aud-familles-enfants", preset: "kit-enfants", status: "ACTIVE", isDefault: true },
+    update: {},
+  });
+}
+
+/** Univers supplémentaire (et son audience) pour les tests multi-univers. */
+export async function createSiteFixture(opts: { slug: string; name?: string; domains?: string[]; status?: "ACTIVE" | "TEST" | "ARCHIVED"; preset?: string; audienceSlug?: string }) {
+  const audienceSlug = opts.audienceSlug ?? "maison-jardin";
+  const audience = await db.audience.upsert({ where: { slug: audienceSlug }, create: { slug: audienceSlug, name: audienceSlug }, update: {} });
+  return db.site.create({
+    data: { slug: opts.slug, name: opts.name ?? opts.slug, audienceId: audience.id, preset: opts.preset ?? "guide-expert", status: opts.status ?? "ACTIVE", domains: opts.domains ?? [], primaryDomain: opts.domains?.[0] ?? null },
+  });
+}
+
+export async function createProductFixture(overrides: Partial<{ slug: string; name: string; priceCents: number; status: "DRAFT" | "PUBLISHED"; siteId: string }> = {}, withFiles = 1) {
   const slug = overrides.slug ?? `produit-${Math.random().toString(36).slice(2, 8)}`;
   return db.product.create({
     data: {
       slug,
+      ...(overrides.siteId ? { siteId: overrides.siteId } : {}),
       name: overrides.name ?? `Produit ${slug}`,
       priceCents: overrides.priceCents ?? 990,
       status: overrides.status ?? "PUBLISHED",

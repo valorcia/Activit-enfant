@@ -5,6 +5,8 @@ import { MarketingNav } from "@/components/admin/ops-marketing-nav";
 import { Button } from "@/components/ui/button";
 import { campaignRoi, periodFromKey, productRoi } from "@/lib/social/roi";
 import { formatPrice } from "@/lib/utils";
+import { prisma } from "@/lib/db";
+import { getAdminSite } from "@/lib/sites";
 
 export const metadata = { title: "Marketing social" };
 export const dynamic = "force-dynamic";
@@ -14,11 +16,16 @@ const PERIODS = [["7j", "7 jours"], ["30j", "30 jours"], ["90j", "90 jours"], ["
 function pct(v: number | null) { return v == null ? "—" : `${Math.round(v * 100)} %`; }
 function roas(v: number | null) { return v == null ? "—" : `×${v.toFixed(2)}`; }
 
-export default async function MarketingPage({ searchParams }: { searchParams: Promise<{ periode?: string }> }) {
+export default async function MarketingPage({ searchParams }: { searchParams: Promise<{ periode?: string; audience?: string }> }) {
   await requirePermission("marketing:write");
-  const { periode = "30j" } = await searchParams;
+  const { periode = "30j", audience: audienceSlug } = await searchParams;
   const period = periodFromKey(periode);
-  const [products, campaigns] = await Promise.all([productRoi(period), campaignRoi(period)]);
+  // Périmètre : univers du sélecteur admin, et/ou audience choisie ici
+  const [adminSite, audiences] = await Promise.all([getAdminSite(), prisma.audience.findMany({ orderBy: { name: "asc" }, select: { id: true, slug: true, name: true } })]);
+  const audience = audiences.find((a) => a.slug === audienceSlug) ?? null;
+  const scope = { siteId: adminSite?.id ?? null, audienceId: audience?.id ?? null };
+  const [products, campaigns] = await Promise.all([productRoi(period, undefined, scope), campaignRoi(period, undefined, undefined, scope)]);
+  const qs = (p: Record<string, string | undefined>) => { const u = new URLSearchParams(); for (const [k, v] of Object.entries({ periode, audience: audience?.slug, ...p })) if (v) u.set(k, v); return u.toString(); };
   const totals = products.reduce((t, p) => ({ ht: t.ht + p.revenueHtCents, spend: t.spend + p.adSpendCents, orders: t.orders + p.orders, margin: t.margin + p.marginCents, creation: t.creation + p.creationCostCents }), { ht: 0, spend: 0, orders: 0, margin: 0, creation: 0 });
   const maxHt = Math.max(1, ...products.map((p) => p.revenueHtCents));
   const sources = new Map<string, { orders: number; ht: number }>();
@@ -28,10 +35,18 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
     <div>
       <AdminPageHeader title="Marketing social" description="Rentabilité de chaque e-book : revenus (remboursements déduits), dépenses publicitaires, coût de création et marge."
         actions={<>
-          <div className="flex rounded-full bg-white border border-line p-0.5">{PERIODS.map(([k, l]) => <Link key={k} href={`/admin/marketing?periode=${k}`} className={`rounded-full px-3 py-1 text-xs font-bold ${periode === k ? "bg-ink text-white" : "text-ink-soft hover:text-ink"}`}>{l}</Link>)}</div>
-          <Button asChild variant="outline" size="sm"><a href={`/api/admin/marketing/export?periode=${periode}`}>Exporter CSV</a></Button>
+          <div className="flex rounded-full bg-white border border-line p-0.5">{PERIODS.map(([k, l]) => <Link key={k} href={`/admin/marketing?${qs({ periode: k })}`} className={`rounded-full px-3 py-1 text-xs font-bold ${periode === k ? "bg-ink text-white" : "text-ink-soft hover:text-ink"}`}>{l}</Link>)}</div>
+          <Button asChild variant="outline" size="sm"><a href={`/api/admin/marketing/export?${qs({})}`}>Exporter CSV</a></Button>
         </>} />
       <MarketingNav />
+
+      <div className="mb-4 flex flex-wrap items-center gap-2 text-xs">
+        <span className="font-bold uppercase tracking-wide text-ink-muted">Audience</span>
+        {[{ slug: "", name: "Toutes" }, ...audiences].map((a) => (
+          <Link key={a.slug || "all"} href={`/admin/marketing?${qs({ audience: a.slug || undefined })}`} className={`rounded-full px-3 py-1 font-bold ${(audience?.slug ?? "") === a.slug ? "bg-ink text-white" : "bg-white border border-line text-ink-soft hover:text-ink"}`}>{a.name}</Link>
+        ))}
+        <span className="ml-auto text-ink-muted">Univers : {adminSite ? adminSite.name : "tous"} (sélecteur en haut du menu)</span>
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5 mb-6">
         {[["Revenus HT", formatPrice(totals.ht)], ["Commandes", String(totals.orders)], ["Dépenses pub", formatPrice(totals.spend)], ["Coût de création", formatPrice(totals.creation)], ["Marge", formatPrice(totals.margin)]].map(([l, v]) => (

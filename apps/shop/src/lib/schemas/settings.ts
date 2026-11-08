@@ -28,8 +28,8 @@ export const themeSettingsSchema = z.object({
     cream: "#FFF9F0", coral: "#FF826F", honey: "#FFD66B", sage: "#A8C9A1", sky: "#A9D8F5", lavender: "#C8B6E8", ink: "#293241",
   }),
   fonts: z.object({
-    heading: z.enum(["Fredoka", "Baloo 2", "Nunito", "Quicksand", "Comfortaa"]).default("Fredoka"),
-    body: z.enum(["Nunito", "Quicksand", "Inter", "Mulish", "Poppins"]).default("Nunito"),
+    heading: z.enum(["Fredoka", "Baloo 2", "Nunito", "Quicksand", "Comfortaa", "Manrope", "Fraunces", "Inter"]).default("Fredoka"),
+    body: z.enum(["Nunito", "Quicksand", "Inter", "Mulish", "Poppins", "Manrope"]).default("Nunito"),
   }).default({ heading: "Fredoka", body: "Nunito" }),
   radius: z.enum(["soft", "round", "pill"]).default("round"),
   texture: z.boolean().default(true),
@@ -152,6 +152,9 @@ export const seoSettingsSchema = z.object({
   defaultDescription: z.string().max(170).default("Chasses au trésor, cahiers d'activités, kits d'anniversaire et histoires à imprimer pour les enfants de 3 à 10 ans. Téléchargement immédiat."),
   ogImageUrl: z.string().max(500).optional().nullable().default("/images/brand/banniere-la-malle-a-jeux.webp"),
   robotsIndex: z.boolean().default(true),
+  /** Vérification du domaine de l'univers : Meta Business (facebook-domain-verification) et Google Search Console. */
+  facebookDomainVerification: z.string().max(100).optional().nullable(),
+  googleSiteVerification: z.string().max(100).optional().nullable(),
 });
 export type SeoSettings = z.infer<typeof seoSettingsSchema>;
 

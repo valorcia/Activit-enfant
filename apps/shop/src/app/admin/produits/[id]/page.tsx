@@ -1,10 +1,10 @@
 import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { prisma } from "@/lib/db";
-import { env } from "@/lib/env";
 import { AdminPageHeader } from "@/components/admin/page-header";
 import { ProductForm } from "@/components/admin/product-form";
 import { productToForm } from "@/lib/admin/product-form-data";
+import { getSites, siteUrl } from "@/lib/sites";
 
 export const dynamic = "force-dynamic";
 
@@ -19,10 +19,11 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
   const { id } = await params;
   const product = await prisma.product.findUnique({ where: { id }, include: { images: { orderBy: { position: "asc" } }, files: { orderBy: { position: "asc" } }, collections: true, recommendations: true } });
   if (!product) notFound();
-  const [categories, collections, products] = await Promise.all([
-    prisma.category.findMany({ orderBy: { position: "asc" }, select: { id: true, name: true } }),
-    prisma.collection.findMany({ orderBy: { position: "asc" }, select: { id: true, name: true } }),
+  const [categories, collections, products, sites] = await Promise.all([
+    prisma.category.findMany({ orderBy: { position: "asc" }, select: { id: true, name: true, siteId: true } }),
+    prisma.collection.findMany({ orderBy: { position: "asc" }, select: { id: true, name: true, siteId: true } }),
     prisma.product.findMany({ where: { status: { not: "ARCHIVED" } }, orderBy: { name: "asc" }, select: { id: true, name: true, slug: true } }),
+    getSites(),
   ]);
   return (
     <div>
@@ -31,7 +32,7 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
         initial={productToForm(product)}
         images={product.images.map((i) => ({ id: i.id, url: i.url, alt: i.alt, role: i.role, position: i.position }))}
         files={product.files.map((f) => ({ id: f.id, name: f.name, description: f.description, kind: f.kind, sizeBytes: f.sizeBytes, mime: f.mime }))}
-        categories={categories} collections={collections} products={products} siteUrl={env.appUrl}
+        categories={categories} collections={collections} products={products} sites={sites.filter((s) => s.status !== "ARCHIVED" || s.id === product.siteId).map((s) => ({ id: s.id, name: s.name, url: siteUrl(s) }))}
       />
     </div>
   );

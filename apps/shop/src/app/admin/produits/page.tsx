@@ -10,6 +10,7 @@ import { DataTable, AdminPagination } from "@/components/admin/data-table";
 import { ProductRowActions } from "@/components/admin/product-row-actions";
 import { PublishScheduledButton } from "@/components/admin/publish-scheduled-button";
 import { formatDate, formatPrice } from "@/lib/utils";
+import { adminSiteWhere } from "@/lib/sites";
 
 export const metadata = { title: "Produits" };
 export const dynamic = "force-dynamic";
@@ -27,7 +28,9 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
   const perPage = 25;
   const needsReview = sp.validation === "1";
 
+  const siteWhere = await adminSiteWhere();
   const where: Prisma.ProductWhereInput = {
+    ...siteWhere,
     ...(q ? { OR: [{ name: { contains: q, mode: "insensitive" } }, { slug: { contains: q, mode: "insensitive" } }, { universe: { contains: q, mode: "insensitive" } }] } : {}),
     ...(status ? { status } : {}),
     ...(categoryId ? { categoryId } : {}),
@@ -38,12 +41,12 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
   const [products, total, categories, counts] = await Promise.all([
     prisma.product.findMany({ where, orderBy, skip: (page - 1) * perPage, take: perPage, include: { category: { select: { name: true } }, images: { where: { role: "MAIN" }, take: 1 }, _count: { select: { files: true } } } }),
     prisma.product.count({ where }),
-    prisma.category.findMany({ orderBy: { position: "asc" }, select: { id: true, name: true } }),
-    prisma.product.groupBy({ by: ["status"], _count: true }),
+    prisma.category.findMany({ where: siteWhere, orderBy: { position: "asc" }, select: { id: true, name: true } }),
+    prisma.product.groupBy({ by: ["status"], where: siteWhere, _count: true }),
   ]);
   const pages = Math.max(1, Math.ceil(total / perPage));
-  const reviewCount = await prisma.product.count({ where: { needsReview: true } });
-  const dueCount = await prisma.product.count({ where: { status: "SCHEDULED", scheduledAt: { lte: new Date() } } });
+  const reviewCount = await prisma.product.count({ where: { ...siteWhere, needsReview: true } });
+  const dueCount = await prisma.product.count({ where: { ...siteWhere, status: "SCHEDULED", scheduledAt: { lte: new Date() } } });
   const buildHref = (p: number) => { const u = new URLSearchParams({ ...(q && { q }), ...(status && { statut: status }), ...(categoryId && { categorie: categoryId }), tri: sort, page: String(p) }); return `/admin/produits?${u}`; };
 
   return (

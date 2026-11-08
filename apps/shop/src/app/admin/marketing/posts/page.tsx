@@ -6,6 +6,7 @@ import { PostGenerator } from "@/components/admin/ops-post-generator";
 import { PostCard, type PostView } from "@/components/admin/ops-post-card";
 import { isClaudeConfigured } from "@/lib/social/copywriter-claude";
 import { parseVideoAlt } from "@/lib/api/video";
+import { adminSiteWhere } from "@/lib/sites";
 
 export const metadata = { title: "Posts & publicités" };
 export const dynamic = "force-dynamic";
@@ -13,12 +14,13 @@ export const dynamic = "force-dynamic";
 export default async function PostsPage({ searchParams }: { searchParams: Promise<{ produit?: string; campagne?: string; statut?: string }> }) {
   await requirePermission("marketing:write");
   const sp = await searchParams;
+  const siteWhere = await adminSiteWhere();
   const [products, campaigns, accounts, posts] = await Promise.all([
-    prisma.product.findMany({ where: { status: { in: ["PUBLISHED", "SCHEDULED", "DRAFT"] } }, select: { id: true, name: true, images: { select: { url: true, alt: true, role: true }, orderBy: { position: "asc" } } }, orderBy: { name: "asc" } }),
-    prisma.campaign.findMany({ select: { id: true, name: true, productId: true, channel: true }, orderBy: { createdAt: "desc" } }),
+    prisma.product.findMany({ where: { ...siteWhere, status: { in: ["PUBLISHED", "SCHEDULED", "DRAFT"] } }, select: { id: true, name: true, images: { select: { url: true, alt: true, role: true }, orderBy: { position: "asc" } } }, orderBy: { name: "asc" } }),
+    prisma.campaign.findMany({ where: siteWhere, select: { id: true, name: true, productId: true, channel: true }, orderBy: { createdAt: "desc" } }),
     prisma.socialAccount.findMany({ where: { isActive: true, kind: { in: ["PAGE", "INSTAGRAM", "TIKTOK"] } }, select: { id: true, name: true, provider: true, kind: true, needsReconnect: true } }),
     prisma.socialPost.findMany({
-      where: { ...(sp.produit ? { productId: sp.produit } : {}), ...(sp.campagne ? { campaignId: sp.campagne } : {}), ...(sp.statut ? { status: sp.statut as "DRAFT" } : {}) },
+      where: { ...(siteWhere.siteId ? { OR: [{ product: { siteId: siteWhere.siteId } }, { campaign: { siteId: siteWhere.siteId } }] } : {}), ...(sp.produit ? { productId: sp.produit } : {}), ...(sp.campagne ? { campaignId: sp.campagne } : {}), ...(sp.statut ? { status: sp.statut as "DRAFT" } : {}) },
       orderBy: { createdAt: "desc" }, take: 60,
       include: { product: { select: { name: true, slug: true } }, account: { select: { name: true, kind: true } }, campaign: { select: { name: true } } },
     }),

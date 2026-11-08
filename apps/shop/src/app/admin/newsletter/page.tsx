@@ -8,6 +8,7 @@ import { DataTable, AdminPagination } from "@/components/admin/data-table";
 import { Button } from "@/components/ui/button";
 import { formatDateTime } from "@/lib/utils";
 import { SubscriberActions } from "@/components/admin/ops-newsletter-actions";
+import { adminSiteWhere } from "@/lib/sites";
 
 export const metadata = { title: "Newsletter" };
 export const dynamic = "force-dynamic";
@@ -17,11 +18,12 @@ export default async function NewsletterPage({ searchParams }: { searchParams: P
   const sp = await searchParams;
   const page = Math.max(1, Number(sp.page) || 1);
   const perPage = 50;
-  const where: Prisma.NewsletterSubscriberWhereInput = sp.statut === "PENDING" || sp.statut === "CONFIRMED" || sp.statut === "UNSUBSCRIBED" ? { status: sp.statut } : {};
+  const siteWhere = await adminSiteWhere();
+  const where: Prisma.NewsletterSubscriberWhereInput = { ...siteWhere, ...(sp.statut === "PENDING" || sp.statut === "CONFIRMED" || sp.statut === "UNSUBSCRIBED" ? { status: sp.statut } : {}) };
   const [subs, total, counts, consents] = await Promise.all([
     prisma.newsletterSubscriber.findMany({ where, orderBy: { createdAt: "desc" }, skip: (page - 1) * perPage, take: perPage }),
     prisma.newsletterSubscriber.count({ where }),
-    prisma.newsletterSubscriber.groupBy({ by: ["status"], _count: true }),
+    prisma.newsletterSubscriber.groupBy({ by: ["status"], where: siteWhere, _count: true }),
     prisma.marketingConsent.count(),
   ]);
   const count = (s: string) => counts.find((c) => c.status === s)?._count ?? 0;

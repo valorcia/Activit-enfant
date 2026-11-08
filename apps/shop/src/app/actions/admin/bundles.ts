@@ -7,6 +7,7 @@ import { revalidateCatalog } from "@/lib/catalog";
 import { handleActionError, succeed, fail, type ActionResult } from "@/lib/admin/action-result";
 import { slugify } from "@/lib/utils";
 import { bundleSchema } from "@/lib/schemas/catalog";
+import { adminDefaultSiteId } from "@/lib/sites";
 
 
 async function uniqueSlug(base: string, excludeId?: string) {
@@ -30,12 +31,16 @@ export async function saveBundleAction(id: string | null, raw: unknown): Promise
   try {
     const user = await assertPermission("catalog:write");
     const input = bundleSchema.parse(raw);
-    const products = await prisma.product.findMany({ where: { id: { in: input.productIds } }, select: { id: true } });
+    const products = await prisma.product.findMany({ where: { id: { in: input.productIds } }, select: { id: true, siteId: true } });
     if (products.length !== input.productIds.length) return fail("Un des produits sélectionnés n'existe plus");
+    // Un pack appartient à l'univers de ses produits (tous du même univers)
+    const siteIds = [...new Set(products.map((p) => p.siteId))];
+    if (siteIds.length > 1) return fail("Les produits d'un pack doivent appartenir au même univers");
     const slug = await uniqueSlug(input.slug || input.name, id ?? undefined);
     const { productIds, ...rest } = input;
     const before = id ? await prisma.bundle.findUnique({ where: { id } }) : null;
-    const data = { ...rest, slug, publishedAt: input.status === "PUBLISHED" ? before?.publishedAt ?? new Date() : before?.publishedAt ?? null };
+    const siteId = siteIds[0] ?? before?.siteId ?? (await adminDefaultSiteId());
+    const data = { ...rest, slug, siteId, publishedAt: input.status === "PUBLISHED" ? before?.publishedAt ?? new Date() : before?.publishedAt ?? null };
     const row = await prisma.$transaction(async (tx) => {
       const b = id ? await tx.bundle.update({ where: { id }, data }) : await tx.bundle.create({ data });
       await tx.bundleItem.deleteMany({ where: { bundleId: b.id } });

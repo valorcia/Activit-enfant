@@ -4,7 +4,8 @@ import { prisma } from "@/lib/db";
 import { getProductBySlug, parseKitContents } from "@/lib/catalog";
 import { getSetting } from "@/lib/settings";
 import { effectivePrice } from "@/lib/pricing";
-import { absoluteUrl, stripMarkdown, truncate } from "@/lib/utils";
+import { stripMarkdown, truncate } from "@/lib/utils";
+import { getSites, siteAbsoluteUrl, siteFromParams } from "@/lib/sites";
 import { JsonLd } from "@/components/storefront/json-ld";
 import { TEMPLATE_ACCENTS } from "@/components/product/theme";
 import { ProductTemplateRenderer } from "@/components/product/templates";
@@ -13,21 +14,24 @@ import { heroImage } from "@/components/product/sections/hero";
 export const revalidate = 300;
 export const dynamicParams = true;
 
-type Params = { params: Promise<{ slug: string }> };
+type Params = { params: Promise<{ site: string; slug: string }> };
 
-export async function generateStaticParams() {
-  const rows = await prisma.product.findMany({ where: { status: "PUBLISHED" }, select: { slug: true }, take: 500 });
+export async function generateStaticParams({ params }: { params: { site: string } }) {
+  const site = (await getSites()).find((s) => s.slug === params.site);
+  if (!site) return [];
+  const rows = await prisma.product.findMany({ where: { status: "PUBLISHED", siteId: site.id }, select: { slug: true }, take: 500 });
   return rows.map((r) => ({ slug: r.slug }));
 }
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { slug } = await params;
-  const product = await getProductBySlug(slug);
+  const site = await siteFromParams(params);
+  const product = await getProductBySlug(site.id, slug);
   // notFound() ici garantit un statut HTTP 404 même avec le streaming (loading.tsx)
   if (!product) notFound();
   const img = product.ogImageUrl ?? heroImage(product)?.url ?? null;
   const description = product.seoDescription ?? truncate(stripMarkdown(product.shortDescription ?? product.tagline ?? product.longDescription), 160);
-  const url = absoluteUrl(`/aventures/${product.slug}`);
+  const url = siteAbsoluteUrl(site, `/aventures/${product.slug}`);
   return {
     title: product.seoTitle ?? product.name,
     description,
@@ -41,12 +45,13 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 
 export default async function ProductPage({ params }: Params) {
   const { slug } = await params;
-  const product = await getProductBySlug(slug);
+  const site = await siteFromParams(params);
+  const product = await getProductBySlug(site.id, slug);
   if (!product) notFound();
 
-  const brand = await getSetting("brand");
+  const brand = await getSetting("brand", site);
   const price = effectivePrice(product);
-  const url = absoluteUrl(`/aventures/${product.slug}`);
+  const url = siteAbsoluteUrl(site, `/aventures/${product.slug}`);
   const images = [heroImage(product)?.url, ...product.images.filter((i) => i.role !== "VIDEO").map((i) => i.url)].filter((u): u is string => !!u);
   const kit = parseKitContents(product.kitContents);
 

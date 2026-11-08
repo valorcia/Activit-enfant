@@ -35,9 +35,11 @@ const list = (v?: string, sep = /[,|]/) => (v ? v.split(sep).map((s) => s.trim()
 const date = (v?: string) => { const n = num(v); if (!n) return undefined; const d = new Date(n); return Number.isNaN(d.getTime()) ? undefined : d; };
 
 /** Convertit une ligne CSV validée en ProductInput (catégorie/collections résolues par slug ou nom). */
-export async function csvRowToProductInput(row: ProductCsvRow, lookups?: { categories: Array<{ id: string; slug: string; name: string }>; collections: Array<{ id: string; slug: string; name: string }> }): Promise<ProductInput> {
-  const cats = lookups?.categories ?? (await prisma.category.findMany({ select: { id: true, slug: true, name: true } }));
-  const cols = lookups?.collections ?? (await prisma.collection.findMany({ select: { id: true, slug: true, name: true } }));
+type Lookup = { id: string; slug: string; name: string; siteId?: string };
+export async function csvRowToProductInput(row: ProductCsvRow, lookups?: { categories: Lookup[]; collections: Lookup[] }, siteId?: string): Promise<ProductInput> {
+  const inSite = (l: Lookup[]) => (siteId ? l.filter((x) => !x.siteId || x.siteId === siteId) : l);
+  const cats = inSite(lookups?.categories ?? (await prisma.category.findMany({ where: siteId ? { siteId } : {}, select: { id: true, slug: true, name: true, siteId: true } })));
+  const cols = inSite(lookups?.collections ?? (await prisma.collection.findMany({ where: siteId ? { siteId } : {}, select: { id: true, slug: true, name: true, siteId: true } })));
   const findCat = (v?: string) => { const n = num(v); if (!n) return null; const s = slugify(n); return cats.find((c) => c.slug === s || c.name.toLowerCase() === n.toLowerCase())?.id ?? null; };
   const collectionIds = list(row.collections, /\|/).map((v) => { const s = slugify(v); return cols.find((c) => c.slug === s || c.name.toLowerCase() === v.toLowerCase())?.id; }).filter(Boolean) as string[];
   const template = (num(row.template)?.toUpperCase() ?? "CLASSIC");
@@ -48,13 +50,14 @@ export async function csvRowToProductInput(row: ProductCsvRow, lookups?: { categ
   if (priceCents === undefined) throw new Error("Prix invalide");
   return productInputSchema.parse({
     name: row.name, slug: num(row.slug) ? slugify(row.slug as string) : undefined, tagline: num(row.tagline) ?? null, shortDescription: num(row.short_description) ?? null, longDescription: num(row.long_description) ?? null, story: num(row.story) ?? null,
-    template: ["ADVENTURE", "ACTIVITY", "STORY", "EVENT", "CLASSIC"].includes(template) ? template : "CLASSIC",
+    template: ["ADVENTURE", "ACTIVITY", "STORY", "EVENT", "CLASSIC", "GUIDE", "RECIPES"].includes(template) ? template : "CLASSIC",
     categoryId: findCat(row.category), collectionIds, universe: num(row.universe) ?? null, tags: list(row.tags), badges: list(row.badges), heroBadges: [],
     ageMin: num(row.age_min), ageMax: num(row.age_max), playersMin: num(row.players_min), playersMax: num(row.players_max), durationMinutes: num(row.duration_minutes), difficulty: num(row.difficulty), pageCount: num(row.page_count), fileFormat: "PDF", materials: list(row.materials),
     priceCents, salePriceCents: euros(row.sale_price), saleStartsAt: date(row.sale_starts_at), saleEndsAt: date(row.sale_ends_at), currency: "EUR", taxRateBp: taxRate ? Math.round(Number(taxRate.replace(",", ".")) * 100) : 2000,
     kitContents: [], faq: [], sellingPoints: [],
     seoTitle: num(row.seo_title) ?? null, seoDescription: num(row.seo_description) ?? null, keywords: list(row.keywords), ogImageUrl: null, promoText: null, recommendedProductIds: [],
     status: statusMap[statusRaw] ?? (["DRAFT", "SCHEDULED", "PUBLISHED", "ARCHIVED"].includes(statusRaw) ? statusRaw : "DRAFT"), scheduledAt: date(row.scheduled_at), isFeatured: false,
+    ...(siteId ? { siteId } : {}),
   });
 }
 
@@ -82,17 +85,20 @@ export async function importRemoteImage(productId: string, url: string, role: "M
 export interface ImportResult { jobId: string; total: number; created: number; updated: number; failed: number; errors: Array<{ line: number; name?: string; error: string }> }
 
 /** Importe des lignes validées : crée ou met à jour par slug, télécharge les images, journalise un ImportJob. */
-export async function importProducts(rows: ParsedCsvRow[], actor: Actor, opts: { source?: ImportSource; fileName?: string } = {}): Promise<ImportResult> {
+/** `siteId` : univers des nouveaux produits (défaut : univers par défaut) ; un produit existant reste dans son univers. */
+export async function importProducts(rows: ParsedCsvRow[], actor: Actor, opts: { source?: ImportSource; fileName?: string; siteId?: string } = {}): Promise<ImportResult> {
   const job = await prisma.importJob.create({ data: { source: opts.source ?? "CSV", fileName: opts.fileName, total: rows.length, createdById: actor.userId ?? undefined } });
-  const lookups = { categories: await prisma.category.findMany({ select: { id: true, slug: true, name: true } }), collections: await prisma.collection.findMany({ select: { id: true, slug: true, name: true } }) };
+  const lookups = { categories: await prisma.category.findMany({ select: { id: true, slug: true, name: true, siteId: true } }), collections: await prisma.collection.findMany({ select: { id: true, slug: true, name: true, siteId: true } }) };
+  const targetSiteId = opts.siteId ?? (await prisma.site.findFirst({ where: { isDefault: true }, select: { id: true } }))?.id;
   const result: ImportResult = { jobId: job.id, total: rows.length, created: 0, updated: 0, failed: 0, errors: [] };
 
   for (const r of rows) {
     if (!r.row) { result.failed++; result.errors.push({ line: r.line, name: r.raw.name, error: r.errors.join(" ; ") }); continue; }
     try {
-      const input = await csvRowToProductInput(r.row, lookups);
+      const rowSlug = num(r.row.slug) ? slugify(r.row.slug as string) : slugify(r.row.name);
+      const existing = await prisma.product.findUnique({ where: { slug: rowSlug }, select: { id: true, siteId: true } });
+      const input = await csvRowToProductInput(r.row, lookups, existing?.siteId ?? targetSiteId);
       const slug = input.slug ?? slugify(input.name);
-      const existing = await prisma.product.findUnique({ where: { slug }, select: { id: true } });
       const product = existing ? await updateProduct(existing.id, { ...input, slug }, actor) : await createProduct({ ...input, slug }, { ...actor, source: actor.source ?? "csv" });
       if (existing) result.updated++; else result.created++;
       const main = num(r.row.main_image_url);

@@ -32,9 +32,10 @@ export function parseCatalogParams(sp: CatalogSearchParams): CatalogFilterValues
 }
 
 /** Vue catalogue réutilisable : filtres + grille + pagination. */
-export async function CatalogView({ searchParams, basePath, fixed = {}, hideCategory = false }: { searchParams: CatalogSearchParams; basePath: string; fixed?: Partial<Pick<CatalogQuery, "category" | "collection">>; hideCategory?: boolean }) {
+export async function CatalogView({ siteId, searchParams, basePath, fixed = {}, hideCategory = false }: { siteId: string; searchParams: CatalogSearchParams; basePath: string; fixed?: Partial<Pick<CatalogQuery, "category" | "collection">>; hideCategory?: boolean }) {
   const v = parseCatalogParams(searchParams);
   const query: CatalogQuery = {
+    siteId,
     q: v.q,
     category: fixed.category ?? v.categorie,
     collection: fixed.collection,
@@ -46,7 +47,7 @@ export async function CatalogView({ searchParams, basePath, fixed = {}, hideCate
     page: v.page,
     perPage: 24,
   };
-  const [result, categories, universes] = await Promise.all([searchCatalog(query), getCategories(), getUniverses()]);
+  const [result, categories, universes] = await Promise.all([searchCatalog(query), getCategories(siteId), getUniverses(siteId)]);
   const values: CatalogFilterValues = { q: v.q, categorie: hideCategory ? undefined : v.categorie, age: v.age, theme: v.theme, prix: v.prix, duree: v.duree, tri: v.tri };
   const paginationParams = { q: v.q, categorie: hideCategory ? undefined : v.categorie, age: v.age, theme: v.theme, prix: v.prix, duree: v.duree, tri: v.tri };
 

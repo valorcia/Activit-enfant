@@ -8,7 +8,7 @@ const norm = (s: string) => s.trim().toLowerCase().replace(/[\s?!.]+$/g, "");
 /** FAQ : questions propres au produit d'abord, puis les objections générales (Admin → Conversion), sans doublon. */
 export async function ProductFaq({ product }: { product: ProductPageData }) {
   const own = parseFaq(product.faq);
-  const { faq: global } = await getSetting("conversion");
+  const { faq: global } = await getSetting("conversion", product.siteId);
   const seen = new Set(own.map((f) => norm(f.question)));
   const faq = [...own, ...global.filter((g) => !seen.has(norm(g.question)))];
   if (faq.length === 0) return null;

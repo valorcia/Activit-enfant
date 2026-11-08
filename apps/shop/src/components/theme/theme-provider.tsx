@@ -9,6 +9,8 @@ const FONT_QUERY: Record<string, string> = {
   Inter: "Inter:wght@400;500;600;700",
   Mulish: "Mulish:wght@400;600;700;800",
   Poppins: "Poppins:wght@400;500;600;700",
+  Manrope: "Manrope:wght@400;500;600;700;800",
+  Fraunces: "Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700",
 };
 
 /** Variables CSS du thème (couleurs, polices) injectées depuis les paramètres du site. */

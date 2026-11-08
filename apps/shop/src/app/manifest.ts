@@ -1,8 +1,12 @@
 import type { MetadataRoute } from "next";
 import { getSettings } from "@/lib/settings";
+import { getRequestSite } from "@/lib/sites";
+
+export const dynamic = "force-dynamic";
 
 export default async function manifest(): Promise<MetadataRoute.Manifest> {
-  const { brand, theme } = await getSettings();
+  const site = await getRequestSite();
+  const { brand, theme } = await getSettings(site);
   return {
     name: brand.name,
     short_name: brand.logoText ?? brand.name,

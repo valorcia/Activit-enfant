@@ -14,7 +14,7 @@ import { heroImage } from "./hero";
 
 /** Récapitulatif de l'offre : dernier rappel clair avant la FAQ, avec CTA d'achat. */
 export async function OfferRecap({ product }: { product: ProductPageData }) {
-  const conversion = await getSetting("conversion");
+  const conversion = await getSetting("conversion", product.siteId);
   const price = effectivePrice(product);
   const img = heroImage(product);
   const items = parseKitContents(product.kitContents);
@@ -49,7 +49,7 @@ export async function OfferRecap({ product }: { product: ProductPageData }) {
               <AddToCartButton size="lg" variant="outline" label="Ajouter au panier" className="w-full sm:w-auto" item={{ kind: "product", id: product.id, slug: product.slug, name: product.name, imageUrl: img?.url ?? null, unitPriceCents: price.priceCents, compareAtCents: price.compareAtCents, currency: product.currency }} />
             </div>
             <TrustBadges badges={conversion.trustBadges} compact className="mt-4" />
-            <GuaranteeBlock compact className="mt-4" />
+            <GuaranteeBlock siteId={product.siteId} compact className="mt-4" />
           </div>
         </div>
       </div>

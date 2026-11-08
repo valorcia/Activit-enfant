@@ -10,15 +10,17 @@ import { publicAnalytics } from "@/lib/settings";
 import { ExitPopup } from "@/components/storefront/exit-popup";
 import { prisma } from "@/lib/db";
 import { unstable_cache } from "next/cache";
+import { siteFromParams } from "@/lib/sites";
 
 const getFooterPages = unstable_cache(
-  async () => prisma.staticPage.findMany({ where: { status: "PUBLISHED", showInFooter: true }, orderBy: { position: "asc" }, select: { slug: true, title: true } }),
+  async (siteId: string) => prisma.staticPage.findMany({ where: { siteId, status: "PUBLISHED", showInFooter: true }, orderBy: { position: "asc" }, select: { slug: true, title: true } }),
   ["footer-pages"],
   { tags: ["pages"], revalidate: 600 },
 );
 
-export default async function StorefrontLayout({ children }: { children: React.ReactNode }) {
-  const [settings, categories, pages] = await Promise.all([getSettings(), getCategories(), getFooterPages()]);
+export default async function StorefrontLayout({ children, params }: { children: React.ReactNode; params: Promise<{ site: string }> }) {
+  const site = await siteFromParams(params);
+  const [settings, categories, pages] = await Promise.all([getSettings(site), getCategories(site.id), getFooterPages(site.id)]);
   return (
     <div className="flex min-h-dvh flex-col">
       <SiteHeader brand={settings.brand} navigation={settings.navigation} banner={settings.homepage.banner} categories={categories.map((c) => ({ slug: c.slug, name: c.name, color: c.color, icon: c.icon }))} />

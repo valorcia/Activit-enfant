@@ -11,6 +11,9 @@ import { generateWithClaude, isClaudeConfigured } from "@/lib/social/copywriter-
 import { publishSocialPost, syncCampaignSpend } from "@/lib/social/publish";
 import { buildProductBrief, productLandingBase } from "@/lib/social/brief";
 import { approveCampaignPosts } from "@/lib/social/autopilot";
+import { accountsForAudience } from "@/lib/social/accounts";
+import { siteBaseUrl } from "@/lib/sites/host";
+import { adminDefaultSiteId } from "@/lib/sites";
 
 type Result<T = undefined> = { ok: true; data: T } | { ok: false; error: string; fields?: Record<string, string> };
 
@@ -34,6 +37,18 @@ function revalidate() {
 // ---------------------------------------------------------------------------
 // Comptes connectés
 // ---------------------------------------------------------------------------
+
+/** Rattache un compte social (page Facebook, Instagram, TikTok, compte pub) à une audience ; null = compte commun. */
+export async function setAccountAudienceAction(accountId: string, audienceId: string | null): Promise<Result> {
+  try {
+    const user = await assertPermission("marketing:write");
+    if (audienceId && !(await prisma.audience.findUnique({ where: { id: audienceId }, select: { id: true } }))) return fail("Audience inconnue");
+    await prisma.socialAccount.update({ where: { id: accountId }, data: { audienceId } });
+    await audit({ userId: user.id, action: "social.audience", entity: "socialAccount", entityId: accountId, data: { audienceId } });
+    revalidate();
+    return { ok: true, data: undefined };
+  } catch (e) { return handle(e); }
+}
 
 export async function disconnectAccountAction(accountId: string): Promise<Result> {
   try {
@@ -75,14 +90,18 @@ export async function saveCampaignAction(id: string | null, raw: unknown): Promi
     const parsed = campaignSchema.safeParse(raw);
     if (!parsed.success) return fail("Formulaire invalide", zodFields(parsed.error));
     const d = parsed.data;
-    const product = d.productId ? await prisma.product.findUnique({ where: { id: d.productId }, select: { slug: true } }) : null;
+    const product = d.productId ? await prisma.product.findUnique({ where: { id: d.productId }, select: { slug: true, siteId: true, site: { select: { primaryDomain: true, domains: true } } } }) : null;
+    // Univers de la campagne : celui du produit, sinon celui sélectionné dans l'admin
+    const siteId = product?.siteId ?? (id ? (await prisma.campaign.findUnique({ where: { id }, select: { siteId: true } }))?.siteId : null) ?? (await adminDefaultSiteId());
+    const site = product?.site ?? (await prisma.site.findUnique({ where: { id: siteId }, select: { primaryDomain: true, domains: true } }));
+    const siteBase = site ? siteBaseUrl(site, env.appUrl) : env.appUrl;
     let slug = slugifyUtm(d.slug || d.name);
     const clash = await prisma.campaign.findUnique({ where: { slug } });
     if (clash && clash.id !== id) slug = `${slug}-${Date.now().toString(36).slice(-4)}`;
-    const base = product ? `${env.appUrl}/aventures/${product.slug}` : `${env.appUrl}/boutique`;
+    const base = product ? `${siteBase}/aventures/${product.slug}` : `${siteBase}/boutique`;
     const landingUrl = withUtm(base, { utm_source: d.utmSource, utm_medium: d.utmMedium, utm_campaign: slug });
     const data = {
-      name: d.name, slug, productId: d.productId || null, objective: d.objective ?? null, channel: d.channel, status: d.status,
+      name: d.name, slug, siteId, productId: d.productId || null, objective: d.objective ?? null, channel: d.channel, status: d.status,
       utmSource: d.utmSource, utmMedium: d.utmMedium, utmCampaign: slug, landingUrl,
       startsAt: d.startsAt ?? null, endsAt: d.endsAt ?? null, dailyBudgetCents: d.dailyBudgetCents ?? null,
       adAccountId: d.adAccountId || null, externalCampaignId: d.externalCampaignId || null, notes: d.notes ?? null,
@@ -148,9 +167,9 @@ export async function syncSpendAction(campaignId: string, days = 30): Promise<Re
 // ---------------------------------------------------------------------------
 
 async function briefFor(productId: string, campaignId?: string | null): Promise<{ brief: ProductBrief; images: string[]; linkUrl: string }> {
-  const product = await prisma.product.findUniqueOrThrow({ where: { id: productId }, select: { slug: true } });
+  const product = await prisma.product.findUniqueOrThrow({ where: { id: productId }, select: { slug: true, site: { select: { primaryDomain: true, domains: true } } } });
   const campaign = campaignId ? await prisma.campaign.findUnique({ where: { id: campaignId } }) : null;
-  const linkUrl = campaign ? campaign.landingUrl : withUtm(productLandingBase(product.slug), { utm_source: "social", utm_medium: "social", utm_campaign: "organique" });
+  const linkUrl = campaign ? campaign.landingUrl : withUtm(productLandingBase(product.slug, product.site), { utm_source: "social", utm_medium: "social", utm_campaign: "organique" });
   const { brief, images } = await buildProductBrief(productId, linkUrl);
   return { brief, images, linkUrl };
 }
@@ -178,9 +197,13 @@ function toFormat(channel: Channel, video = false): "FEED_IMAGE" | "TIKTOK_PHOTO
 /** `videoUrl` : vidéo publicitaire du produit à joindre (Reel / TikTok) ; la publicité Meta reste en texte + image. */
 async function saveVariants(userId: string, productId: string, campaignId: string | null | undefined, variants: PostVariant[], generatedBy: "api" | "manual", videoUrl?: string | null) {
   const { images, linkUrl } = await briefFor(productId, campaignId);
+  // Compte social proposé : celui de l'audience de l'univers du produit (puis comptes communs)
+  const owner = await prisma.product.findUniqueOrThrow({ where: { id: productId }, select: { site: { select: { audienceId: true } } } });
+  const accounts = accountsForAudience(await prisma.socialAccount.findMany({ where: { isActive: true, needsReconnect: false, kind: { in: ["PAGE", "INSTAGRAM", "TIKTOK"] } }, orderBy: { createdAt: "asc" } }), owner.site.audienceId);
+  const accountFor = (c: Channel) => (c === "meta_ad" ? null : accounts.find((a) => (c === "tiktok" ? a.kind === "TIKTOK" : c === "instagram" ? a.kind === "INSTAGRAM" : a.kind === "PAGE"))?.id ?? null);
   const created = await prisma.$transaction(variants.map((v) => prisma.socialPost.create({
     data: {
-      productId, campaignId: campaignId || null, provider: toProvider(v.channel), format: toFormat(v.channel, !!videoUrl && v.channel !== "meta_ad"), status: "DRAFT", videoUrl: videoUrl && v.channel !== "meta_ad" ? videoUrl : null,
+      productId, campaignId: campaignId || null, accountId: accountFor(v.channel), provider: toProvider(v.channel), format: toFormat(v.channel, !!videoUrl && v.channel !== "meta_ad"), status: "DRAFT", videoUrl: videoUrl && v.channel !== "meta_ad" ? videoUrl : null,
       hook: v.hook, body: v.body, cta: v.cta, headline: v.headline ?? null, hashtags: v.hashtags, imageUrls: v.imageIndex != null && images[v.imageIndex] ? [images[v.imageIndex]] : images.slice(0, 1),
       linkUrl, generatedBy, variantLabel: v.label, createdById: userId,
     },

@@ -5,6 +5,7 @@ import { getSetting } from "@/lib/settings";
 import { effectivePrice } from "@/lib/pricing";
 import { formatPrice } from "@/lib/utils";
 import type { ProductBrief } from "./copywriter";
+import { siteBaseUrl } from "@/lib/sites/host";
 
 /**
  * Données factuelles d'un produit pour le copywriter (seule source autorisée)
@@ -12,7 +13,7 @@ import type { ProductBrief } from "./copywriter";
  */
 export async function buildProductBrief(productId: string, linkUrl: string, db: PrismaClient = defaultPrisma): Promise<{ brief: ProductBrief; images: string[] }> {
   const product = await db.product.findUniqueOrThrow({ where: { id: productId }, include: { images: { orderBy: { position: "asc" } } } });
-  const brand = await getSetting("brand");
+  const brand = await getSetting("brand", product.siteId);
   const price = effectivePrice(product);
   const kit = Array.isArray(product.kitContents) ? (product.kitContents as Array<{ title: string; quantity?: number | null }>) : [];
   // Image principale en tête, vidéos exclues
@@ -30,6 +31,7 @@ export async function buildProductBrief(productId: string, linkUrl: string, db: 
   };
 }
 
-export function productLandingBase(slug: string): string {
-  return `${env.appUrl}/aventures/${slug}`;
+/** Page produit sur le domaine de son univers (repli : URL de l'application). */
+export function productLandingBase(slug: string, site?: { primaryDomain: string | null; domains: string[] } | null): string {
+  return `${site ? siteBaseUrl(site, env.appUrl) : env.appUrl}/aventures/${slug}`;
 }

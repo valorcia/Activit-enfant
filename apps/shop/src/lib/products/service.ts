@@ -6,6 +6,7 @@ import { audit } from "@/lib/audit";
 import { emitMarketingEvent } from "@/lib/marketing/events";
 import { productInputSchema, type ProductInput } from "@/lib/schemas/product";
 import { slugify } from "@/lib/utils";
+import { DEFAULT_SITE_ID } from "@/lib/sites/constants";
 
 export interface Actor { userId?: string | null; actor?: string | null; source?: string }
 
@@ -24,6 +25,7 @@ export async function uniqueSlug(base: string, excludeId?: string): Promise<stri
 function toData(input: ProductInput): Omit<Prisma.ProductUncheckedCreateInput, "slug" | "name" | "priceCents"> & { name: string; priceCents: number } {
   const publishedAt = input.status === "PUBLISHED" ? new Date() : undefined;
   return {
+    ...(input.siteId ? { siteId: input.siteId } : {}),
     name: input.name,
     tagline: input.tagline ?? null,
     shortDescription: input.shortDescription ?? null,
@@ -79,8 +81,27 @@ async function syncRelations(productId: string, input: ProductInput, tx: Prisma.
   }
 }
 
+/** Univers par défaut (repli : identifiant fixe de La Malle à Jeux). */
+async function defaultSiteId(): Promise<string> {
+  return (await prisma.site.findFirst({ where: { isDefault: true }, select: { id: true } }))?.id ?? DEFAULT_SITE_ID;
+}
+
+/** Catégorie et collections doivent appartenir à l'univers du produit. */
+async function assertSameSite(input: ProductInput, siteId: string) {
+  if (input.categoryId) {
+    const c = await prisma.category.findUnique({ where: { id: input.categoryId }, select: { siteId: true } });
+    if (c && c.siteId !== siteId) throw new Error("La catégorie choisie appartient à un autre univers que le produit");
+  }
+  if (input.collectionIds?.length) {
+    const other = await prisma.collection.count({ where: { id: { in: input.collectionIds }, siteId: { not: siteId } } });
+    if (other) throw new Error("Une collection choisie appartient à un autre univers que le produit");
+  }
+}
+
 export async function createProduct(raw: unknown, actor: Actor = {}): Promise<Product> {
   const input = productInputSchema.parse(raw);
+  input.siteId ||= await defaultSiteId();
+  await assertSameSite(input, input.siteId);
   const slug = await uniqueSlug(input.slug || input.name);
   const data = toData(input);
   const product = await prisma.$transaction(async (tx) => {
@@ -97,6 +118,7 @@ export async function createProduct(raw: unknown, actor: Actor = {}): Promise<Pr
 export async function updateProduct(id: string, raw: unknown, actor: Actor = {}): Promise<Product> {
   const input = productInputSchema.parse(raw);
   const before = await prisma.product.findUniqueOrThrow({ where: { id } });
+  await assertSameSite(input, input.siteId || before.siteId);
   const slug = input.slug && input.slug !== before.slug ? await uniqueSlug(input.slug, id) : before.slug;
   const data = toData(input);
   // Conserve la date de première publication

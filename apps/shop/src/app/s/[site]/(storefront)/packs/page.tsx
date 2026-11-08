@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Boxes } from "lucide-react";
-import { env } from "@/lib/env";
+import { siteFromParams, siteUrl } from "@/lib/sites";
 import { getPublishedBundles } from "@/lib/catalog";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/misc";
@@ -15,14 +15,15 @@ export const revalidate = 300;
 export const metadata: Metadata = {
   title: "Packs et offres groupées",
   description: "Plusieurs aventures à imprimer réunies à prix doux : packs anniversaire, vacances, par âge ou par thème.",
-  alternates: { canonical: `${env.appUrl}/packs` },
+  alternates: { canonical: "/packs" },
 };
 
-export default async function PacksPage() {
-  const bundles = await getPublishedBundles(48);
+export default async function PacksPage({ params }: { params: Promise<{ site: string }> }) {
+  const site = await siteFromParams(params);
+  const bundles = await getPublishedBundles(site.id, 48);
   return (
     <div className="container-shell py-8 sm:py-12">
-      <JsonLd data={{ "@context": "https://schema.org", "@type": "CollectionPage", name: "Packs", url: `${env.appUrl}/packs` }} />
+      <JsonLd data={{ "@context": "https://schema.org", "@type": "CollectionPage", name: "Packs", url: `${siteUrl(site)}/packs` }} />
       <Breadcrumbs items={[{ label: "Packs" }]} className="mb-6" />
       <SectionHeading as="h1" eyebrow="Bons plans" title="Packs et offres groupées" description="Plusieurs kits réunis pour prolonger le plaisir, à prix réduit." />
       {bundles.length === 0 ? (

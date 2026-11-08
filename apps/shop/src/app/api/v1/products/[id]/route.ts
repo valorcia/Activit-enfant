@@ -2,7 +2,7 @@ import { ZodError } from "zod";
 import { prisma } from "@/lib/db";
 import { env } from "@/lib/env";
 import { apiError, apiOk, authenticateApiKey } from "@/lib/api/auth";
-import { apiProductSelect, productToInput, resolveCategoryAndCollections, serializeProduct } from "@/lib/api/products";
+import { apiProductSelect, productToInput, resolveApiSite, resolveCategoryAndCollections, serializeProduct, UnknownSiteError } from "@/lib/api/products";
 import { updateProduct } from "@/lib/products/service";
 import { productApiInputSchema } from "@/lib/schemas/product";
 import { attachImageFromUrl } from "@/lib/api/media";
@@ -37,9 +37,12 @@ export async function PATCH(req: Request, ctx: Ctx) {
     const merged = { ...existing, ...patch };
     if (requestedStatus === "DRAFT" || requestedStatus === "ARCHIVED") merged.status = requestedStatus;
     const parsed = productApiInputSchema.parse({ ...merged, images: images ?? [], categorySlug, collectionSlugs });
-    const { images: imgs, categorySlug: cs, collectionSlugs: cols, ...rest } = parsed;
-    const resolved = await resolveCategoryAndCollections({ categorySlug: cs, categoryId: rest.categoryId, collectionSlugs: cols, collectionIds: cols?.length ? [] : rest.collectionIds });
-    const product = await updateProduct(id, { ...rest, categoryId: resolved.categoryId, collectionIds: resolved.collectionIds }, { actor: `api:${auth.key.prefix}`, source: "api" });
+    const { images: imgs, categorySlug: cs, collectionSlugs: cols, siteSlug, ...rest } = parsed;
+    const siteId = siteSlug ? (await resolveApiSite(siteSlug)).id : existing.siteId;
+    // Changement d'univers : catégorie et collections sont à redéfinir dans le nouvel univers
+    if (siteId !== existing.siteId && !cs) rest.categoryId = null;
+    const resolved = await resolveCategoryAndCollections({ siteId, categorySlug: cs, categoryId: rest.categoryId, collectionSlugs: cols, collectionIds: cols?.length ? [] : siteId !== existing.siteId ? [] : rest.collectionIds });
+    const product = await updateProduct(id, { ...rest, siteId, categoryId: resolved.categoryId, collectionIds: resolved.collectionIds }, { actor: `api:${auth.key.prefix}`, source: "api" });
     const warnings: string[] = [];
     for (const img of imgs) {
       try { await attachImageFromUrl(product.id, img.url, { role: img.role, alt: img.alt }); } catch (e) { warnings.push(`${img.url} : ${e instanceof Error ? e.message : "erreur"}`); }
@@ -47,6 +50,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
     const full = await prisma.product.findUniqueOrThrow({ where: { id }, select: apiProductSelect });
     return apiOk(serializeProduct(full, env.appUrl), 200, warnings.length ? { warnings } : {});
   } catch (e) {
+    if (e instanceof UnknownSiteError) return apiError(422, e.message);
     if (e instanceof ZodError) return apiError(422, "Données invalides", e.issues.map((i) => ({ path: i.path.join("."), message: i.message })));
     return apiError(400, e instanceof Error ? e.message : "Erreur");
   }

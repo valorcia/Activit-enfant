@@ -8,7 +8,7 @@ import { NewsletterForm } from "./newsletter-form";
  * Après l'achat : produits complémentaires (même catégorie que les articles achetés,
  * sinon meilleures ventes), newsletter si pas abonné, invitation à donner son avis.
  */
-export async function PostPurchase({ purchasedProductIds, email }: { purchasedProductIds: string[]; email: string }) {
+export async function PostPurchase({ siteId, purchasedProductIds, email }: { siteId: string; purchasedProductIds: string[]; email: string }) {
   const purchased = purchasedProductIds.length
     ? await prisma.product.findMany({ where: { id: { in: purchasedProductIds } }, select: { id: true, categoryId: true, universe: true } })
     : [];
@@ -16,14 +16,14 @@ export async function PostPurchase({ purchasedProductIds, email }: { purchasedPr
   const exclude = new Set(purchasedProductIds);
 
   let related: ProductCardData[] = categoryIds.length
-    ? await prisma.product.findMany({ where: { status: "PUBLISHED", id: { notIn: [...exclude] }, categoryId: { in: categoryIds } }, orderBy: { salesCount: "desc" }, take: 3, select: productCardSelect })
+    ? await prisma.product.findMany({ where: { status: "PUBLISHED", siteId, id: { notIn: [...exclude] }, categoryId: { in: categoryIds } }, orderBy: { salesCount: "desc" }, take: 3, select: productCardSelect })
     : [];
   if (related.length < 3) {
-    const best = (await getBestsellers(12)).filter((p) => !exclude.has(p.id) && !related.some((r) => r.id === p.id));
+    const best = (await getBestsellers(siteId, 12)).filter((p) => !exclude.has(p.id) && !related.some((r) => r.id === p.id));
     related = [...related, ...best].slice(0, 3);
   }
 
-  const subscribed = email ? await prisma.newsletterSubscriber.findFirst({ where: { email: email.toLowerCase(), status: "CONFIRMED" }, select: { id: true } }) : null;
+  const subscribed = email ? await prisma.newsletterSubscriber.findFirst({ where: { siteId, email: email.toLowerCase(), status: "CONFIRMED" }, select: { id: true } }) : null;
 
   return (
     <div className="mt-14 space-y-12">

@@ -67,6 +67,10 @@ export function SettingsForm({ commerce: c0, seo: s0, analytics: a0, integration
             {seo.ogImageUrl && <img src={seo.ogImageUrl} alt="" className="mb-2 max-h-40 rounded-xl" />}
             <UploadField scope="public" accept="image/*" label="Déposer une image" onUploaded={(f) => "url" in f && setSeo({ ...seo, ogImageUrl: f.url })} />
           </FormField>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField label="Vérification Meta (facebook-domain-verification)" htmlFor="s-fbv" hint="Code de la balise méta fournie par Meta Business → Brand Safety → Domaines, pour le domaine de cet univers"><Input id="s-fbv" value={seo.facebookDomainVerification ?? ""} maxLength={100} onChange={(e) => setSeo({ ...seo, facebookDomainVerification: e.target.value.trim() || null })} /></FormField>
+            <FormField label="Vérification Google Search Console" htmlFor="s-gv" hint="Contenu de la balise google-site-verification"><Input id="s-gv" value={seo.googleSiteVerification ?? ""} maxLength={100} onChange={(e) => setSeo({ ...seo, googleSiteVerification: e.target.value.trim() || null })} /></FormField>
+          </div>
           <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={seo.robotsIndex} onChange={(e) => setSeo({ ...seo, robotsIndex: e.target.checked })} className="size-4 accent-coral" /> Autoriser l&apos;indexation par les moteurs de recherche</label>
           <div><Button variant="admin" disabled={pending} onClick={() => save("seo", seo)}>Enregistrer</Button></div>
         </FormSection>

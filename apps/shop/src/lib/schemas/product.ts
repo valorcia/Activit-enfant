@@ -22,7 +22,7 @@ export const sellingPointSchema = z.object({
 export type SellingPoint = z.infer<typeof sellingPointSchema>;
 
 export const productStatusSchema = z.enum(["DRAFT", "SCHEDULED", "PUBLISHED", "ARCHIVED"]);
-export const productTemplateSchema = z.enum(["ADVENTURE", "ACTIVITY", "STORY", "EVENT", "CLASSIC"]);
+export const productTemplateSchema = z.enum(["ADVENTURE", "ACTIVITY", "STORY", "EVENT", "CLASSIC", "GUIDE", "RECIPES"]);
 export const mediaRoleSchema = z.enum(["MAIN", "GALLERY", "ILLUSTRATION", "MOCKUP", "VIDEO", "PDF_PREVIEW", "OG"]);
 export const fileKindSchema = z.enum(["MAIN_PDF", "EXTRA_PDF", "INSTRUCTIONS", "BONUS"]);
 
@@ -87,6 +87,8 @@ const productBaseSchema = z.object({
   status: productStatusSchema.default("DRAFT"),
   scheduledAt: optionalDate,
   isFeatured: z.coerce.boolean().optional().default(false),
+  /** Univers (site) du produit ; absent = univers par défaut à la création, inchangé à la mise à jour. */
+  siteId: z.string().optional(),
 });
 
 type ProductBase = z.infer<typeof productBaseSchema>;
@@ -115,6 +117,8 @@ export const productApiInputSchema = withRules(productBaseSchema.extend({
     role: mediaRoleSchema.default("GALLERY"),
   })).optional().default([]),
   categorySlug: z.string().optional(),
+  /** Univers cible (slug, ex. « la-malle-a-jeux ») ; défaut : univers par défaut. */
+  siteSlug: z.string().optional(),
   collectionSlugs: z.array(z.string()).optional().default([]),
 }));
 export type ProductApiInput = z.infer<typeof productApiInputSchema>;

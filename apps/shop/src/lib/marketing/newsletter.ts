@@ -1,24 +1,25 @@
 import "server-only";
 import { prisma } from "@/lib/db";
-import { env } from "@/lib/env";
 import { sendEmail } from "@/lib/email";
 import { newsletterConfirmEmail } from "@/lib/email/templates";
-import { getSetting } from "@/lib/settings";
+import { emailBrandForSite } from "@/lib/sites/email";
+import { DEFAULT_SITE_ID } from "@/lib/sites/constants";
 import { randomToken } from "@/lib/tokens";
 import { emitMarketingEvent } from "./events";
 
 export const NEWSLETTER_CONSENT_TEXT =
   "J'accepte de recevoir par email les nouvelles aventures et offres promotionnelles. Désinscription possible à tout moment.";
 
-export async function subscribeToNewsletter(input: { email: string; firstName?: string | null; source?: string; ip?: string | null }) {
+export async function subscribeToNewsletter(input: { siteId?: string; email: string; firstName?: string | null; source?: string; ip?: string | null }) {
   const email = input.email.trim().toLowerCase();
-  const existing = await prisma.newsletterSubscriber.findUnique({ where: { email } });
+  const siteId = input.siteId ?? DEFAULT_SITE_ID;
+  const existing = await prisma.newsletterSubscriber.findUnique({ where: { siteId_email: { siteId, email } } });
   if (existing?.status === "CONFIRMED") return { status: "already" as const };
 
   const confirmToken = randomToken(24);
   const sub = await prisma.newsletterSubscriber.upsert({
-    where: { email },
-    create: { email, firstName: input.firstName ?? undefined, status: "PENDING", confirmToken, unsubToken: randomToken(24), source: input.source },
+    where: { siteId_email: { siteId, email } },
+    create: { siteId, email, firstName: input.firstName ?? undefined, status: "PENDING", confirmToken, unsubToken: randomToken(24), source: input.source },
     update: { firstName: input.firstName ?? undefined, status: "PENDING", confirmToken, unsubscribedAt: null },
   });
   await prisma.marketingConsent.create({
@@ -26,10 +27,9 @@ export async function subscribeToNewsletter(input: { email: string; firstName?: 
   });
   await emitMarketingEvent("subscriber.created", email, { source: input.source ?? null });
 
-  const brand = await getSetting("brand");
-  const theme = await getSetting("theme");
-  const confirmUrl = `${env.appUrl}/newsletter/confirmation/${sub.confirmToken}`;
-  await sendEmail({ to: email, ...newsletterConfirmEmail({ name: brand.name, appUrl: env.appUrl, contactEmail: brand.contactEmail, color: theme.colors.coral }, { confirmUrl }) });
+  const brand = await emailBrandForSite(siteId);
+  const confirmUrl = `${brand.appUrl}/newsletter/confirmation/${sub.confirmToken}`;
+  await sendEmail({ to: email, ...newsletterConfirmEmail(brand, { confirmUrl }) });
   return { status: "pending" as const };
 }
 

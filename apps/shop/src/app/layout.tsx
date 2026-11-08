@@ -9,7 +9,9 @@ export async function generateMetadata(): Promise<Metadata> {
   const { seo, brand } = await getSettings();
   return {
     metadataBase: new URL(env.appUrl),
-    title: { default: seo.defaultTitle, template: seo.titleTemplate },
+    // Pas de modèle de titre ici : chaque univers définit le sien (src/app/s/[site]/layout.tsx),
+    // sinon le titre par défaut d'un univers recevrait le suffixe de l'univers par défaut.
+    title: seo.defaultTitle,
     description: seo.defaultDescription,
     applicationName: brand.name,
     robots: seo.robotsIndex ? { index: true, follow: true } : { index: false, follow: false },

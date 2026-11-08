@@ -6,14 +6,14 @@ import { Share2, Music2, RefreshCw, Unplug, Check, AlertTriangle } from "lucide-
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ConfirmButton } from "@/components/admin/confirm-button";
-import { disconnectAccountAction } from "@/app/actions/admin/marketing-social";
+import { disconnectAccountAction, setAccountAudienceAction } from "@/app/actions/admin/marketing-social";
 import { formatDate } from "@/lib/utils";
 
-export interface AccountRow { id: string; provider: "META" | "TIKTOK"; kind: string; name: string; username: string | null; avatarUrl: string | null; needsReconnect: boolean; tokenExpiresAt: string | null; parentId: string | null }
+export interface AccountRow { id: string; provider: "META" | "TIKTOK"; kind: string; name: string; username: string | null; avatarUrl: string | null; needsReconnect: boolean; tokenExpiresAt: string | null; parentId: string | null; audienceId: string | null }
 
 const KIND_LABEL: Record<string, string> = { PAGE: "Page Facebook", INSTAGRAM: "Instagram", TIKTOK: "Compte TikTok", AD_ACCOUNT: "Compte publicitaire" };
 
-export function SocialConnectors({ accounts, configured, conversions }: { accounts: AccountRow[]; configured: Record<"META" | "TIKTOK", boolean>; conversions: { meta: boolean; tiktok: boolean } }) {
+export function SocialConnectors({ accounts, audiences, configured, conversions }: { accounts: AccountRow[]; audiences: Array<{ id: string; name: string }>; configured: Record<"META" | "TIKTOK", boolean>; conversions: { meta: boolean; tiktok: boolean } }) {
   const router = useRouter();
   const providers: Array<{ key: "META" | "TIKTOK"; label: string; icon: React.ReactNode; help: string; tool: { label: string; href: string } }> = [
     { key: "META", label: "Meta (Facebook & Instagram)", icon: <Share2 className="size-5" />, help: "Pages Facebook, comptes Instagram professionnels rattachés et comptes publicitaires.", tool: { label: "Meta Business Suite", href: "https://business.facebook.com/latest/home" } },
@@ -46,6 +46,15 @@ export function SocialConnectors({ accounts, configured, conversions }: { accoun
                     <p className="truncate font-semibold">{a.name} {a.username && <span className="text-ink-muted">@{a.username}</span>}</p>
                     <p className="text-xs text-ink-soft">{KIND_LABEL[a.kind] ?? a.kind}{a.tokenExpiresAt ? ` · jeton jusqu'au ${formatDate(a.tokenExpiresAt)}` : ""}{a.needsReconnect ? " · à reconnecter" : ""}</p>
                   </div>
+                  <select
+                    aria-label={`Audience du compte ${a.name}`}
+                    className="max-w-[9.5rem] rounded-lg border border-line bg-white px-2 py-1 text-xs"
+                    defaultValue={a.audienceId ?? ""}
+                    onChange={async (e) => { const r = await setAccountAudienceAction(a.id, e.target.value || null); if (r.ok) { toast.success("Audience du compte enregistrée"); router.refresh(); } else toast.error(r.error); }}
+                  >
+                    <option value="">Commun (toutes audiences)</option>
+                    {audiences.map((au) => <option key={au.id} value={au.id}>{au.name}</option>)}
+                  </select>
                   <ConfirmButton size="icon-sm" variant="ghost" title="Déconnecter ce compte ?" description="Le jeton sera révoqué localement. Les posts publiés ne sont pas supprimés." confirmLabel="Déconnecter" onConfirm={async () => { const r = await disconnectAccountAction(a.id); if (r.ok) { toast.success("Compte déconnecté"); router.refresh(); } return r; }}>
                     <Unplug className="size-4" />
                   </ConfirmButton>

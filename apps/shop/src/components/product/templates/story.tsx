@@ -22,7 +22,7 @@ export function StoryTemplate({ product }: { product: ProductPageData }) {
       <TemplateGallery product={product} />
       <LongDescription product={product} title="À propos de ce livre" />
       <KitContents product={product} />
-      <GuaranteeBlock />
+      <GuaranteeBlock siteId={product.siteId} />
       <SellingPoints product={product} />
       <PracticalInfo product={product} />
       <OfferRecap product={product} />

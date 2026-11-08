@@ -3,8 +3,8 @@ import { getSetting } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 
 /** Bloc garantie (configurable Admin → Apparence → Conversion). Masqué si désactivé. */
-export async function GuaranteeBlock({ compact = false, className }: { compact?: boolean; className?: string }) {
-  const { guarantee } = await getSetting("conversion");
+export async function GuaranteeBlock({ siteId, compact = false, className }: { siteId?: string; compact?: boolean; className?: string }) {
+  const { guarantee } = await getSetting("conversion", siteId);
   if (!guarantee.enabled) return null;
   if (compact) {
     return (

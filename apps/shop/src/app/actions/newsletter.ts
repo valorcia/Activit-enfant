@@ -2,6 +2,7 @@
 import { z } from "zod";
 import { headers } from "next/headers";
 import { subscribeToNewsletter } from "@/lib/marketing/newsletter";
+import { getRequestSite } from "@/lib/sites";
 
 const schema = z.object({
   email: z.string().email("Adresse email invalide"),
@@ -37,7 +38,8 @@ export async function subscribeNewsletterAction(_prev: NewsletterState | undefin
     return { error: "Trop de tentatives, réessayez dans quelques minutes." };
   }
   try {
-    const res = await subscribeToNewsletter({ email: parsed.data.email, firstName: parsed.data.firstName, source: parsed.data.source, ip });
+    const site = await getRequestSite();
+    const res = await subscribeToNewsletter({ siteId: site.id, email: parsed.data.email, firstName: parsed.data.firstName, source: parsed.data.source, ip });
     if (res.status === "already") return { ok: true, message: "Vous êtes déjà inscrit·e. Merci !" };
     return { ok: true, message: "Presque fini ! Vérifiez votre boîte mail pour confirmer votre inscription." };
   } catch (e) {

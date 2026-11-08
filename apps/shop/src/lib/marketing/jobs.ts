@@ -6,6 +6,7 @@ import { abandonedCartEmail, newProductEmail } from "@/lib/email/templates";
 import { getSetting } from "@/lib/settings";
 import { sendPurchaseConversions } from "@/lib/social/conversions";
 import { runSocialJobs } from "@/lib/social/jobs";
+import { emailBrandForSite } from "@/lib/sites/email";
 
 export interface Brand { name: string; appUrl: string; contactEmail?: string | null; color?: string }
 
@@ -31,10 +32,10 @@ export function isAbandoned(order: { status: string; email: string; createdAt: D
   return now.getTime() - order.createdAt.getTime() >= delayMinutes * 60_000;
 }
 
-async function brand(): Promise<Brand> {
-  const b = await getSetting("brand");
-  const t = await getSetting("theme");
-  return { name: b.name, appUrl: env.appUrl, contactEmail: b.contactEmail, color: t.colors.coral };
+/** Identité (nom, couleur, domaine) de l'univers concerné, pour les emails. */
+async function brand(siteId?: string | null): Promise<Brand> {
+  const b = await emailBrandForSite(siteId);
+  return { name: b.name, appUrl: b.appUrl, contactEmail: b.contactEmail, color: b.color };
 }
 
 /** (a) Relance des paniers abandonnés. */
@@ -49,16 +50,16 @@ export async function processAbandonedCarts(db: PrismaClient = defaultPrisma, no
   });
   let sent = 0;
   let skipped = 0;
-  const b = await brand();
   for (const order of orders) {
+    const b = await brand(order.siteId);
     if (!isAbandoned(order, commerce.abandonedCartDelayMinutes, now)) { skipped++; continue; }
     const [consents, sub] = await Promise.all([
       db.marketingConsent.findMany({ where: { email: order.email }, select: { purpose: true, granted: true, createdAt: true } }),
-      db.newsletterSubscriber.findUnique({ where: { email: order.email }, select: { status: true, unsubToken: true } }),
+      db.newsletterSubscriber.findUnique({ where: { siteId_email: { siteId: order.siteId, email: order.email } }, select: { status: true, unsubToken: true } }),
     ]);
     if (!canReceiveMarketing(consents, sub?.status)) { skipped++; continue; }
-    const unsubscribeUrl = sub ? `${env.appUrl}/newsletter/desinscription/${sub.unsubToken}` : `${env.appUrl}/pages/confidentialite`;
-    const mail = abandonedCartEmail(b, { items: order.items.map((i) => i.name), resumeUrl: `${env.appUrl}/panier`, unsubscribeUrl });
+    const unsubscribeUrl = sub ? `${b.appUrl}/newsletter/desinscription/${sub.unsubToken}` : `${b.appUrl}/pages/confidentialite`;
+    const mail = abandonedCartEmail(b, { items: order.items.map((i) => i.name), resumeUrl: `${b.appUrl}/panier`, unsubscribeUrl });
     const res = await sendEmail({ to: order.email, ...mail });
     if (res.ok) {
       await db.order.update({ where: { id: order.id }, data: { abandonedEmailSentAt: now } });
@@ -75,18 +76,19 @@ export async function processAbandonedCarts(db: PrismaClient = defaultPrisma, no
 export async function processProductPublishedEvents(db: PrismaClient = defaultPrisma, now = new Date(), maxEmails = 200): Promise<{ events: number; emails: number }> {
   const events = await db.marketingEvent.findMany({ where: { type: "product.published", processedAt: null }, orderBy: { createdAt: "asc" }, take: 5 });
   if (events.length === 0) return { events: 0, emails: 0 };
-  const b = await brand();
   let emails = 0;
   let processed = 0;
   for (const ev of events) {
     const payload = (ev.payload ?? {}) as { productId?: string; slug?: string; name?: string };
     if (!payload.productId) { await db.marketingEvent.update({ where: { id: ev.id }, data: { processedAt: now, error: "payload invalide" } }); processed++; continue; }
-    const product = await db.product.findUnique({ where: { id: payload.productId }, select: { name: true, slug: true, tagline: true, status: true } });
+    const product = await db.product.findUnique({ where: { id: payload.productId }, select: { name: true, slug: true, tagline: true, status: true, siteId: true } });
     if (!product || product.status !== "PUBLISHED") { await db.marketingEvent.update({ where: { id: ev.id }, data: { processedAt: now, error: "produit non publié" } }); processed++; continue; }
-    const subscribers = await db.newsletterSubscriber.findMany({ where: { status: "CONFIRMED" }, select: { email: true, unsubToken: true }, take: Math.max(0, maxEmails - emails) });
+    const b = await brand(product.siteId);
+    // Annonce limitée aux abonnés de l'univers du produit
+    const subscribers = await db.newsletterSubscriber.findMany({ where: { status: "CONFIRMED", siteId: product.siteId }, select: { email: true, unsubToken: true }, take: Math.max(0, maxEmails - emails) });
     if (emails + subscribers.length > maxEmails && subscribers.length === 0) break;
     for (const s of subscribers) {
-      const mail = newProductEmail(b, { productName: product.name, productUrl: `${env.appUrl}/aventures/${product.slug}?utm_source=newsletter&utm_medium=email&utm_campaign=nouveaute`, tagline: product.tagline, unsubscribeUrl: `${env.appUrl}/newsletter/desinscription/${s.unsubToken}` });
+      const mail = newProductEmail(b, { productName: product.name, productUrl: `${b.appUrl}/aventures/${product.slug}?utm_source=newsletter&utm_medium=email&utm_campaign=nouveaute`, tagline: product.tagline, unsubscribeUrl: `${b.appUrl}/newsletter/desinscription/${s.unsubToken}` });
       await sendEmail({ to: s.email, ...mail });
       emails++;
     }
