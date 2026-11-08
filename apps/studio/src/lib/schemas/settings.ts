@@ -64,3 +64,20 @@ export const ShopListingSchema = z.object({
   autoPublish: z.boolean().optional(), // surcharge du réglage global pour ce livre
 });
 export type ShopListing = z.infer<typeof ShopListingSchema>;
+
+// ---------------------------------------------------------------------------
+// Studio : nom affiché, prix par défaut par type de kit, charte d'illustration
+// ---------------------------------------------------------------------------
+
+export const DEFAULT_ILLUSTRATION_CHARTER =
+  "Style : illustration jeunesse à l'aquarelle, contours fins et doux, couleurs chaudes et lumineuses (crème #FFF9F0, corail, jaune miel, vert sauge, bleu ciel), grain de papier léger, lumière douce, aucune ombre dure. Personnages expressifs, visages ronds et souriants, proportions enfantines (grosse tête, grands yeux), aucun texte dans l'image sauf demande explicite. Cadrage lisible pour une impression A4, marges propres, fond uni crème ou décor simple. Pas de style 3D, pas de photo-réalisme, pas de logo.";
+
+export const StudioSettingsSchema = z.object({
+  studioName: z.string().min(1).max(80).default("La Malle à Jeux · Studio"),
+  defaultAuthor: z.string().max(80).default("La Malle à Jeux"),
+  illustrationCharter: z.string().max(4000).default(DEFAULT_ILLUSTRATION_CHARTER),
+  /** Prix par défaut par type de kit (centimes), surcharge du référentiel */
+  priceByKitType: z.record(z.string(), z.number().int().min(0)).default({}),
+});
+export type StudioSettings = z.infer<typeof StudioSettingsSchema>;
+export const DEFAULT_STUDIO_SETTINGS: StudioSettings = StudioSettingsSchema.parse({});

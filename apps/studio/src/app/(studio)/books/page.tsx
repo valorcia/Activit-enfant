@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { ageRangeLabel, ART_STYLES, BOOK_TYPES } from "@/lib/schemas/activity";
+import { kitLabel } from "@/lib/kits/types";
 import { formatDate } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -31,7 +32,7 @@ export default async function BooksPage() {
             {books.map((b) => (
               <tr key={b.id} className="hover:bg-slate-50">
                 <td className="px-4 py-2"><Link href={`/books/${b.id}`} className="font-semibold hover:underline">{b.title}</Link>{b.subtitle && <div className="text-xs text-slate-500">{b.subtitle}</div>}</td>
-                <td className="px-4 py-2">{BOOK_TYPES.find((t) => t.key === b.bookType)?.label ?? b.bookType}</td>
+                <td className="px-4 py-2">{BOOK_TYPES.find((t) => t.key === b.bookType)?.label ?? kitLabel(b.kitType)}</td>
                 <td className="px-4 py-2">{ageRangeLabel(b.ageRange)}</td>
                 <td className="px-4 py-2">{ART_STYLES.find((s) => s.key === b.artStyle)?.label ?? b.artStyle}</td>
                 <td className="px-4 py-2">{b._count.activities} / {b.targetCount}</td>

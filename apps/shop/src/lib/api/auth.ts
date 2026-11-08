@@ -45,7 +45,10 @@ export async function authenticateApiKey(req: Request, requiredScope?: ApiScope,
   const key = await db.apiKey.findUnique({ where: { keyHash: sha256(raw) }, select: { id: true, name: true, prefix: true, scopes: true, revokedAt: true } });
   if (!key) return { ok: false, status: 401, error: "Clé API inconnue" };
   if (key.revokedAt) return { ok: false, status: 401, error: "Clé API révoquée" };
-  if (requiredScope && !key.scopes.includes(requiredScope)) {
+  // products:write (et products:publish) impliquent la lecture : une intégration qui écrit doit pouvoir relire le catalogue
+  const effective = new Set(key.scopes);
+  if (effective.has("products:write") || effective.has("products:publish")) effective.add("products:read");
+  if (requiredScope && !effective.has(requiredScope)) {
     return { ok: false, status: 403, error: `Permission manquante : ${requiredScope}` };
   }
   if (!checkRateLimit(key.id)) return { ok: false, status: 429, error: "Trop de requêtes : limite de 60 requêtes par minute" };

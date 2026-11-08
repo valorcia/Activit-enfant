@@ -52,6 +52,9 @@ const PURPOSE_LABELS: Record<string, string> = {
   activity: "Fiche",
   visual_reference: "Fiche de référence visuelle",
   cover: "Textes de couverture",
+  kit_hunt: "Contenu du kit (chasse au trésor)",
+  kit_pranks: "Contenu du kit (idées)",
+  kit_plan: "Plan de kit depuis un brief",
   qc: "Contrôle qualité",
   repair: "Réparation",
 };

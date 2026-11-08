@@ -4,7 +4,7 @@ import { z } from "zod";
 // Référentiels
 // ---------------------------------------------------------------------------
 
-export const AGE_RANGES = ["3-5", "4-6", "6-9", "9-12"] as const;
+export const AGE_RANGES = ["3-5", "4-6", "5-8", "6-9", "8-10", "3-10", "9-12"] as const;
 export type AgeRange = (typeof AGE_RANGES)[number];
 
 export const BOOK_TYPES = [

@@ -18,7 +18,7 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
   const perPage = Math.min(100, Math.max(1, Number(url.searchParams.get("perPage")) || 25));
-  const status = url.searchParams.get("status");
+  const status = url.searchParams.get("status"); // DRAFT | SCHEDULED | PUBLISHED | ARCHIVED | all (défaut : tous)
   const slug = url.searchParams.get("slug");
   const source = url.searchParams.get("source");
   const where = {

@@ -1,5 +1,6 @@
 import type { TextProvider, TextResult } from "../types";
 import { mockOutline, mockActivity, mockVisualReference, mockCover } from "./mock-content";
+import { mockKitPlan, mockPranksKit, mockTreasureHunt } from "../../kits/mock";
 
 /**
  * Fournisseur de démonstration : produit des contenus plausibles, structurés et
@@ -17,6 +18,9 @@ export class MockTextProvider implements TextProvider {
     else if (purpose === "activity") out = mockActivity(ctx);
     else if (purpose === "visual_reference") out = mockVisualReference(ctx);
     else if (purpose === "cover") out = mockCover(ctx);
+    else if (purpose === "kit_hunt") out = mockTreasureHunt(ctx);
+    else if (purpose === "kit_pranks") out = mockPranksKit(ctx);
+    else if (purpose === "kit_plan") out = mockKitPlan(ctx);
     else out = { note: "mock" };
     await new Promise((r) => setTimeout(r, 150));
     return { text: JSON.stringify(out), provider: this.name, model: "mock", usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 } };
@@ -24,7 +28,7 @@ export class MockTextProvider implements TextProvider {
 }
 
 function parseContext(prompt: string): Record<string, string> {
-  const ctx: Record<string, string> = {};
+  const ctx: Record<string, string> = {}; // valeurs scalaires (les nombres restent des nombres)
   const m = /<<context>>([\s\S]*?)<<\/context>>/.exec(prompt);
   if (m) {
     try {

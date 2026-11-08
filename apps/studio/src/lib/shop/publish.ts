@@ -13,6 +13,8 @@ import { getShopSettings } from "../settings";
 import { ShopListingSchema, type ShopListing, type ShopSettings } from "../schemas/settings";
 import { ageRangeLabel, BOOK_TYPES } from "../schemas/activity";
 import { ShopApiError, ShopClient, type ShopProduct } from "./client";
+import { isStructuredKit, kitContentsFor, kitType, LEGACY_ACTIVITY_TYPE } from "../kits/types";
+import { KitCustomizationSchema, PranksKitSchema, TreasureHuntSchema } from "../kits/schemas";
 
 export type BookForListing = Book & {
   activities: Array<{ activity: { title: string; concept: Prisma.JsonValue | null; currentVersion: { content: Prisma.JsonValue } | null; durationMinutes: number; difficulty: number; category: string } }>;
@@ -45,8 +47,10 @@ function templateFor(bookType: string, fallback: ShopSettings["defaultTemplate"]
 
 /** Fiche commerciale dérivée du livre, puis fusionnée avec les surcharges éditées dans le studio. */
 export function buildListingFromBook(book: BookForListing, settings: ShopSettings) {
+  if (isStructuredKit(book.kitType) && book.kitContent) return buildListingFromKit(book, settings);
   const override = ShopListingSchema.safeParse(book.shopListing ?? {});
   const o: ShopListing = override.success ? override.data : {};
+  const def = book.kitType && book.kitType !== LEGACY_ACTIVITY_TYPE ? kitType(book.kitType) : null;
   const typeLabel = BOOK_TYPES.find((t) => t.key === book.bookType)?.label ?? book.bookType;
   const cover = (book.cover ?? {}) as { backText?: string; introduction?: string; tagline?: string };
   const titles = book.activities.map((a) => a.activity.title);
@@ -78,8 +82,8 @@ export function buildListingFromBook(book: BookForListing, settings: ShopSetting
     shortDescription: o.shortDescription ?? shortDescription,
     longDescription: o.longDescription ?? longDescription,
     story: o.story ?? cover.introduction ?? undefined,
-    template: o.template ?? templateFor(book.bookType, settings.defaultTemplate),
-    categorySlug: o.categorySlug ?? settings.defaultCategorySlug,
+    template: o.template ?? def?.template ?? templateFor(book.bookType, settings.defaultTemplate),
+    categorySlug: o.categorySlug ?? def?.shopCategory ?? settings.defaultCategorySlug,
     collectionSlugs: o.collectionSlugs ?? [],
     universe: o.universe ?? typeLabel,
     tags: o.tags ?? [typeLabel.toLowerCase(), "e-book", "à imprimer"],
@@ -100,6 +104,59 @@ export function buildListingFromBook(book: BookForListing, settings: ShopSetting
     seoTitle: (o.seoTitle ?? `${book.title} — e-book d'activités à imprimer`).slice(0, 70),
     seoDescription: (o.seoDescription ?? shortDescription).slice(0, 170),
     keywords: o.keywords ?? keywords,
+  };
+}
+
+/** Fiche commerciale d'un kit structuré : contenu réel du kit + section « boutique » + personnalisation. */
+export function buildListingFromKit(book: BookForListing, settings: ShopSettings) {
+  const def = kitType(book.kitType);
+  const o: ShopListing = ShopListingSchema.safeParse(book.shopListing ?? {}).data ?? {};
+  const c = KitCustomizationSchema.safeParse(book.customization ?? {}).data;
+  const hunt = def.format === "treasure_hunt" ? TreasureHuntSchema.safeParse(book.kitContent).data : undefined;
+  const pranks = def.format === "pranks" ? PranksKitSchema.safeParse(book.kitContent).data : undefined;
+  const content = hunt ?? pranks;
+  const b = content?.boutique ?? {};
+  const count = hunt ? hunt.enigmes.length : pranks?.idees.length ?? book.targetCount;
+  const latestExport = book.exports.find((e) => e.kind === "BOOK_DIGITAL") ?? book.exports[0];
+  const ages = parseAgeRange(book.ageRange);
+  const universe = o.universe ?? (c?.universe || b.universe || def.defaultUniverse || def.label);
+  const hero = hunt?.personnage?.nom ?? pranks?.personnages?.[0]?.nom;
+  const shortDescription = (o.shortDescription ?? b.shortDescription ?? `${def.label} à imprimer pour les ${ageRangeLabel(book.ageRange)} : ${count} ${def.countLabel}${hero ? ` avec ${hero}` : ""}. Téléchargement immédiat.`).slice(0, 400);
+  const story = o.story ?? b.story ?? (hunt ? hunt.lettre : pranks?.lettre_arrivee);
+  const heroBadges = b.heroBadges?.length ? b.heroBadges : ["PDF A4 immédiat", ageRangeLabel(book.ageRange), `${count} ${def.countLabel}`];
+  const tags = o.tags ?? b.tags ?? [def.label.toLowerCase(), universe.toLowerCase(), "à imprimer"];
+  return {
+    name: o.name ?? book.title,
+    slug: o.slug ?? book.shopProductSlug ?? stableSlug(book),
+    tagline: (o.tagline ?? b.tagline ?? book.subtitle ?? content?.sous_titre ?? "").slice(0, 200) || undefined,
+    shortDescription,
+    longDescription: o.longDescription ?? b.longDescription ?? undefined,
+    story: story ?? undefined,
+    template: o.template ?? c?.shopTemplate ?? def.template,
+    categorySlug: o.categorySlug ?? c?.shopCategorySlug ?? def.shopCategory ?? settings.defaultCategorySlug,
+    collectionSlugs: o.collectionSlugs ?? [],
+    universe,
+    tags,
+    badges: ["Nouveau"],
+    heroBadges,
+    ageMin: o.ageMin ?? b.ageMin ?? ages.ageMin,
+    ageMax: o.ageMax ?? b.ageMax ?? ages.ageMax,
+    playersMin: b.playersMin,
+    playersMax: b.playersMax,
+    durationMinutes: o.durationMinutes === null ? undefined : o.durationMinutes ?? b.durationMinutes,
+    difficulty: b.difficulty,
+    pageCount: latestExport?.pageCount ?? b.pageCount ?? undefined,
+    fileFormat: "PDF A4",
+    materials: (b.materials ?? hunt?.guide?.materiel ?? []).slice(0, 12),
+    priceCents: o.priceCents ?? c?.priceCents ?? b.priceCents ?? def.defaultPriceCents ?? settings.defaultPriceCents,
+    salePriceCents: o.salePriceCents ?? undefined,
+    currency: "EUR",
+    kitContents: o.kitContents ?? (b.kitContents?.length ? b.kitContents : kitContentsFor(def, { main: count })),
+    faq: o.faq ?? b.faq ?? [],
+    sellingPoints: o.sellingPoints ?? b.sellingPoints ?? [],
+    seoTitle: (o.seoTitle ?? b.seoTitle ?? `${book.title} — ${def.label.toLowerCase()} à imprimer`).slice(0, 70),
+    seoDescription: (o.seoDescription ?? b.seoDescription ?? shortDescription).slice(0, 170),
+    keywords: o.keywords ?? b.keywords ?? tags,
   };
 }
 

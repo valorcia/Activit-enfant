@@ -1,6 +1,6 @@
 import type { z } from "zod";
 
-export type GenerationPurpose = "outline" | "activity" | "visual_reference" | "illustration" | "cover" | "qc" | "repair";
+export type GenerationPurpose = "outline" | "activity" | "visual_reference" | "illustration" | "cover" | "qc" | "repair" | "kit_hunt" | "kit_pranks" | "kit_plan";
 
 export interface TextUsage {
   inputTokens: number;

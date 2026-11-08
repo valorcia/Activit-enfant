@@ -1,4 +1,5 @@
 import { BookThemeSchema, type BookTheme } from "../schemas/layout";
+import { isStructuredKit } from "../kits/types";
 
 export const BUILTIN_TEMPLATES: { key: string; name: string; description: string; theme: BookTheme }[] = [
   {
@@ -20,6 +21,12 @@ export const BUILTIN_TEMPLATES: { key: string; name: string; description: string
     theme: BookThemeSchema.parse({ templateKey: "bonbon", colorPrimary: "#be185d", colorSecondary: "#7c3aed", colorAccent: "#14b8a6", colorPanel: "#fdf2f8", headingStyle: "playful", fontHeading: "Baloo 2" }),
   },
   {
+    key: "malle",
+    name: "La Malle à Jeux",
+    description: "Bleu marine, rouge pirate et vert d'eau sur fond crème : l'identité des kits La Malle à Jeux.",
+    theme: BookThemeSchema.parse({ templateKey: "malle", colorPrimary: "#1F3A5F", colorSecondary: "#C0392B", colorAccent: "#2E8B7A", colorText: "#293241", colorPanel: "#FFF9F0", headingStyle: "playful", fontHeading: "Fredoka" }),
+  },
+  {
     key: "ardoise",
     name: "Ardoise",
     description: "Gris ardoise et orange, sobre et lisible. Idéal 9-12 ans.",
@@ -33,6 +40,7 @@ export function themeFor(raw: unknown): BookTheme {
 }
 
 export function defaultThemeForBook(bookType: string, ageRange: string): BookTheme {
+  if (bookType === "kit" || isStructuredKit(bookType)) return BUILTIN_TEMPLATES.find((t) => t.key === "malle")!.theme;
   if (bookType === "nature" || bookType === "bricolages") return BUILTIN_TEMPLATES[1].theme;
   if (bookType === "prescolaire" || bookType === "creativite" || ageRange === "3-5") return BUILTIN_TEMPLATES[2].theme;
   if (ageRange === "9-12") return BUILTIN_TEMPLATES[3].theme;

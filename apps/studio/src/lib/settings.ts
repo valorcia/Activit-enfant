@@ -60,3 +60,22 @@ export function maskShopSettings(s: ShopSettings) {
   return { ...s, shopApiKey: "", shopApiKeyPreview: s.shopApiKey ? `${s.shopApiKey.slice(0, 8)}…` : null, shopConfigured: Boolean(s.shopApiUrl && s.shopApiKey) };
 }
 export type ShopSettingsPublic = ReturnType<typeof maskShopSettings>;
+
+// ---------------------------------------------------------------------------
+// Studio (nom, charte d'illustration, prix par défaut par type)
+// ---------------------------------------------------------------------------
+import { StudioSettingsSchema, DEFAULT_STUDIO_SETTINGS, type StudioSettings } from "./schemas/settings";
+
+const STUDIO_KEY = "studio";
+
+export async function getStudioSettings(): Promise<StudioSettings> {
+  const row = await prisma.setting.findUnique({ where: { key: STUDIO_KEY } }).catch(() => null);
+  const parsed = row ? StudioSettingsSchema.safeParse(row.value) : null;
+  return parsed?.success ? parsed.data : DEFAULT_STUDIO_SETTINGS;
+}
+
+export async function saveStudioSettings(input: unknown): Promise<StudioSettings> {
+  const data = StudioSettingsSchema.parse(input);
+  await prisma.setting.upsert({ where: { key: STUDIO_KEY }, create: { key: STUDIO_KEY, value: data }, update: { value: data } });
+  return data;
+}

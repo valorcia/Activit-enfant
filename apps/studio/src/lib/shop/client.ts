@@ -25,6 +25,9 @@ export interface ShopProduct {
 
 export interface ShopCategory { id: string; slug: string; name: string }
 
+export interface ShopPeriodStats { orders: number; units: number; revenueCents: number; revenueNetCents: number; refundedCents: number }
+export interface ShopProductStats { productId: string; currency: string; total: ShopPeriodStats; last30Days: ShopPeriodStats; lastOrderAt: string | null }
+
 export class ShopClient {
   constructor(private cfg: ShopClientConfig) {
     if (!cfg.baseUrl || !cfg.apiKey) throw new ShopApiError("Boutique non configurée (URL ou clé API manquante)", 0);
@@ -63,6 +66,32 @@ export class ShopClient {
   async findBySlug(slug: string): Promise<ShopProduct | null> {
     const r = await this.request<ShopProduct[]>(`/products?slug=${encodeURIComponent(slug)}&perPage=1`);
     return r.data[0] ?? null;
+  }
+  async listProducts(opts: { page?: number; perPage?: number; status?: string } = {}) {
+    const q = new URLSearchParams({ page: String(opts.page ?? 1), perPage: String(opts.perPage ?? 100), status: opts.status ?? "all" });
+    const r = await this.request<ShopProduct[]>(`/products?${q}`);
+    return { items: r.data, total: Number(r.meta.total ?? r.data.length), page: Number(r.meta.page ?? 1), perPage: Number(r.meta.perPage ?? 100) };
+  }
+  /** Tous les produits, toutes pages, tous statuts. */
+  async allProducts(): Promise<ShopProduct[]> {
+    const out: ShopProduct[] = [];
+    for (let page = 1; page < 50; page++) {
+      const r = await this.listProducts({ page, perPage: 100 });
+      out.push(...r.items);
+      if (out.length >= r.total || r.items.length === 0) break;
+    }
+    return out;
+  }
+  async productStats(idOrSlug: string): Promise<ShopProductStats | null> {
+    try { return (await this.request<ShopProductStats>(`/products/${encodeURIComponent(idOrSlug)}/stats`)).data; }
+    catch (e) { if (e instanceof ShopApiError && e.status === 404) return null; throw e; }
+  }
+  /** Télécharge une image publique de la boutique (URL absolue ou relative au domaine). */
+  async downloadImage(url: string): Promise<{ data: Buffer; mime: string } | null> {
+    const abs = url.startsWith("http") ? url : `${this.cfg.baseUrl.replace(/\/$/, "")}${url.startsWith("/") ? "" : "/"}${url}`;
+    const res = await fetch(abs, { signal: AbortSignal.timeout(60_000) });
+    if (!res.ok) return null;
+    return { data: Buffer.from(await res.arrayBuffer()), mime: res.headers.get("content-type")?.split(";")[0] ?? "image/png" };
   }
   async createProduct(payload: Record<string, unknown>) {
     return this.json("/products", "POST", payload);

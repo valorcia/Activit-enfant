@@ -6,6 +6,7 @@ import { PagesTab } from "./pages-tab";
 import { CoverTab } from "./cover-tab";
 import { ExportsTab } from "./exports-tab";
 import { ShopTab, type ShopSyncView } from "./shop-tab";
+import { KitTab, type KitTabView } from "@/components/kits/kit-tab";
 import type { BookTheme, PageLayout } from "@/lib/schemas/layout";
 import type { CoverData } from "@/lib/schemas/activity";
 import type { estimateBookCost } from "@/lib/queue/estimate";
@@ -31,17 +32,19 @@ export function BookTabs(props: {
   coverIllustrations: CoverIll[];
   settings: { textProvider: string; imageProvider: string; stepIllustrations: boolean };
   shop: ShopSyncView;
+  kit?: KitTabView | null;
 }) {
   return (
     <Tabs defaultValue={props.defaultTab}>
       <TabsList>
-        <TabsTrigger value="outline">Sommaire ({props.activities.length})</TabsTrigger>
-        <TabsTrigger value="production">Production</TabsTrigger>
+        {props.kit ? <TabsTrigger value="kit">Kit</TabsTrigger> : <TabsTrigger value="outline">Sommaire ({props.activities.length})</TabsTrigger>}
+        {!props.kit && <TabsTrigger value="production">Production</TabsTrigger>}
         <TabsTrigger value="pages">Pages ({props.pages.length})</TabsTrigger>
         <TabsTrigger value="cover">Couverture</TabsTrigger>
         <TabsTrigger value="exports">Exports ({props.exports.length})</TabsTrigger>
         <TabsTrigger value="shop">Boutique{props.shop.publishedAt ? " ✓" : ""}</TabsTrigger>
       </TabsList>
+      {props.kit && <TabsContent value="kit"><KitTab bookId={props.book.id} kit={props.kit} activeJobId={props.activeJobId} /></TabsContent>}
       <TabsContent value="outline"><OutlineTab book={props.book} activities={props.activities} /></TabsContent>
       <TabsContent value="production"><ProductionTab book={props.book} activities={props.activities} jobs={props.jobs} activeJobId={props.activeJobId} estimate={props.estimate} settings={props.settings} /></TabsContent>
       <TabsContent value="pages"><PagesTab book={props.book} pages={props.pages} /></TabsContent>

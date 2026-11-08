@@ -14,7 +14,7 @@ Scopes :
 
 | Scope | Permet |
 |---|---|
-| `products:read` | lire le catalogue, les catégories et collections |
+| `products:read` | lire le catalogue, les catégories et collections, les statistiques de ventes (implicite pour une clé `products:write` ou `products:publish`) |
 | `products:write` | créer / modifier des produits **en brouillon**, ajouter images et fichiers, programmer une publication |
 | `products:publish` | publier immédiatement sans validation humaine (à réserver à des intégrations de confiance) |
 
@@ -63,9 +63,15 @@ Réponse `201` : le produit complet, avec `editUrl` (lien d'édition dans l'admi
 
 ### `GET /products?page=1&perPage=25&status=PUBLISHED&slug=…&source=api`
 
+`status` : `DRAFT`, `SCHEDULED`, `PUBLISHED`, `ARCHIVED` ou `all` (défaut : tous). `perPage` ≤ 100. Chaque produit inclut `salesCount`. Réponse paginée : `{ data, page, perPage, total }`.
+
 Filtres facultatifs : `status`, `slug` (recherche exacte, utile pour retrouver un produit créé par une intégration), `source` (`admin`, `csv`, `api`, `duplicate`).
 
 ### `GET /products/:id` (id ou slug)
+
+### `GET /products/:id/stats` — ventes du produit
+
+Réponse : `{ productId, currency, total: { orders, units, revenueCents, revenueNetCents, refundedCents }, last30Days: { … }, lastOrderAt }`. Revenus TTC remboursements déduits (au prorata de la commande) et HT ; commandes payées ou remboursées uniquement ; les ventes via un pack ne sont pas ventilées.
 
 ### `PATCH /products/:id` — mise à jour partielle
 

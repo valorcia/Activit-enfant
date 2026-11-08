@@ -6,7 +6,9 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { PageHeader } from "@/components/page-header";
 import { formatUsd, formatDate } from "@/lib/utils";
 import { labelFor } from "@/lib/jobs-labels";
-import { BookOpen, Sparkles, Library, Palette, FileDown, Settings } from "lucide-react";
+import { BookOpen, Sparkles, Library, Settings, Wand2, Store } from "lucide-react";
+import { ShopPanel } from "@/components/shop/shop-panel";
+import { kitLabel } from "@/lib/kits/types";
 
 export const dynamic = "force-dynamic";
 
@@ -38,11 +40,11 @@ export default async function Dashboard() {
       <PageHeader title="Tableau de bord" description="Vue d'ensemble de la production éditoriale." />
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
         {[
-          { href: "/books/new", label: "Nouveau livre", icon: BookOpen, primary: true },
+          { href: "/books/new", label: "Nouveau kit", icon: BookOpen, primary: true },
+          { href: "/brief", label: "Créer depuis un brief", icon: Wand2 },
+          { href: "/shop", label: "Boutique", icon: Store },
           { href: "/activities/new", label: "Nouvelle activité", icon: Sparkles },
           { href: "/library", label: "Bibliothèque", icon: Library },
-          { href: "/templates", label: "Modèles graphiques", icon: Palette },
-          { href: "/exports", label: "Exports", icon: FileDown },
           { href: "/settings", label: "Paramètres", icon: Settings },
         ].map((b) => (
           <Button key={b.href} asChild variant={b.primary ? "default" : "secondary"} size="lg" className="justify-start">
@@ -60,7 +62,8 @@ export default async function Dashboard() {
           </Link>
         ))}
       </div>
-      <div className="grid lg:grid-cols-2 gap-6">
+      <div className="grid lg:grid-cols-2 gap-6 mb-6">
+        <ShopPanel />
         <Card>
           <CardHeader><CardTitle>Livres récents</CardTitle></CardHeader>
           <CardContent>
@@ -70,7 +73,7 @@ export default async function Dashboard() {
                 <li key={b.id} className="py-2 flex items-center justify-between gap-3">
                   <Link href={`/books/${b.id}`} className="font-semibold hover:underline truncate">{b.title}</Link>
                   <div className="flex items-center gap-2 text-xs text-slate-500 shrink-0">
-                    <span>{b._count.activities} act. · {b._count.pages} p.</span>
+                    <span>{kitLabel(b.kitType)} · {b._count.pages} p.</span>
                     <StatusBadge kind="book" status={b.status} />
                   </div>
                 </li>
@@ -78,6 +81,8 @@ export default async function Dashboard() {
             </ul>
           </CardContent>
         </Card>
+      </div>
+      <div className="grid lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader><CardTitle>Historique des tâches</CardTitle></CardHeader>
           <CardContent>

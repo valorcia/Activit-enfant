@@ -16,6 +16,8 @@ import { getAiSettings } from "@/lib/settings";
 import type { IllustrationKind } from "@prisma/client";
 import { isManualInputRequired } from "@/lib/ai/manual-core";
 import { markWaitingInput } from "@/lib/manual/requests";
+import { isStructuredKit } from "@/lib/kits/types";
+import { generateKitContent, generateKitIllustration, kitIllustrationPlan, readKitContent } from "@/lib/kits/generate";
 
 type Handler = (data: JobPayload) => Promise<unknown>;
 
@@ -47,6 +49,22 @@ async function gate(jobId: string) {
 
 export const handlers: Record<string, Handler> = {
   [QUEUES.bookOutline]: async ({ jobId, bookId }) => {
+    const kb = await prisma.book.findUniqueOrThrow({ where: { id: bookId! }, select: { kitType: true } });
+    if (isStructuredKit(kb.kitType)) {
+      await setJob(jobId, { status: "RUNNING", step: "Rédaction du contenu du kit", progress: 10 });
+      try {
+        const r = await generateKitContent(bookId!, { jobId });
+        const n = "enigmes" in r.content ? r.content.enigmes.length : r.content.idees.length;
+        await setJob(jobId, { status: "COMPLETED", progress: 100, step: `Contenu du kit rédigé (${n} éléments)`, costUsd: r.usage.costUsd, result: { count: n } });
+      } catch (err) {
+        if (isManualInputRequired(err)) {
+          await markWaitingInput(jobId, 1);
+          throw new WaitingInputSignal(1);
+        }
+        throw err;
+      }
+      return;
+    }
     await setJob(jobId, { status: "RUNNING", step: "Génération du sommaire", progress: 10 });
     const outline = await generateOutline(bookId!, { jobId });
     await setJob(jobId, { status: "COMPLETED", progress: 100, step: `${outline.activities.length} activités proposées`, result: { count: outline.activities.length } });
@@ -118,8 +136,13 @@ export const handlers: Record<string, Handler> = {
 
   [QUEUES.bookCover]: async ({ jobId, bookId, variants }) => {
     await setJob(jobId, { status: "RUNNING", step: "Textes de couverture", progress: 10 });
-    const r = await generateCoverTexts(bookId!, { jobId });
-    await setJob(jobId, { progress: 40, step: "Illustration de couverture", costUsd: r.usage.costUsd });
+    const cb = await prisma.book.findUniqueOrThrow({ where: { id: bookId! }, select: { kitType: true, kitContent: true } });
+    // Kits : les textes de couverture viennent du contenu du kit (pas d'appel IA supplémentaire)
+    if (!(isStructuredKit(cb.kitType) && cb.kitContent)) {
+      const r = await generateCoverTexts(bookId!, { jobId });
+      await setJob(jobId, { costUsd: r.usage.costUsd });
+    }
+    await setJob(jobId, { progress: 40, step: "Illustration de couverture" });
     const n = Math.max(1, Math.min(4, Number(variants ?? 2)));
     let waiting = 0;
     for (let v = 0; v < n; v++) {
@@ -177,6 +200,8 @@ export const handlers: Record<string, Handler> = {
     const settings = await getAiSettings();
     await setJob(jobId, { status: "RUNNING", step: "Démarrage", progress: 1 });
     await prisma.book.update({ where: { id: bookId! }, data: { status: "GENERATING" } });
+    const pb = await prisma.book.findUniqueOrThrow({ where: { id: bookId! }, select: { kitType: true } });
+    if (isStructuredKit(pb.kitType)) return runKitPipeline(jobId, bookId!, { withIllustrations: withIllustrations !== false, withCover: withCover !== false });
     const links = await prisma.bookActivity.findMany({ where: { bookId: bookId! }, include: { activity: true }, orderBy: { position: "asc" } });
     const total = links.length;
     const errors: string[] = [];
@@ -273,6 +298,83 @@ export const handlers: Record<string, Handler> = {
     await finish(jobId, bookId!, errors.length ? "COMPLETED" : "COMPLETED", errors.length ? `${errors.length} erreur(s) : ${errors.join(" | ")}` : undefined);
   },
 };
+
+/**
+ * Pipeline d'un kit structuré : contenu (si absent) → illustrations par emplacement →
+ * couverture → pages. Idempotent : ce qui existe (contenu, images générées ou collées) est conservé.
+ */
+async function runKitPipeline(jobId: string, bookId: string, opts: { withIllustrations: boolean; withCover: boolean }) {
+  const settings = await getAiSettings();
+  let waiting = 0;
+  const errors: string[] = [];
+  let book = await prisma.book.findUniqueOrThrow({ where: { id: bookId } });
+  let content = readKitContent(book);
+  if (!content) {
+    await setJob(jobId, { step: "Rédaction du contenu du kit", progress: 5 });
+    try {
+      const r = await generateKitContent(bookId, { jobId });
+      await setJob(jobId, { costUsd: r.usage.costUsd });
+      book = await prisma.book.findUniqueOrThrow({ where: { id: bookId } });
+      content = readKitContent(book);
+    } catch (err) {
+      if (isManualInputRequired(err)) {
+        await markWaitingInput(jobId, 1);
+        return;
+      }
+      throw err;
+    }
+  }
+  if (!content) return finish(jobId, bookId, "FAILED", "Contenu du kit invalide");
+
+  if (opts.withIllustrations) {
+    const plan = kitIllustrationPlan(content);
+    for (let i = 0; i < plan.length; i++) {
+      if (!(await gate(jobId))) return finish(jobId, bookId, "CANCELLED");
+      const it = plan[i];
+      const existing = await prisma.illustration.findFirst({ where: { bookId, kind: "KIT", slot: it.slot, isCurrent: true, status: { in: ["GENERATED", "ACCEPTED"] } } });
+      if (existing) continue;
+      if ((await spentOnBook(bookId)) > settings.maxBudgetPerBookUsd) {
+        await jobLog(jobId, `Budget du livre dépassé (${settings.maxBudgetPerBookUsd} $) : illustrations interrompues`, "warn");
+        break;
+      }
+      await setJob(jobId, { step: `Illustration ${i + 1}/${plan.length} : ${it.label}`, progress: 10 + Math.round((i / plan.length) * 70) });
+      try {
+        const r = await generateKitIllustration({ bookId, slot: it.slot, prompt: it.prompt, label: it.label, jobId });
+        await setJob(jobId, { costUsd: r.costUsd });
+      } catch (err) {
+        if (isManualInputRequired(err)) { waiting++; continue; }
+        const m = err instanceof Error ? err.message : String(err);
+        errors.push(`${it.label} : ${m}`);
+        await jobLog(jobId, `Échec illustration « ${it.label} » : ${m}`, "error");
+      }
+    }
+  }
+
+  if (opts.withCover) {
+    if (!(await gate(jobId))) return finish(jobId, bookId, "CANCELLED");
+    await setJob(jobId, { step: "Couverture", progress: 84 });
+    const child = await prisma.job.create({ data: { type: QUEUES.bookCover, status: "RUNNING", bookId, parentId: jobId, startedAt: new Date() } });
+    try {
+      await handlers[QUEUES.bookCover]({ jobId: child.id, bookId, variants: 1 });
+    } catch (err) {
+      if (err instanceof WaitingInputSignal) waiting += err.count;
+      else {
+        const m = err instanceof Error ? err.message : String(err);
+        errors.push(`Couverture : ${m}`);
+        await setJob(child.id, { status: "FAILED", error: m });
+      }
+    }
+  }
+
+  if (waiting > 0) {
+    await markWaitingInput(jobId, waiting);
+    return;
+  }
+  await setJob(jobId, { step: "Assemblage des pages", progress: 92 });
+  const pages = await rebuildBookPages(bookId);
+  await jobLog(jobId, `${pages.length} pages assemblées`);
+  await finish(jobId, bookId, "COMPLETED", errors.length ? `${errors.length} erreur(s) : ${errors.join(" | ")}` : undefined);
+}
 
 async function finish(jobId: string, bookId: string, status: "COMPLETED" | "FAILED" | "CANCELLED", error?: string) {
   await setJob(jobId, { status, progress: status === "COMPLETED" ? 100 : undefined, step: status === "COMPLETED" ? "Terminé — éléments à valider" : status === "CANCELLED" ? "Annulé" : "Échec", error: error ?? null });

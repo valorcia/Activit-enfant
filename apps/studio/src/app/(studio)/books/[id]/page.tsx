@@ -15,6 +15,11 @@ import { getCover } from "@/lib/generation/cover";
 import { assetUrl } from "@/lib/storage";
 import { PageLayoutSchema } from "@/lib/schemas/layout";
 import { formatUsd } from "@/lib/utils";
+import { isStructuredKit, kitLabel, kitType } from "@/lib/kits/types";
+import { kitIllustrationPlan, readKitContent } from "@/lib/kits/generate";
+import { KitCustomizationSchema } from "@/lib/kits/schemas";
+import { shopClient } from "@/lib/shop/catalog";
+import type { KitTabView } from "@/components/kits/kit-tab";
 
 export const dynamic = "force-dynamic";
 
@@ -44,11 +49,39 @@ export default async function BookPage({ params, searchParams }: { params: Promi
   const listingParsed = ShopListingSchema.safeParse(book.shopListing ?? {});
   const derived = buildListingFromBook(await loadBookForListing(id), shopSettings);
 
+  // Kit structuré : contenu, emplacements d'illustration
+  let kit: KitTabView | null = null;
+  if (isStructuredKit(book.kitType)) {
+    const def = kitType(book.kitType);
+    const content = readKitContent(book);
+    const ills = await prisma.illustration.findMany({ where: { bookId: id, kind: "KIT", isCurrent: true } });
+    const bySlot = new Map(ills.map((i) => [i.slot ?? "", i]));
+    const custom = KitCustomizationSchema.safeParse(book.customization ?? {});
+    kit = {
+      typeLabel: def.label,
+      countLabel: def.countLabel,
+      sections: def.sections.map((s) => ({ label: s.label, count: ["enigmes-texte", "enigmes-images", "idees"].includes(s.key) ? book.targetCount : s.count })),
+      customization: custom.success ? custom.data : {},
+      hasContent: Boolean(content),
+      heroName: content ? ("enigmes" in content ? content.personnage?.nom ?? null : content.personnages?.[0]?.nom ?? null) : null,
+      elements: content ? ("enigmes" in content ? content.enigmes.map((e) => ({ title: `Cachette : ${e.cachette}`, detail: e.texte })) : content.idees.map((i) => ({ title: i.titre, detail: i.resume }))) : [],
+      slots: content ? kitIllustrationPlan(content).map((p) => { const i = bySlot.get(p.slot); return { slot: p.slot, label: p.label, status: i?.status ?? null, src: i ? assetUrl(i.assetId) ?? null : null, isDemo: i?.isDemo ?? false, provider: i?.provider ?? null }; }) : [],
+    };
+  }
+
+  // Ventes du produit lié dans la boutique
+  let sales: { total: { orders: number; revenueCents: number; revenueNetCents: number }; last30Days: { orders: number; revenueCents: number }; currency: string } | null = null;
+  if (book.shopProductId && shopConfigured) {
+    const client = await shopClient();
+    sales = client ? await client.productStats(book.shopProductId).catch(() => null) : null;
+  }
+  const eur = (c: number, cur = "EUR") => new Intl.NumberFormat("fr-FR", { style: "currency", currency: cur }).format(c / 100);
+
   return (
     <div className="p-8 max-w-7xl">
       <PageHeader
         title={<span className="flex items-center gap-3">{book.title} <StatusBadge kind="book" status={book.status} /></span>}
-        description={`${BOOK_TYPES.find((t) => t.key === book.bookType)?.label} · ${ageRangeLabel(book.ageRange)} · ${ART_STYLES.find((s) => s.key === book.artStyle)?.label} · ${PAGE_FORMATS[book.pageFormat as keyof typeof PAGE_FORMATS]?.label ?? book.pageFormat} · ${book.activities.length} activités · ${book.pages.length} pages · dépensé ${formatUsd(Number(spent._sum.costUsd ?? 0))}`}
+        description={`${BOOK_TYPES.find((t) => t.key === book.bookType)?.label ?? kitLabel(book.kitType)} · ${ageRangeLabel(book.ageRange)} · ${ART_STYLES.find((s) => s.key === book.artStyle)?.label} · ${PAGE_FORMATS[book.pageFormat as keyof typeof PAGE_FORMATS]?.label ?? book.pageFormat} · ${kit ? `${book.targetCount} ${kitType(book.kitType).countLabel}` : `${book.activities.length} activités`} · ${book.pages.length} pages · dépensé ${formatUsd(Number(spent._sum.costUsd ?? 0))}`}
         actions={
           <>
             <Button asChild variant="secondary"><Link href={`/print/books/${id}`} target="_blank">Aperçu impression</Link></Button>
@@ -56,8 +89,17 @@ export default async function BookPage({ params, searchParams }: { params: Promi
           </>
         }
       />
+      {sales && (
+        <div className="mb-6 grid gap-3 sm:grid-cols-4">
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4"><div className="text-2xl font-black text-emerald-900">{sales.total.orders}</div><div className="text-xs text-emerald-800">commande(s) dans la boutique</div></div>
+          <div className="rounded-xl border border-slate-200 bg-white p-4"><div className="text-2xl font-black">{eur(sales.total.revenueCents, sales.currency)}</div><div className="text-xs text-slate-500">revenus TTC (remboursements déduits)</div></div>
+          <div className="rounded-xl border border-slate-200 bg-white p-4"><div className="text-2xl font-black">{eur(sales.total.revenueNetCents, sales.currency)}</div><div className="text-xs text-slate-500">revenus HT</div></div>
+          <div className="rounded-xl border border-slate-200 bg-white p-4"><div className="text-2xl font-black">{sales.last30Days.orders} · {eur(sales.last30Days.revenueCents, sales.currency)}</div><div className="text-xs text-slate-500">30 derniers jours</div></div>
+        </div>
+      )}
       <BookTabs
-        defaultTab={sp.tab ?? "outline"}
+        kit={kit}
+        defaultTab={sp.tab ?? (kit ? "kit" : "outline")}
         book={{ id: book.id, title: book.title, subtitle: book.subtitle, collection: book.collection, status: book.status, ageRange: book.ageRange, targetCount: book.targetCount, introduction: cover.introduction ?? "", theme: ctx.theme, widthMm: ctx.widthMm, heightMm: ctx.heightMm }}
         activities={book.activities.map((ba) => ({
           id: ba.activity.id,

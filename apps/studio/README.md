@@ -13,6 +13,35 @@ Première collection visée : 365 activités créatives, scientifiques et manuel
 5. **Éditeur visuel** : texte, déplacement et redimensionnement des images, couleurs, typographies, ajout/suppression/duplication/réordonnancement de pages, changement de modèle graphique, annuler/rétablir, sauvegarde.
 6. **Export PDF** (A4 imprimable, numérique, activité seule, fiches, couverture, par lot) : chaque export de livre fige un snapshot reproductible, vérifie le nombre de pages, les images manquantes, les débordements et les polices intégrées.
 
+## Kits, brief collé et catalogue de la boutique
+
+### Types de kits
+
+Le studio produit des **kits** alignés sur le catalogue de la boutique (référentiel `src/lib/kits/types.ts`) : chasse au trésor, mission / enquête, kit d'anniversaire, chasse aux œufs de Pâques, jeu d'Halloween, lutins farceurs, activités de Noël, cahier d'activités, jeux de logique, Montessori, histoire illustrée, histoires du soir, livre personnalisable (les anciens livres d'activités — inventions, sciences… — restent disponibles). Chaque type définit sa catégorie et son modèle de fiche boutique, l'âge et le prix par défaut, et sa structure (ex. chasse au trésor : guide, lettre, 10 énigmes texte + 10 énigmes images, carte en 10 morceaux, 6 défis, diplômes, invitations).
+
+Les kits structurés (chasse au trésor et dérivés, lutins farceurs, Noël) stockent leur contenu dans `Book.kitContent` (schémas `src/lib/kits/schemas.ts`, même format que les prompts de `docs/prompts`). Leurs pages sont produites par les gabarits de `src/lib/kits/pages.ts` : lettre pleine page, cartes énigmes 4 par page (texte et images), carte au trésor découpée en 10 morceaux, défis, diplômes et invitations 2 par page, idée de farce 1 par page, calendrier 24 cases, petits mots à découper, guide. Les illustrations sont rattachées par emplacement (`Illustration.kind = KIT`, `slot` : `lettre`, `carte`, `enigme-image-3`, `idee-12`…).
+
+**Assistant « Nouveau kit »** : type de kit, univers, personnage, compagnon, lieu ou véhicule, nombre d'éléments, âge (3–5, 5–8, 8–10, 3–10), ton, prix et catégorie boutique, style et format, puis production complète en un clic (contenu → illustrations → couverture → pages). La page du livre affiche un onglet **Kit** : contenu, illustrations par emplacement (refaire une image), réécriture du contenu, réassemblage, et import d'un JSON collé.
+
+### Créer depuis un brief
+
+`/brief` : collez une demande libre (« Fais-moi une chasse au trésor dinosaures pour les 5-8 ans… »), un prompt de `docs/prompts`, ou directement le **JSON complet** obtenu avec ce prompt dans Claude ou ChatGPT.
+- JSON complet reconnu (`enigmes`, `idees`, `boutique`…) → importé tel quel, sans appel IA pour le texte ;
+- brief libre en mode API → l'IA configurée en déduit un plan (type, titre, âge, univers, personnages, nombre d'éléments, prix, catégorie) ;
+- brief libre en mode copier-coller → le studio affiche le prompt à copier, puis on colle le JSON obtenu et on relance l'analyse.
+
+Le plan est modifiable, puis « Créer le kit et lancer la production » démarre tout le pipeline (publication boutique automatique à l'export si activée).
+
+### Catalogue de la boutique
+
+`/shop` liste tous les produits de la boutique (tous statuts) avec prix, ventes, liens vers la fiche et l'admin, et le livre lié. Un produit existant (ex. la Capitaine Coquelicot) s'**importe dans le studio** en un clic : livre lié (même produit, jamais dupliqué), fiche commerciale préremplie, image principale reprise comme couverture. Le tableau de bord affiche l'encart « Dans la boutique » (publiés, brouillons à valider, meilleures ventes avec revenus) et chaque livre lié ses ventes (total et 30 derniers jours, via `GET /api/v1/products/:id/stats`).
+
+### Paramètres du studio
+
+Paramètres → Studio : nom affiché (« La Malle à Jeux · Studio »), auteur / collection par défaut, **charte d'illustration** ajoutée à tous les prompts d'images des kits, prix par défaut par type de kit.
+
+`pnpm tsx scripts/dev-kit-smoke.ts [chasse-au-tresor|lutins-farceurs]` produit un kit complet en mode démonstration, sans worker, pour vérifier le pipeline.
+
 ## Mode copier-coller (sans clé API)
 
 Le studio fonctionne aussi **sans aucune clé API** : les prompts sont copiés dans l'assistant de votre choix (Claude.ai, ChatGPT…) et les réponses collées dans le studio.

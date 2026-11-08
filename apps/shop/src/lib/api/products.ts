@@ -8,7 +8,7 @@ export const apiProductSelect = {
   universe: true, tags: true, badges: true, heroBadges: true, ageMin: true, ageMax: true, playersMin: true, playersMax: true, durationMinutes: true, difficulty: true, pageCount: true, fileFormat: true, materials: true,
   priceCents: true, salePriceCents: true, saleStartsAt: true, saleEndsAt: true, currency: true, taxRateBp: true,
   kitContents: true, faq: true, sellingPoints: true, seoTitle: true, seoDescription: true, keywords: true, ogImageUrl: true, promoText: true,
-  status: true, publishedAt: true, scheduledAt: true, isFeatured: true, needsReview: true, source: true, createdAt: true, updatedAt: true,
+  status: true, publishedAt: true, scheduledAt: true, isFeatured: true, needsReview: true, source: true, salesCount: true, createdAt: true, updatedAt: true,
   images: { select: { id: true, url: true, role: true, alt: true, position: true }, orderBy: { position: "asc" } },
   files: { select: { id: true, name: true, kind: true, mime: true, sizeBytes: true, position: true }, orderBy: { position: "asc" } },
   recommendations: { select: { recommendedId: true } },

@@ -1,17 +1,18 @@
 import { PageHeader } from "@/components/page-header";
-import { BookWizard } from "@/components/book-wizard";
-import { getAiSettings } from "@/lib/settings";
-import { estimateBookCost } from "@/lib/queue/estimate";
+import { KitWizard } from "@/components/kits/kit-wizard";
+import { getStudioSettings } from "@/lib/settings";
+import { shopClient } from "@/lib/shop/catalog";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewBookPage() {
-  const settings = await getAiSettings();
-  const perActivity = estimateBookCost(settings, { activities: 1, includeCover: false }).total;
+  const studio = await getStudioSettings();
+  const client = await shopClient();
+  const categories = client ? await client.categories().then((c) => c.map((x) => ({ slug: x.slug, name: x.name }))).catch(() => undefined) : undefined;
   return (
-    <div className="p-8 max-w-4xl">
-      <PageHeader title="Nouveau livre" description="Assistant guidé : type, âge, nombre d'activités, style graphique, format, puis génération du sommaire." />
-      <BookWizard perActivityCost={perActivity} textProvider={settings.textProvider} />
+    <div className="p-8 max-w-5xl">
+      <PageHeader title="Nouveau kit" description="Type de kit, personnalisation (univers, personnage, compagnon, âge, prix…), style, puis production automatique." />
+      <KitWizard categories={categories} prices={studio.priceByKitType} />
     </div>
   );
 }

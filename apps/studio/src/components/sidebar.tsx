@@ -1,15 +1,17 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, BookOpen, PlusCircle, Library, Palette, FileDown, Settings, ListChecks, Sparkles, ClipboardPaste } from "lucide-react";
+import { LayoutDashboard, BookOpen, PlusCircle, Library, Palette, FileDown, Settings, ListChecks, Sparkles, ClipboardPaste, Store, Wand2 } from "lucide-react";
 import { ModeToggle } from "@/components/mode-toggle";
 import { cn } from "@/lib/utils";
 import { logoutAction } from "@/app/actions/auth";
 
 const NAV = [
   { href: "/", label: "Tableau de bord", icon: LayoutDashboard },
-  { href: "/books/new", label: "Nouveau livre", icon: PlusCircle },
-  { href: "/books", label: "Livres", icon: BookOpen },
+  { href: "/books/new", label: "Nouveau kit", icon: PlusCircle },
+  { href: "/brief", label: "Créer depuis un brief", icon: Wand2 },
+  { href: "/books", label: "Livres et kits", icon: BookOpen },
+  { href: "/shop", label: "Boutique", icon: Store },
   { href: "/activities/new", label: "Nouvelle activité", icon: Sparkles },
   { href: "/library", label: "Bibliothèque", icon: Library },
   { href: "/templates", label: "Modèles graphiques", icon: Palette },
@@ -19,17 +21,18 @@ const NAV = [
   { href: "/settings", label: "Paramètres", icon: Settings },
 ];
 
-export function Sidebar({ mode = "api", pendingManual = 0 }: { mode?: "api" | "manual"; pendingManual?: number }) {
+export function Sidebar({ mode = "api", pendingManual = 0, studioName = "La Malle à Jeux · Studio" }: { mode?: "api" | "manual"; pendingManual?: number; studioName?: string }) {
+  const [brand, sub] = studioName.includes("·") ? studioName.split("·").map((x) => x.trim()) : [studioName, "Studio"];
   const pathname = usePathname();
   if (pathname.startsWith("/print") || pathname.includes("/editor")) return null;
   return (
     <aside className="w-60 shrink-0 border-r border-slate-200 bg-white flex flex-col">
       <div className="px-5 py-5 border-b border-slate-100">
         <Link href="/" className="flex items-center gap-2">
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-white font-black">I</span>
+          <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-white font-black">{brand.charAt(0).toUpperCase()}</span>
           <div>
-            <div className="font-black leading-tight">Inventor Studio</div>
-            <div className="text-[11px] text-slate-500 leading-tight">Livres d'activités</div>
+            <div className="font-black leading-tight">{brand}</div>
+            <div className="text-[11px] text-slate-500 leading-tight">{sub || "Studio"}</div>
           </div>
         </Link>
       </div>

@@ -6,7 +6,7 @@ import { newId } from "../utils";
 
 export interface IllustrationRef {
   id: string;
-  kind: "FINAL" | "STEP" | "COVER" | "MATERIAL";
+  kind: "FINAL" | "STEP" | "COVER" | "MATERIAL" | "KIT";
   stepIndex: number | null;
   src?: string;
   isDemo: boolean;

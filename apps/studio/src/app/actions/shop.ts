@@ -47,3 +47,16 @@ export async function publishToShopAction(bookId: string, opts: { publish: boole
   revalidatePath(`/books/${bookId}`);
   return { jobId: job.id };
 }
+
+/** Importe un produit de la boutique comme livre lié du studio. */
+export async function importShopProductAction(idOrSlug: string): Promise<{ ok: true; bookId: string; created: boolean; coverImported: boolean } | { ok: false; error: string }> {
+  try {
+    const { importShopProduct } = await import("@/lib/shop/catalog");
+    const r = await importShopProduct(idOrSlug);
+    revalidatePath("/shop");
+    revalidatePath("/books");
+    return { ok: true, ...r };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
