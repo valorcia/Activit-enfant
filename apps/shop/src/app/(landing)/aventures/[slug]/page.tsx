@@ -6,6 +6,7 @@ import { getSetting } from "@/lib/settings";
 import { effectivePrice } from "@/lib/pricing";
 import { absoluteUrl, stripMarkdown, truncate } from "@/lib/utils";
 import { JsonLd } from "@/components/storefront/json-ld";
+import { TEMPLATE_ACCENTS } from "@/components/product/theme";
 import { ProductTemplateRenderer } from "@/components/product/templates";
 import { heroImage } from "@/components/product/sections/hero";
 
@@ -73,10 +74,13 @@ export default async function ProductPage({ params }: Params) {
       : {}),
   };
 
+  // Couleur d'accent de la landing : catégorie du produit, sinon couleur du modèle de fiche
+  const accent = product.category?.color ?? TEMPLATE_ACCENTS[product.template];
+
   return (
-    <>
+    <div className="landing-page" style={{ "--landing-accent": accent } as React.CSSProperties}>
       <JsonLd data={productLd} />
       <ProductTemplateRenderer product={product} />
-    </>
+    </div>
   );
 }

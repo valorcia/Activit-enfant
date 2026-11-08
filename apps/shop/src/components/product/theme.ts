@@ -22,3 +22,12 @@ export const TEMPLATE_THEMES: Record<ProductTemplate, TemplateTheme> = {
 export function defaultHeroBadges(ageLabel: string): string[] {
   return ["PDF immédiat", "Facile à organiser", "Prêt à imprimer", ageLabel];
 }
+
+/** Couleur d'accent par modèle (variable CSS --landing-accent quand le produit n'a pas de catégorie colorée). */
+export const TEMPLATE_ACCENTS: Record<ProductTemplate, string> = {
+  ADVENTURE: "#A9D8F5",
+  ACTIVITY: "#A8C9A1",
+  STORY: "#C8B6E8",
+  EVENT: "#FFD66B",
+  CLASSIC: "#FF826F",
+};
