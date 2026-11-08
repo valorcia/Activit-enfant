@@ -13,3 +13,4 @@ Chaque e-book se produit en trois temps :
 | Mission astronaute | `mission-astronaute.md` |
 | Lutins farceurs : 30 idées pour Noël | `lutins-farceurs-noel.md` |
 | Charte d'illustration commune | `style-illustrations.md` |
+| Prompts d'images ChatGPT (3 e-books) | `images-openai.md` |
