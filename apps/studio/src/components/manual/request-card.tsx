@@ -2,14 +2,16 @@
 import Link from "next/link";
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Copy, ExternalLink, Image as ImageIcon, Type, Upload, XCircle } from "lucide-react";
+import { Check, Copy, Download, ExternalLink, Film, Image as ImageIcon, Type, Upload, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
-import { cancelRequestAction, resolveBatchAction, resolveImageRequestAction, resolveTextRequestAction } from "@/app/actions/manual";
+import { cancelRequestAction, resolveBatchAction, resolveImageRequestAction, resolveTextRequestAction, resolveVideoRequestAction } from "@/app/actions/manual";
 
 export interface ManualRequestView {
   id: string;
-  kind: "TEXT" | "IMAGE";
+  kind: "TEXT" | "IMAGE" | "VIDEO";
+  /** Illustration de départ à télécharger (clip vidéo à produire) */
+  sourceUrl?: string | null;
   title: string;
   prompt: string;
   expectedFormat: string | null;
@@ -48,7 +50,15 @@ function CopyButton({ text, label = "Copier le prompt" }: { text: string; label?
   );
 }
 
-function AssistantLinks() {
+function AssistantLinks({ kind }: { kind: ManualRequestView["kind"] }) {
+  if (kind === "VIDEO") {
+    return (
+      <>
+        <Button asChild size="sm" variant="secondary"><a href="https://app.runwayml.com/" target="_blank" rel="noopener noreferrer"><ExternalLink className="h-3.5 w-3.5" /> Ouvrir Runway</a></Button>
+        <Button asChild size="sm" variant="secondary"><a href="https://sora.chatgpt.com/" target="_blank" rel="noopener noreferrer"><ExternalLink className="h-3.5 w-3.5" /> Ouvrir Sora</a></Button>
+      </>
+    );
+  }
   return (
     <>
       <Button asChild size="sm" variant="secondary"><a href="https://claude.ai/new" target="_blank" rel="noopener noreferrer"><ExternalLink className="h-3.5 w-3.5" /> Ouvrir Claude</a></Button>
@@ -85,7 +95,7 @@ export function ManualRequestCard({ request }: { request: ManualRequestView }) {
       const fd = new FormData();
       fd.set("requestId", request.id);
       fd.set("file", file);
-      const r = await resolveImageRequestAction(fd);
+      const r = request.kind === "VIDEO" ? await resolveVideoRequestAction(fd) : await resolveImageRequestAction(fd);
       if (r.ok) afterResolve(r.resumed);
       else setError(r.error);
     });
@@ -95,7 +105,7 @@ export function ManualRequestCard({ request }: { request: ManualRequestView }) {
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2 font-bold">
-            <span className={`inline-flex h-6 w-6 items-center justify-center rounded-md ${request.kind === "TEXT" ? "bg-blue-100 text-blue-700" : "bg-violet-100 text-violet-700"}`}>{request.kind === "TEXT" ? <Type className="h-3.5 w-3.5" /> : <ImageIcon className="h-3.5 w-3.5" />}</span>
+            <span className={`inline-flex h-6 w-6 items-center justify-center rounded-md ${request.kind === "TEXT" ? "bg-blue-100 text-blue-700" : request.kind === "VIDEO" ? "bg-rose-100 text-rose-700" : "bg-violet-100 text-violet-700"}`}>{request.kind === "TEXT" ? <Type className="h-3.5 w-3.5" /> : request.kind === "VIDEO" ? <Film className="h-3.5 w-3.5" /> : <ImageIcon className="h-3.5 w-3.5" />}</span>
             <span className="truncate">{request.title}</span>
           </div>
           <div className="mt-1 text-xs text-slate-500">
@@ -106,7 +116,8 @@ export function ManualRequestCard({ request }: { request: ManualRequestView }) {
         </div>
         <div className="flex flex-wrap gap-2">
           <CopyButton text={request.prompt} />
-          <AssistantLinks />
+          <AssistantLinks kind={request.kind} />
+          {request.sourceUrl && <Button asChild size="sm" variant="secondary"><a href={request.sourceUrl} download><Download className="h-3.5 w-3.5" /> Image de départ</a></Button>}
           <Button size="sm" variant="ghost" disabled={pending} onClick={() => { if (confirm("Annuler cette demande ? La tâche restera en attente.")) start(async () => { await cancelRequestAction(request.id); router.refresh(); }); }}>
             <XCircle className="h-3.5 w-3.5" /> Annuler
           </Button>
@@ -133,9 +144,9 @@ export function ManualRequestCard({ request }: { request: ManualRequestView }) {
             className={`flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 text-center text-sm ${dragging ? "border-blue-500 bg-blue-50" : "border-slate-300 bg-slate-50"}`}
           >
             <Upload className="h-5 w-5 text-slate-400" />
-            <p className="text-slate-600">Déposez l'image générée ici (PNG, JPG ou WebP), ou</p>
+            <p className="text-slate-600">{request.kind === "VIDEO" ? "Déposez le clip généré ici (MP4, WebM ou MOV), ou" : "Déposez l'image générée ici (PNG, JPG ou WebP), ou"}</p>
             <Button size="sm" variant="secondary" disabled={pending} onClick={() => fileRef.current?.click()}>Choisir un fichier</Button>
-            <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) submitFile(f); }} />
+            <input ref={fileRef} type="file" accept={request.kind === "VIDEO" ? "video/mp4,video/webm,video/quicktime" : "image/png,image/jpeg,image/webp"} className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) submitFile(f); }} />
           </div>
         )}
         {pending && <p className="mt-2 text-xs text-slate-500">Enregistrement…</p>}

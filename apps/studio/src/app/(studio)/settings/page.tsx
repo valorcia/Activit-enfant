@@ -1,4 +1,5 @@
-import { getAiSettings, getShopSettings, getStudioSettings, maskShopSettings, providerAvailability } from "@/lib/settings";
+import { getAiSettings, getShopSettings, getStudioSettings, getVideoSettings, maskShopSettings, maskVideoSettings, providerAvailability } from "@/lib/settings";
+import { VideoSettingsForm } from "@/components/video-settings-form";
 import { StudioSettingsForm } from "@/components/studio-settings-form";
 import { ShopSettingsForm } from "@/components/shop-settings-form";
 import { PageHeader } from "@/components/page-header";
@@ -13,6 +14,7 @@ export default async function SettingsPage() {
   const availability = providerAvailability();
   const shop = maskShopSettings(await getShopSettings());
   const studio = await getStudioSettings();
+  const video = maskVideoSettings(await getVideoSettings());
   const spent = await prisma.generationLog.groupBy({ by: ["provider", "kind"], _sum: { costUsd: true }, _count: { _all: true } });
   return (
     <div className="p-8 max-w-4xl">
@@ -20,6 +22,7 @@ export default async function SettingsPage() {
       <div className="mb-8"><StudioSettingsForm initial={studio} /></div>
       <SettingsForm initial={settings} availability={availability} />
       <div className="mt-8"><ShopSettingsForm initial={shop} /></div>
+      <div className="mt-8"><VideoSettingsForm initial={video} /></div>
       <div className="mt-8 rounded-xl border border-slate-200 bg-white p-5">
         <h2 className="font-bold mb-2">Dépenses enregistrées</h2>
         {spent.length === 0 && <p className="text-sm text-slate-500">Aucune génération pour l'instant.</p>}

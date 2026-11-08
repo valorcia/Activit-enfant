@@ -79,3 +79,34 @@ export async function saveStudioSettings(input: unknown): Promise<StudioSettings
   await prisma.setting.upsert({ where: { key: STUDIO_KEY }, create: { key: STUDIO_KEY, value: data }, update: { value: data } });
   return data;
 }
+
+// ---------------------------------------------------------------------------
+// Vidéos publicitaires
+// ---------------------------------------------------------------------------
+import { VideoSettingsSchema, DEFAULT_VIDEO_SETTINGS, type VideoSettings } from "./schemas/settings";
+
+const VIDEO_KEY = "video";
+
+/** Réglages vidéo complets (clé Runway incluse) — usage serveur uniquement. Repli sur RUNWAY_API_KEY. */
+export async function getVideoSettings(): Promise<VideoSettings> {
+  const row = await prisma.setting.findUnique({ where: { key: VIDEO_KEY } }).catch(() => null);
+  const parsed = row ? VideoSettingsSchema.safeParse(row.value) : null;
+  const base = parsed?.success ? parsed.data : DEFAULT_VIDEO_SETTINGS;
+  return { ...base, runwayApiKey: base.runwayApiKey || process.env.RUNWAY_API_KEY || "" };
+}
+
+/** Enregistre les réglages ; une clé vide conserve la clé existante. */
+export async function saveVideoSettings(input: unknown): Promise<VideoSettings> {
+  const data = VideoSettingsSchema.parse(input);
+  const row = await prisma.setting.findUnique({ where: { key: VIDEO_KEY } });
+  const prev = row ? VideoSettingsSchema.safeParse(row.value) : null;
+  if (!data.runwayApiKey) data.runwayApiKey = prev?.success ? prev.data.runwayApiKey : "";
+  await prisma.setting.upsert({ where: { key: VIDEO_KEY }, create: { key: VIDEO_KEY, value: data }, update: { value: data } });
+  return data;
+}
+
+/** Version sans secret pour le navigateur. */
+export function maskVideoSettings(s: VideoSettings) {
+  return { ...s, runwayApiKey: "", runwayKeyPreview: s.runwayApiKey ? `${s.runwayApiKey.slice(0, 8)}…` : null, runwayConfigured: Boolean(s.runwayApiKey) };
+}
+export type VideoSettingsPublic = ReturnType<typeof maskVideoSettings>;

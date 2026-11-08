@@ -20,6 +20,7 @@ import { kitIllustrationPlan, readKitContent } from "@/lib/kits/generate";
 import { KitCustomizationSchema } from "@/lib/kits/schemas";
 import { shopClient } from "@/lib/shop/catalog";
 import type { KitTabView } from "@/components/kits/kit-tab";
+import { adFormDefaults, listAdVideos } from "@/lib/video/service";
 
 export const dynamic = "force-dynamic";
 
@@ -98,6 +99,8 @@ export default async function BookPage({ params, searchParams }: { params: Promi
         </div>
       )}
       <BookTabs
+        videos={sp.tab === "videos" ? { defaults: await adFormDefaults(book.id), list: await listAdVideos({ bookId: book.id }) } : null}
+        videoCount={await prisma.adVideo.count({ where: { bookId: book.id } })}
         kit={kit}
         defaultTab={sp.tab ?? (kit ? "kit" : "outline")}
         book={{ id: book.id, title: book.title, subtitle: book.subtitle, collection: book.collection, status: book.status, ageRange: book.ageRange, targetCount: book.targetCount, introduction: cover.introduction ?? "", theme: ctx.theme, widthMm: ctx.widthMm, heightMm: ctx.heightMm }}

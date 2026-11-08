@@ -97,6 +97,28 @@ export async function resolveImageRequestAction(formData: FormData): Promise<Man
   }
 }
 
+const VIDEO_MIME: Record<string, string> = { "video/mp4": "mp4", "video/webm": "webm", "video/quicktime": "mov" };
+
+/** Téléverse le clip vidéo produit à la main (Runway, Sora, Veo) pour une demande vidéo. */
+export async function resolveVideoRequestAction(formData: FormData): Promise<ManualActionResult> {
+  const requestId = String(formData.get("requestId") ?? "");
+  const file = formData.get("file");
+  const req = await prisma.manualRequest.findUnique({ where: { id: requestId } });
+  if (!req || req.kind !== "VIDEO") return { ok: false, error: "Demande introuvable" };
+  if (!(file instanceof File) || file.size === 0) return { ok: false, error: "Aucun fichier reçu" };
+  const ext = VIDEO_MIME[file.type] ?? (/\.(mp4|webm|mov)$/i.exec(file.name)?.[1]?.toLowerCase());
+  if (!ext) return { ok: false, error: "Format accepté : MP4, WebM ou MOV" };
+  if (file.size > 200 * 1024 * 1024) return { ok: false, error: "Vidéo trop lourde (200 Mo maximum)" };
+  const mime = ext === "mov" ? "video/quicktime" : `video/${ext}`;
+  const data = Buffer.from(await file.arrayBuffer());
+  const asset = await storeAsset({ key: `manual/${req.id}.${ext}`, data, mime });
+  await prisma.manualRequest.update({ where: { id: req.id }, data: { status: "DONE", assetId: asset.id, error: null, resolvedAt: new Date() } });
+  const resumed = await resumeJobIfReady(req.jobId);
+  revalidateAll();
+  revalidatePath("/videos");
+  return { ok: true, resumed };
+}
+
 /** Annule une demande : la tâche reste en attente avec une erreur explicite. */
 export async function cancelRequestAction(requestId: string): Promise<void> {
   const req = await prisma.manualRequest.findUnique({ where: { id: requestId } });

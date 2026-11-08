@@ -21,7 +21,7 @@ async function main() {
   console.log(`[worker] démarré — concurrence ${concurrency}, fournisseurs texte=${settings.textProvider} image=${settings.imageProvider}`);
 
   for (const queue of Object.values(QUEUES)) {
-    const teamSize = queue === QUEUES.bookPipeline ? 1 : queue === QUEUES.bookExport ? 1 : concurrency;
+    const teamSize = queue === QUEUES.bookPipeline || queue === QUEUES.bookExport || queue === QUEUES.adRender ? 1 : concurrency;
     await boss.work<JobPayload>(queue, { batchSize: 1, pollingIntervalSeconds: 2, localConcurrency: teamSize }, async (jobs: Job<JobPayload>[]) => {
       for (const job of jobs) {
         const data = job.data;

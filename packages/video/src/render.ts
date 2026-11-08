@@ -24,11 +24,21 @@ export function findBrowser(): string | undefined {
   return undefined;
 }
 
-let bundled: Promise<string> | null = null;
-/** Le bundle webpack est construit une fois par processus. `publicDir` sert les fichiers locaux (images, clips, musique). */
+const bundles = new Map<string, Promise<string>>();
+/**
+ * Le bundle webpack est construit une fois par processus et par dossier public.
+ * Le dossier public est lié (symlink) et non copié : un processus long (worker) peut
+ * y déposer de nouveaux fichiers (images, clips, musique) après la construction du bundle.
+ */
 function getBundle(publicDir?: string): Promise<string> {
-  if (!bundled) bundled = bundle({ entryPoint: ENTRY, publicDir: publicDir ?? null, onProgress: () => undefined });
-  return bundled;
+  const key = publicDir ? path.resolve(publicDir) : "";
+  let b = bundles.get(key);
+  if (!b) {
+    b = bundle({ entryPoint: ENTRY, publicDir: key || null, symlinkPublicDir: Boolean(key), onProgress: () => undefined });
+    b.catch(() => bundles.delete(key));
+    bundles.set(key, b);
+  }
+  return b;
 }
 
 export interface RenderOptions {

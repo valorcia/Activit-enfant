@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, BookOpen, PlusCircle, Library, Palette, FileDown, Settings, ListChecks, Sparkles, ClipboardPaste, Store, Wand2 } from "lucide-react";
+import { LayoutDashboard, BookOpen, PlusCircle, Library, Palette, FileDown, Settings, ListChecks, Sparkles, ClipboardPaste, Store, Wand2, Clapperboard } from "lucide-react";
 import { ModeToggle } from "@/components/mode-toggle";
 import { cn } from "@/lib/utils";
 import { logoutAction } from "@/app/actions/auth";
@@ -16,6 +16,7 @@ const NAV = [
   { href: "/library", label: "Bibliothèque", icon: Library },
   { href: "/templates", label: "Modèles graphiques", icon: Palette },
   { href: "/exports", label: "Exports", icon: FileDown },
+  { href: "/videos", label: "Vidéos", icon: Clapperboard },
   { href: "/jobs", label: "Tâches", icon: ListChecks },
   { href: "/manual", label: "À coller", icon: ClipboardPaste },
   { href: "/settings", label: "Paramètres", icon: Settings },

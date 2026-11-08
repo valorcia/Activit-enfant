@@ -173,3 +173,23 @@ Ce qui est envoyé : la fiche, la couverture acceptée (image principale), jusqu
 Scripts : `pnpm tsx scripts/dev-publish-to-shop.ts <bookId> [--draft] [--no-previews]`.
 
 Note technique : le studio épingle Prisma `6.19.2` tandis que la boutique utilise `6.19.3`. Avec une version identique, pnpm partage un seul paquet `@prisma/client` entre les deux applications et chaque `prisma generate` écrase le client de l'autre.
+
+## Vidéos publicitaires
+
+Chaque livre a un onglet **« Vidéos pub »**, et la page **Vidéos** regroupe les vidéos de tous les livres.
+
+1. **Formulaire** : formats (Story 9:16, Carré 1:1, Paysage 16:9), durée de 6 à 20 s, accroche, 2 ou 3 bénéfices et appel à l'action. Ces champs sont préremplis depuis la fiche boutique. La musique est facultative.
+2. **Clip d'accroche animé** (facultatif) :
+   - **Runway** : l'illustration choisie est animée par Gen-4 Turbo (5 ou 10 s). Le coût estimé s'affiche avant le lancement. Le worker interroge Runway toutes les 10 s, pendant 10 min au plus.
+   - **Copier-coller** : le prompt de mouvement est affiché, à utiliser dans Runway, Sora ou Veo. Le clip MP4 se téléverse ensuite dans « À coller » (demande de type vidéo, image de départ téléchargeable). Le montage reprend automatiquement.
+   - **Démo** (développement uniquement) : un petit clip est monté localement, sans appel externe.
+3. **Montage** : le worker monte la vidéo avec Remotion (paquet `@malle/video`) à partir de la couverture, des illustrations du kit, du prix et du logo. Il produit un MP4 et une miniature, stockés comme Assets.
+4. **Envoi à la boutique** : si le livre est lié à un produit, la vidéo y est envoyée automatiquement. Elle devient un média VIDEO du produit, proposé dans Marketing social → Posts. Sinon, utilisez le bouton « Envoyer à la boutique » une fois le livre publié.
+
+Le montage est toujours réalisé par le worker : lancez `pnpm worker`, ou `pnpm worker:prod` contre le studio en ligne. Le worker utilise le Chromium local et le ffmpeg fourni par Remotion. Les fichiers de travail sont dans `VIDEO_WORK_DIR`, par défaut le dossier temporaire du système.
+
+Réglages dans **Paramètres → Vidéo** :
+- clé Runway, stockée côté serveur ; à défaut, la variable `RUNWAY_API_KEY` ;
+- coût estimé par seconde, 0,05 $ par défaut ;
+- durée par défaut ;
+- musique par défaut et son volume.

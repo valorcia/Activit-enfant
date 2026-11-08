@@ -170,6 +170,9 @@ importers:
       '@aws-sdk/client-s3':
         specifier: ^3.1152.0
         version: 3.1164.0
+      '@malle/video':
+        specifier: workspace:*
+        version: link:../../packages/video
       '@prisma/client':
         specifier: 6.19.2
         version: 6.19.2(prisma@6.19.2(typescript@5.9.3))(typescript@5.9.3)

@@ -7,6 +7,9 @@ import { CoverTab } from "./cover-tab";
 import { ExportsTab } from "./exports-tab";
 import { ShopTab, type ShopSyncView } from "./shop-tab";
 import { KitTab, type KitTabView } from "@/components/kits/kit-tab";
+import { VideoForm, type VideoFormDefaults } from "@/components/videos/video-form";
+import { VideoList } from "@/components/videos/video-list";
+import type { AdVideoView } from "@/lib/video/service";
 import type { BookTheme, PageLayout } from "@/lib/schemas/layout";
 import type { CoverData } from "@/lib/schemas/activity";
 import type { estimateBookCost } from "@/lib/queue/estimate";
@@ -33,6 +36,9 @@ export function BookTabs(props: {
   settings: { textProvider: string; imageProvider: string; stepIllustrations: boolean };
   shop: ShopSyncView;
   kit?: KitTabView | null;
+  /** Chargé seulement quand l'onglet « Vidéos pub » est ouvert (calcul de la fiche et des illustrations) */
+  videos?: { defaults: VideoFormDefaults; list: AdVideoView[] } | null;
+  videoCount?: number;
 }) {
   return (
     <Tabs defaultValue={props.defaultTab}>
@@ -43,6 +49,7 @@ export function BookTabs(props: {
         <TabsTrigger value="cover">Couverture</TabsTrigger>
         <TabsTrigger value="exports">Exports ({props.exports.length})</TabsTrigger>
         <TabsTrigger value="shop">Boutique{props.shop.publishedAt ? " ✓" : ""}</TabsTrigger>
+        <TabsTrigger value="videos" asChild><a href={`/books/${props.book.id}?tab=videos`}>Vidéos pub{props.videoCount ? ` (${props.videoCount})` : ""}</a></TabsTrigger>
       </TabsList>
       {props.kit && <TabsContent value="kit"><KitTab bookId={props.book.id} kit={props.kit} activeJobId={props.activeJobId} /></TabsContent>}
       <TabsContent value="outline"><OutlineTab book={props.book} activities={props.activities} /></TabsContent>
@@ -51,6 +58,19 @@ export function BookTabs(props: {
       <TabsContent value="cover"><CoverTab book={props.book} cover={props.cover} illustrations={props.coverIllustrations} /></TabsContent>
       <TabsContent value="exports"><ExportsTab book={props.book} exports={props.exports} snapshots={props.snapshots} /></TabsContent>
       <TabsContent value="shop"><ShopTab bookId={props.book.id} sync={props.shop} /></TabsContent>
+      <TabsContent value="videos">
+        {props.videos ? (
+          <div className="space-y-6">
+            <VideoForm bookId={props.book.id} defaults={props.videos.defaults} />
+            <div>
+              <h3 className="mb-3 text-base font-black text-slate-700">Vidéos de ce livre</h3>
+              <VideoList videos={props.videos.list} />
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-slate-500">Chargement…</p>
+        )}
+      </TabsContent>
     </Tabs>
   );
 }

@@ -66,6 +66,15 @@ enum JobStatus {
 enum ManualRequestKind {
   TEXT
   IMAGE
+  VIDEO // clip d'animation produit à la main (Runway, Sora, Veo) puis téléversé
+}
+
+enum AdVideoStatus {
+  QUEUED
+  RENDERING
+  WAITING_CLIP // clip d'accroche en cours chez le fournisseur, ou à téléverser (copier-coller)
+  READY
+  FAILED
 }
 
 enum ManualRequestStatus {
@@ -141,6 +150,7 @@ model Book {
   issues     QualityIssue[]
   snapshots  BookSnapshot[]
   illustrations Illustration[]
+  adVideos      AdVideo[]
 
   @@index([status])
 }
@@ -250,6 +260,9 @@ model Asset {
   illustrations  Illustration[]
   exports        Export[]
   manualRequests ManualRequest[]
+  adVideos       AdVideo[]       @relation("AdVideoFile")
+  adThumbnails   AdVideo[]       @relation("AdVideoThumbnail")
+  adClips        AdVideo[]       @relation("AdVideoClip")
 }
 
 // ---------------------------------------------------------------------------
@@ -470,4 +483,41 @@ model Setting {
   key       String   @id
   value     Json
   updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Vidéos publicitaires (montage Remotion + clip d'accroche Runway ou copier-coller)
+// ---------------------------------------------------------------------------
+
+model AdVideo {
+  id                String        @id @default(cuid())
+  bookId            String
+  format            String        // story | square | landscape
+  status            AdVideoStatus @default(QUEUED)
+  step              String?       // libellé de progression affiché
+  props             Json          // options du montage (accroche, bénéfices, CTA, durée, musique…)
+  clipProvider      String        @default("none") // runway | manual | mock | none
+  clipPrompt        String?
+  clipDurationSeconds Int?
+  clipSourceAssetId String?       // illustration de départ
+  clipJobId         String?       // identifiant de tâche chez le fournisseur
+  clipStartedAt     DateTime?
+  clipAssetId       String?       // clip d'accroche obtenu
+  assetId           String?       // MP4 final
+  thumbnailAssetId  String?
+  durationSeconds   Int           @default(15)
+  costUsd           Decimal       @default(0) @db.Decimal(10, 4)
+  shopVideoUrl      String?
+  jobId             String?       // tâche du studio en cours (suivi, reprise après collage)
+  error             String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  book      Book   @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  asset     Asset? @relation("AdVideoFile", fields: [assetId], references: [id], onDelete: SetNull)
+  thumbnail Asset? @relation("AdVideoThumbnail", fields: [thumbnailAssetId], references: [id], onDelete: SetNull)
+  clip      Asset? @relation("AdVideoClip", fields: [clipAssetId], references: [id], onDelete: SetNull)
+
+  @@index([bookId, createdAt])
+  @@index([status])
 }

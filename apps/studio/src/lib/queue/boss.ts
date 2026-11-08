@@ -13,6 +13,8 @@ export const QUEUES = {
   bookExport: "book.export",
   bookCover: "book.cover",
   shopPublish: "shop.publish",
+  adClip: "ad.clip",
+  adRender: "ad.render",
 } as const;
 export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];
 

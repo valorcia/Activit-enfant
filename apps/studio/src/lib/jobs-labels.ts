@@ -10,6 +10,8 @@ export function labelFor(type: string) {
       "book.export": "Export PDF",
       "book.cover": "Couverture",
       "shop.publish": "Publication boutique",
+      "ad.clip": "Clip d'accroche (vidéo pub)",
+      "ad.render": "Montage vidéo pub",
     }[type] ?? type
   );
 }

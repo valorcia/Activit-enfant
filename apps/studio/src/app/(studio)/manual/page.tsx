@@ -1,3 +1,4 @@
+import { assetUrl } from "@/lib/storage";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { getAiSettings } from "@/lib/settings";
@@ -30,6 +31,7 @@ export default async function ManualPage() {
       id: r.id, kind: r.kind, title: r.title, prompt: r.prompt, expectedFormat: r.expectedFormat, error: r.error, createdAt: r.createdAt.toISOString(),
       bookId: r.bookId, activityId: r.activityId, activityTitle: activities.find((a) => a.id === r.activityId)?.title ?? null,
       jobId: r.jobId, jobLabel: job ? labelFor(job.type) : null,
+      sourceUrl: r.kind === "VIDEO" ? assetUrl(((r.params ?? {}) as { sourceAssetId?: string }).sourceAssetId) ?? null : null,
     };
     groups.set(key, [...(groups.get(key) ?? []), view]);
   }
@@ -78,7 +80,7 @@ export default async function ManualPage() {
           <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white text-sm">
             {recent.map((r) => (
               <li key={r.id} className="flex items-center justify-between gap-3 px-4 py-2">
-                <span className="truncate"><span className="text-slate-400 mr-2">{r.kind === "TEXT" ? "Texte" : "Image"}</span>{r.title}<span className="ml-2 text-xs text-slate-400">{bookTitle(r.bookId)}</span></span>
+                <span className="truncate"><span className="text-slate-400 mr-2">{r.kind === "TEXT" ? "Texte" : r.kind === "VIDEO" ? "Vidéo" : "Image"}</span>{r.title}<span className="ml-2 text-xs text-slate-400">{bookTitle(r.bookId)}</span></span>
                 <span className={`shrink-0 text-xs font-semibold ${r.status === "DONE" ? "text-emerald-700" : "text-slate-400"}`}>{r.status === "DONE" ? "Collée" : "Annulée"} · {r.resolvedAt ? formatDate(r.resolvedAt) : ""}</span>
               </li>
             ))}

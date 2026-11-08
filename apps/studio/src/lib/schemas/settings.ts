@@ -81,3 +81,18 @@ export const StudioSettingsSchema = z.object({
 });
 export type StudioSettings = z.infer<typeof StudioSettingsSchema>;
 export const DEFAULT_STUDIO_SETTINGS: StudioSettings = StudioSettingsSchema.parse({});
+
+// ---------------------------------------------------------------------------
+// Vidéos publicitaires (Remotion + Runway)
+// ---------------------------------------------------------------------------
+
+export const VideoSettingsSchema = z.object({
+  runwayApiKey: z.string().default(""), // stockée côté serveur uniquement, jamais renvoyée en clair (repli : RUNWAY_API_KEY)
+  /** Coût Runway estimé en $ par seconde de clip (Gen-4 Turbo ≈ 5 crédits/s × 0,01 $) */
+  usdPerSecond: z.number().min(0).max(5).default(0.05),
+  defaultDurationSeconds: z.number().int().min(6).max(20).default(15),
+  defaultMusicAssetId: z.string().nullable().default(null),
+  musicVolume: z.number().min(0).max(1).default(0.6),
+});
+export type VideoSettings = z.infer<typeof VideoSettingsSchema>;
+export const DEFAULT_VIDEO_SETTINGS: VideoSettings = VideoSettingsSchema.parse({});

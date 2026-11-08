@@ -18,6 +18,7 @@ import { isManualInputRequired } from "@/lib/ai/manual-core";
 import { markWaitingInput } from "@/lib/manual/requests";
 import { isStructuredKit } from "@/lib/kits/types";
 import { generateKitContent, generateKitIllustration, kitIllustrationPlan, readKitContent } from "@/lib/kits/generate";
+import { runClipStep, runRenderStep } from "@/lib/video/worker";
 
 type Handler = (data: JobPayload) => Promise<unknown>;
 
@@ -48,6 +49,9 @@ async function gate(jobId: string) {
 }
 
 export const handlers: Record<string, Handler> = {
+  // Vidéos publicitaires : clip d'accroche (Runway / copier-coller / démo) puis montage Remotion
+  [QUEUES.adClip]: async ({ jobId, adVideoId }) => runClipStep(adVideoId as string, jobId),
+  [QUEUES.adRender]: async ({ jobId, adVideoId }) => runRenderStep(adVideoId as string, jobId),
   [QUEUES.bookOutline]: async ({ jobId, bookId }) => {
     const kb = await prisma.book.findUniqueOrThrow({ where: { id: bookId! }, select: { kitType: true } });
     if (isStructuredKit(kb.kitType)) {
