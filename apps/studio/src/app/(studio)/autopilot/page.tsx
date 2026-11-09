@@ -8,6 +8,9 @@ import { loadSites } from "@/lib/universes";
 import { currentStage, parseStages } from "@/lib/autopilot/stages";
 import { formatDate, formatUsd } from "@/lib/utils";
 
+import { getAiSettings, providerAvailability, usesDemoProviders } from "@/lib/settings";
+import { DemoModeBanner } from "@/components/demo-mode-banner";
+
 export const dynamic = "force-dynamic";
 
 export default async function AutopilotPage() {
@@ -21,6 +24,7 @@ export default async function AutopilotPage() {
         description="Un brief → rédaction, illustrations, mise en page, PDF, boutique, vidéos et publicités, sans intervention."
         actions={<Button asChild><Link href="/brief"><Rocket className="h-4 w-4" /> Lancer un nouvel e-book</Link></Button>}
       />
+      <DemoModeBanner {...usesDemoProviders(await getAiSettings())} keys={providerAvailability()} />
       {runs.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-600">
           <p className="font-semibold">Aucun run pour l&apos;instant.</p>

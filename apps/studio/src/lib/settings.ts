@@ -3,11 +3,41 @@ import { AiSettingsSchema, DEFAULT_AI_SETTINGS, type AiSettings } from "./schema
 
 const KEY = "ai";
 
+/**
+ * Réglages IA par défaut quand rien n'a été enregistré : jamais le générateur de démonstration en ligne.
+ * Clé Claude → Claude pour le texte ; clé OpenAI → GPT Image pour les images ; sans clé → mode copier-coller.
+ */
+export function defaultAiSettingsFromEnv(env: NodeJS.ProcessEnv = process.env): AiSettings {
+  const hasAnthropic = Boolean(env.ANTHROPIC_API_KEY);
+  const hasOpenai = Boolean(env.OPENAI_API_KEY);
+  const textProvider = hasAnthropic ? "anthropic" : hasOpenai ? "openai" : "mock";
+  const imageProvider = hasOpenai ? "openai" : "mock";
+  const textOk = textProvider !== "mock";
+  const imageOk = imageProvider !== "mock";
+  return AiSettingsSchema.parse({
+    ...DEFAULT_AI_SETTINGS,
+    textProvider,
+    textModel: textProvider === "openai" ? "gpt-5" : "claude-opus-5-5",
+    imageProvider,
+    mode: textOk && imageOk ? "api" : "manual",
+    manualFor: textOk && imageOk ? "all" : textOk ? "images" : imageOk ? "text" : "all",
+    // En local sans aucune clé (développement), on garde la démonstration
+    ...(!textOk && !imageOk && env.NODE_ENV !== "production" ? { mode: "api", manualFor: "all" } : {}),
+  });
+}
+
 export async function getAiSettings(): Promise<AiSettings> {
   const row = await prisma.setting.findUnique({ where: { key: KEY } });
-  if (!row) return DEFAULT_AI_SETTINGS;
+  if (!row) return defaultAiSettingsFromEnv();
   const parsed = AiSettingsSchema.safeParse(row.value);
-  return parsed.success ? parsed.data : DEFAULT_AI_SETTINGS;
+  return parsed.success ? parsed.data : defaultAiSettingsFromEnv();
+}
+
+/** Le texte ou les images sortiront du générateur de démonstration (aucun rapport avec le brief). */
+export function usesDemoProviders(s: AiSettings): { text: boolean; images: boolean } {
+  const manualText = s.mode === "manual" && (s.manualFor === "all" || s.manualFor === "text");
+  const manualImages = s.mode === "manual" && (s.manualFor === "all" || s.manualFor === "images");
+  return { text: !manualText && s.textProvider === "mock", images: !manualImages && s.imageProvider === "mock" };
 }
 
 export async function saveAiSettings(input: unknown): Promise<AiSettings> {

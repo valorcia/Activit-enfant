@@ -4,6 +4,9 @@ import { getStudioSettings } from "@/lib/settings";
 import { shopClient } from "@/lib/shop/catalog";
 import { activeSites, defaultSiteSlug } from "@/lib/universes";
 
+import { getAiSettings, providerAvailability, usesDemoProviders } from "@/lib/settings";
+import { DemoModeBanner } from "@/components/demo-mode-banner";
+
 export const dynamic = "force-dynamic";
 
 export default async function NewBookPage() {
@@ -14,6 +17,7 @@ export default async function NewBookPage() {
   return (
     <div className="p-8 max-w-5xl">
       <PageHeader title="Nouvel e-book" description="Univers de la boutique, type d'e-book, personnalisation (thème, personnage, âge, prix…), style, puis production automatique." />
+      <DemoModeBanner {...usesDemoProviders(await getAiSettings())} keys={providerAvailability()} />
       <KitWizard categories={categories} prices={studio.priceByKitType} sites={sites} defaultSiteSlug={defaultSite} />
     </div>
   );

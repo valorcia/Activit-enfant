@@ -1,6 +1,7 @@
 import { PageHeader } from "@/components/page-header";
 import { BriefFlow } from "@/components/kits/brief-flow";
-import { getAiSettings } from "@/lib/settings";
+import { getAiSettings, providerAvailability, usesDemoProviders } from "@/lib/settings";
+import { DemoModeBanner } from "@/components/demo-mode-banner";
 import { manualText } from "@/lib/ai/registry";
 import { shopClient } from "@/lib/shop/catalog";
 import { activeSites, loadSites } from "@/lib/universes";
@@ -15,6 +16,7 @@ export default async function BriefPage() {
   return (
     <div className="p-8 max-w-5xl">
       <PageHeader title="Créer depuis un brief" description="Collez votre demande : le studio en déduit l'univers de la boutique, le type d'e-book, le ton, le prix… puis produit tout le reste automatiquement." />
+      <DemoModeBanner {...usesDemoProviders(settings)} keys={providerAvailability()} />
       <BriefFlow mode={manualText(settings) ? "manual" : "api"} categories={categories} sites={sites} sitesNote={source === "fallback" ? sitesError ?? "Univers par défaut (boutique mono-univers)." : null} />
     </div>
   );
