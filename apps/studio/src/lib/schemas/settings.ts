@@ -109,7 +109,7 @@ export const DEFAULT_VIDEO_SETTINGS: VideoSettings = VideoSettingsSchema.parse({
 // Pilote automatique (brief → kit → PDF → boutique → vidéo → publicités)
 // ---------------------------------------------------------------------------
 
-export const AUTOPILOT_STAGE_KEYS = ["plan", "content", "quality", "character", "illustrations", "layout", "pdf", "publish", "video", "ads"] as const;
+export const AUTOPILOT_STAGE_KEYS = ["plan", "content", "quality", "character", "illustrations", "layout", "pdf", "publish", "etsy", "video", "ads"] as const;
 export type AutopilotStageKey = (typeof AUTOPILOT_STAGE_KEYS)[number];
 
 export const AutopilotSettingsSchema = z.object({
@@ -120,12 +120,16 @@ export const AutopilotSettingsSchema = z.object({
       character: z.boolean().default(true),
       pdf: z.boolean().default(true),
       publish: z.boolean().default(true),
+      /** « Publier aussi sur Etsy » (via la boutique, qui doit avoir une boutique Etsy connectée) */
+      etsy: z.boolean().default(false),
       video: z.boolean().default(true),
       ads: z.boolean().default(true),
     })
     .default({}),
   /** Publication directe dans la boutique (sinon brouillon « à valider ») */
   publishDirect: z.boolean().default(true),
+  /** État de la fiche Etsy créée : brouillon (à vérifier sur Etsy) ou active (0,20 $ facturés par Etsy) */
+  etsyState: z.enum(["draft", "active"]).default("draft"),
   /** Export imprimable en plus de la version numérique */
   printPdf: z.boolean().default(false),
   videoFormats: z.array(z.enum(["story", "square", "landscape"])).min(1).default(["story", "square"]),

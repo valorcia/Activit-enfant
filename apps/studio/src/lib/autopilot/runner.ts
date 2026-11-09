@@ -37,6 +37,7 @@ import { checkKitContent, summarizeQuality } from "./quality";
 import { estimateRun } from "./estimate";
 import { applyOutcome, beforeStage, currentStage, markStarted, parseStages, type Stage, type StageOutcome, type RunStatus } from "./stages";
 import { buildMarketingBody, callMarketingAutopilot } from "./marketing";
+import { callEtsyPublish, etsyStageOutcome } from "./etsy";
 
 /** Conversion approximative pour le coût de création envoyé à la boutique (en centimes d'euro). */
 export const EUR_PER_USD = 0.92;
@@ -56,6 +57,7 @@ export interface RunState {
   publicUrl?: string | null;
   editUrl?: string;
   publishStatus?: string;
+  etsy?: { listingId: string | null; url: string | null; state: string };
   adsCopy?: Record<string, unknown> | null;
   campaign?: { campaignId: string; campaignSlug: string; landingUrl: string; adminUrl: string; posts: number; generatedBy: string };
   contentSource?: string;
@@ -203,8 +205,9 @@ async function estimateStage(run: RunRow, key: AutopilotStageKey, cfg: Autopilot
     }
   }
   const est = estimateRun({ format, count, contentProvided, ai, autopilot: cfg, runwayUsdPerSecond: video.usdPerSecond });
-  // L'étape vidéo bascule sur le montage seul si le clip dépasse le plafond : pas de blocage
-  if (key === "video") return 0;
+  // L'étape vidéo bascule sur le montage seul si le clip dépasse le plafond : pas de blocage.
+  // Etsy : frais facturés par Etsy, hors budget IA du run.
+  if (key === "video" || key === "etsy") return 0;
   return est.stages[key] ?? 0;
 }
 
@@ -222,6 +225,7 @@ async function runStage(key: AutopilotStageKey, run: RunRow, cfg: AutopilotSetti
     case "layout": return stageLayout(run);
     case "pdf": return stagePdf(run, cfg);
     case "publish": return stagePublish(run, cfg);
+    case "etsy": return stageEtsy(run, cfg);
     case "video": return stageVideo(run, cfg);
     case "ads": return stageAds(run, cfg, jobId);
   }
@@ -448,6 +452,17 @@ async function stagePublish(run: RunRow, cfg: AutopilotSettings): Promise<StageO
   await patchState(run.id, { productId: r.product.id, publicUrl: r.product.publicUrl, editUrl: r.product.editUrl, publishStatus: r.status });
   const label = r.status === "published" ? `Publié : ${r.product.publicUrl ?? r.product.slug}` : r.status === "draft_pending_review" ? "Brouillon en attente de validation dans la boutique" : "Fiche mise à jour";
   return { type: "done", detail: `${label}${r.warnings.length ? ` — ${r.warnings.join(" ")}` : ""}` };
+}
+
+async function stageEtsy(run: RunRow, cfg: AutopilotSettings): Promise<StageOutcome> {
+  const bookId = requireBook(run);
+  const book = await prisma.book.findUniqueOrThrow({ where: { id: bookId }, select: { shopProductId: true } });
+  const productId = book.shopProductId ?? stateOf(run).productId;
+  if (!productId) return { type: "failed", error: "Le kit n'est pas encore dans la boutique : l'étape « Boutique » doit réussir avant Etsy." };
+  const shop = await getShopSettings();
+  const outcome = await callEtsyPublish({ baseUrl: shop.shopApiUrl, apiKey: shop.shopApiKey }, productId, { state: cfg.etsyState });
+  if (outcome.kind === "ok") await patchState(run.id, { etsy: { listingId: outcome.data.listingId, url: outcome.data.url, state: outcome.data.state } });
+  return etsyStageOutcome(outcome);
 }
 
 async function stageVideo(run: RunRow, cfg: AutopilotSettings): Promise<StageOutcome> {

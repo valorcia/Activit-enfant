@@ -3,6 +3,7 @@ import { AutopilotSettingsSchema } from "@/lib/schemas/settings";
 import { applyOutcome, approveCurrent, approvalGateFor, beforeStage, currentStage, initStages, markStarted, resetStage, resumeStages, type Stage } from "@/lib/autopilot/stages";
 import { estimateRun, illustrationCount } from "@/lib/autopilot/estimate";
 import { buildMarketingBody, callMarketingAutopilot } from "@/lib/autopilot/marketing";
+import { callEtsyPublish, etsyStageOutcome } from "@/lib/autopilot/etsy";
 import { checkKitContent } from "@/lib/autopilot/quality";
 import { mockTreasureHunt } from "@/lib/kits/mock";
 import { TreasureHuntSchema } from "@/lib/kits/schemas";
@@ -16,9 +17,11 @@ function runThrough(stages: Stage[], keys: string[]) {
 }
 
 describe("pilote automatique — machine à états", () => {
-  it("initialise 10 étapes et respecte les étapes désactivées", () => {
+  it("initialise 11 étapes et respecte les étapes désactivées", () => {
     const stages = initStages(cfg({ stages: { video: false, publish: false } }));
-    expect(stages).toHaveLength(10);
+    expect(stages).toHaveLength(11);
+    // pas de boutique → pas d'Etsy
+    expect(stages.find((s) => s.key === "etsy")!.status).toBe("skipped");
     expect(stages.find((s) => s.key === "video")!.status).toBe("skipped");
     expect(stages.find((s) => s.key === "publish")!.status).toBe("skipped");
     // pas de boutique → pas de publicités
@@ -34,6 +37,26 @@ describe("pilote automatique — machine à états", () => {
     const last = applyOutcome({ status: "RUNNING", stages }, "ads", { type: "done" }, 1);
     expect(last.status).toBe("COMPLETED");
     expect(last.requeueSeconds).toBeNull();
+  });
+
+  it("étape Etsy : désactivée par défaut, placée après la boutique quand elle est activée", () => {
+    const def = initStages(cfg());
+    expect(def.map((s) => s.key)).toEqual(["plan", "content", "quality", "character", "illustrations", "layout", "pdf", "publish", "etsy", "video", "ads"]);
+    expect(def.find((s) => s.key === "etsy")!.status).toBe("skipped");
+    const on = initStages(cfg({ stages: { etsy: true } }));
+    expect(on.find((s) => s.key === "etsy")!.status).toBe("pending");
+    const afterShop = runThrough(on, ["plan", "content", "quality", "character", "illustrations", "layout", "pdf", "publish"]);
+    expect(currentStage(afterShop)!.key).toBe("etsy");
+    // 409 de la boutique → étape ignorée avec explication, le run continue (vidéos)
+    const t = applyOutcome({ status: "RUNNING", stages: afterShop }, "etsy", etsyStageOutcome({ kind: "unavailable", code: "etsy_not_connected", reason: "aucune boutique Etsy connectée" }), 0);
+    const etsy = t.stages.find((s) => s.key === "etsy")!;
+    expect(etsy.status).toBe("skipped");
+    expect(etsy.detail).toMatch(/Ignorée : aucune boutique Etsy connectée/);
+    expect(t.status).toBe("RUNNING");
+    expect(currentStage(t.stages)!.key).toBe("video");
+    // sans PDF ou sans boutique : Etsy ignorée
+    expect(initStages(cfg({ stages: { etsy: true, pdf: false } })).find((s) => s.key === "etsy")!.status).toBe("skipped");
+    expect(initStages(cfg({ stages: { etsy: true, publish: false } })).find((s) => s.key === "etsy")!.detail).toMatch(/dépend/);
   });
 
   it("interroge les tâches longues, attend les réponses à coller et échoue proprement", () => {
@@ -105,6 +128,48 @@ describe("pilote automatique — estimation de coût", () => {
     expect(imported.stages.plan).toBe(0);
     const manual = estimateRun({ format: "pranks", count: 30, contentProvided: false, ai: { ...ai, mode: "manual" }, autopilot: cfg(), runwayUsdPerSecond: 0.05 });
     expect(manual.totalUsd).toBe(0);
+  });
+  it("compte 0,20 $ de mise en vente Etsy quand l'étape est activée", () => {
+    const off = estimateRun({ format: "treasure_hunt", count: 10, contentProvided: true, ai: { ...ai, mode: "manual" }, autopilot: cfg(), runwayUsdPerSecond: 0.05 });
+    expect(off.stages.etsy).toBe(0);
+    const on = estimateRun({ format: "treasure_hunt", count: 10, contentProvided: true, ai: { ...ai, mode: "manual" }, autopilot: cfg({ stages: { etsy: true } }), runwayUsdPerSecond: 0.05 });
+    expect(on.stages.etsy).toBeCloseTo(0.2);
+    expect(on.totalUsd).toBeCloseTo(0.2);
+    expect(on.notes.join(" ")).toMatch(/Etsy/);
+  });
+});
+
+describe("pilote automatique — publication Etsy via la boutique", () => {
+  const shop = { baseUrl: "https://boutique.test/", apiKey: "key" };
+  const reply = (status: number, json: unknown) => async (url: string, init?: RequestInit) => {
+    expect(url).toBe("https://boutique.test/api/v1/products/p1/etsy");
+    expect(init?.method).toBe("POST");
+    expect(JSON.parse(String(init?.body))).toEqual({ state: "draft" });
+    expect((init?.headers as Record<string, string>).Authorization).toBe("Bearer key");
+    return new Response(typeof json === "string" ? json : JSON.stringify(json), { status });
+  };
+  it("200 → fiche créée, détail avec l'URL", async () => {
+    const r = await callEtsyPublish(shop, "p1", { state: "draft" }, reply(200, { data: { listingId: "555", url: "https://www.etsy.com/listing/555", state: "draft", warnings: [], created: true } }));
+    expect(r.kind).toBe("ok");
+    const o = etsyStageOutcome(r);
+    expect(o).toEqual({ type: "done", detail: "Fiche Etsy créée (brouillon) : https://www.etsy.com/listing/555" });
+  });
+  it("409 etsy_not_connected / etsy_disabled → ignorée", async () => {
+    const a = await callEtsyPublish(shop, "p1", { state: "draft" }, reply(409, { error: "etsy_not_connected" }));
+    expect(a).toMatchObject({ kind: "unavailable", code: "etsy_not_connected" });
+    expect(etsyStageOutcome(a)).toMatchObject({ type: "skipped" });
+    const b = await callEtsyPublish(shop, "p1", { state: "draft" }, reply(409, { error: "etsy_disabled" }));
+    expect(etsyStageOutcome(b)).toMatchObject({ type: "skipped", detail: expect.stringMatching(/désactivée/) });
+  });
+  it("422 (PDF > 20 Mo, catégorie manquante) → ignorée avec le message, sans bloquer les publicités", async () => {
+    const r = await callEtsyPublish(shop, "p1", { state: "draft" }, reply(422, { error: "Le fichier « kit.pdf » dépasse 20 Mo (limite Etsy).", code: "file_too_large" }));
+    expect(r).toMatchObject({ kind: "invalid", code: "file_too_large" });
+    expect(etsyStageOutcome(r)).toMatchObject({ type: "skipped", detail: expect.stringMatching(/20 Mo/) });
+  });
+  it("404 sans JSON → boutique pas à jour ; 502 → erreur (étape relançable)", async () => {
+    const r = await callEtsyPublish(shop, "p1", { state: "draft" }, reply(404, "<html>404</html>"));
+    expect(r.kind).toBe("missing_endpoint");
+    await expect(callEtsyPublish(shop, "p1", { state: "draft" }, reply(502, { error: "Etsy indisponible" }))).rejects.toThrow("Etsy indisponible");
   });
 });
 

@@ -14,7 +14,7 @@ export type SettingsResult = { ok: true } | { ok: false; error: string; fields?:
 export async function saveSettingAction(key: SettingsKey, value: unknown): Promise<SettingsResult> {
   try {
     if (!(key in settingsSchemas)) return { ok: false, error: "Clé inconnue" };
-    const user = await assertPermission(APPEARANCE_KEYS.includes(key) ? "appearance:write" : "settings:write");
+    const user = await assertPermission(APPEARANCE_KEYS.includes(key) ? "appearance:write" : key === "etsy" ? "marketing:write" : "settings:write");
     const parsed = settingsSchemas[key].safeParse(value);
     if (!parsed.success) {
       const fields: Record<string, string> = {};
@@ -36,6 +36,7 @@ export async function saveSettingAction(key: SettingsKey, value: unknown): Promi
     revalidatePath("/", "layout");
     revalidatePath("/admin/apparence");
     revalidatePath("/admin/parametres");
+    if (key === "etsy") revalidatePath("/admin/marketing/etsy");
     return { ok: true };
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : "Erreur" }; }
 }

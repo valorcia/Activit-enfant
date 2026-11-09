@@ -205,8 +205,33 @@ export const conversionSettingsSchema = z.object({
 });
 export type ConversionSettings = z.infer<typeof conversionSettingsSchema>;
 
+/** Publication des e-books sur Etsy (réglable par univers). */
+export const etsySettingsSchema = z.object({
+  enabled: z.boolean().default(false),
+  /** Compte Etsy (SocialAccount) à utiliser ; sinon la boutique Etsy rattachée à l'univers. */
+  accountId: z.string().optional().nullable(),
+  defaultState: z.enum(["draft", "active"]).default("draft"),
+  markupPercent: z.number().min(0).max(300).default(0),
+  rounding: z.enum(["none", "90", "99"]).default("90"),
+  whoMade: z.enum(["i_did", "collective", "someone_else"]).default("i_did"),
+  whenMade: z.string().max(30).default("made_to_order"),
+  autoRenew: z.boolean().default(true),
+  aiDisclosureEnabled: z.boolean().default(true),
+  aiDisclosureText: z.string().max(400).default("Illustrations créées avec l'aide d'outils d'intelligence artificielle, puis sélectionnées et mises en page par nos soins."),
+  /** Correspondance catégorie de la boutique (slug) → catégorie Etsy (taxonomy_id). */
+  taxonomyByCategory: z.record(z.string(), z.number().int().positive()).default({}),
+  defaultTaxonomyId: z.number().int().positive().optional().nullable(),
+  /** Frais estimés (rentabilité) : commission Etsy, frais de paiement (% + fixe), frais de mise en ligne. */
+  transactionFeePercent: z.number().min(0).max(50).default(6.5),
+  paymentFeePercent: z.number().min(0).max(20).default(4),
+  paymentFeeFixedCents: z.number().int().min(0).max(500).default(30),
+  listingFeeCents: z.number().int().min(0).max(500).default(20),
+});
+export type EtsySettings = z.infer<typeof etsySettingsSchema>;
+
 export const settingsSchemas = {
   conversion: conversionSettingsSchema,
+  etsy: etsySettingsSchema,
   brand: brandSettingsSchema,
   theme: themeSettingsSchema,
   homepage: homepageSettingsSchema,

@@ -25,8 +25,8 @@ export default async function PostsPage({ searchParams }: { searchParams: Promis
       include: { product: { select: { name: true, slug: true } }, account: { select: { name: true, kind: true } }, campaign: { select: { name: true } } },
     }),
   ]);
-  const views: PostView[] = posts.map((p) => ({
-    id: p.id, provider: p.provider, format: p.format, status: p.status, hook: p.hook, body: p.body, cta: p.cta, headline: p.headline, hashtags: p.hashtags, imageUrls: p.imageUrls, videoUrl: p.videoUrl, linkUrl: p.linkUrl,
+  const views: PostView[] = posts.filter((p) => p.provider !== "ETSY").map((p) => ({
+    id: p.id, provider: p.provider as "META" | "TIKTOK", format: p.format, status: p.status, hook: p.hook, body: p.body, cta: p.cta, headline: p.headline, hashtags: p.hashtags, imageUrls: p.imageUrls, videoUrl: p.videoUrl, linkUrl: p.linkUrl,
     scheduledAt: p.scheduledAt?.toISOString() ?? null, publishedAt: p.publishedAt?.toISOString() ?? null, externalUrl: p.externalUrl, error: p.error, generatedBy: p.generatedBy, variantLabel: p.variantLabel,
     accountId: p.accountId, campaignId: p.campaignId, productId: p.productId, productName: p.product?.name ?? null, accountName: p.account?.name ?? null, campaignName: p.campaign?.name ?? null,
   }));

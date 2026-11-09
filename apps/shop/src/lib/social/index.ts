@@ -7,12 +7,20 @@ import type { SocialConnector } from "./types";
 
 export * from "./types";
 
-export const connectors: Record<SocialProvider, SocialConnector> = {
+/** Réseaux de publication. Etsy (boutique de vente) a son propre connecteur : `@/lib/channels/etsy`. */
+export type PublishingProvider = Exclude<SocialProvider, "ETSY">;
+
+export const connectors: Record<PublishingProvider, SocialConnector> = {
   META: metaConnector,
   TIKTOK: tiktokConnector,
 };
 
+export function isPublishingProvider(provider: SocialProvider): provider is PublishingProvider {
+  return provider !== "ETSY";
+}
+
 export function getConnector(provider: SocialProvider): SocialConnector {
+  if (!isPublishingProvider(provider)) throw new Error("Etsy n'est pas un réseau de publication : utilisez le connecteur Etsy");
   return connectors[provider];
 }
 

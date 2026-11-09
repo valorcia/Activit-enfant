@@ -1,7 +1,7 @@
 /**
  * Pilote automatique — machine à états pure (sans base de données), testable.
  *
- * Un run enchaîne 10 étapes. Chaque étape renvoie un « résultat » (terminé, à
+ * Un run enchaîne 11 étapes. Chaque étape renvoie un « résultat » (terminé, à
  * interroger plus tard, en attente de réponses à coller, échec…) que `applyOutcome`
  * traduit en nouvel état du run et en éventuelle relance différée.
  */
@@ -34,6 +34,7 @@ export const STAGE_LABELS: Record<AutopilotStageKey, string> = {
   layout: "Mise en page",
   pdf: "PDF",
   publish: "Boutique",
+  etsy: "Etsy",
   video: "Vidéos pub",
   ads: "Publicités",
 };
@@ -47,6 +48,7 @@ export const STAGE_DESCRIPTIONS: Record<AutopilotStageKey, string> = {
   layout: "Assemblage des pages, cadrage automatique et contrôle des images (résolution, format)",
   pdf: "Export PDF et contrôles (débordements, images manquantes)",
   publish: "Fiche produit, couverture, aperçus, PDF privé, publication",
+  etsy: "Fiche Etsy (produit numérique) créée ou mise à jour par la boutique",
   video: "Vidéos publicitaires (Story, carré…) envoyées à la boutique",
   ads: "Campagne et posts Instagram / Facebook / TikTok",
 };
@@ -57,6 +59,7 @@ const OPTIONAL: Partial<Record<AutopilotStageKey, keyof AutopilotSettings["stage
   character: "character",
   pdf: "pdf",
   publish: "publish",
+  etsy: "etsy",
   video: "video",
   ads: "ads",
 };
@@ -66,7 +69,7 @@ export function initStages(cfg: AutopilotSettings): Stage[] {
     const opt = OPTIONAL[key];
     const enabled = opt ? cfg.stages[opt] !== false : true;
     // Sans boutique, pas de publicité possible
-    const disabledByDependency = (key === "ads" && cfg.stages.publish === false) || (key === "publish" && cfg.stages.pdf === false);
+    const disabledByDependency = ((key === "ads" || key === "etsy") && (cfg.stages.publish === false || cfg.stages.pdf === false)) || (key === "publish" && cfg.stages.pdf === false);
     const skipped = !enabled || disabledByDependency;
     return {
       key,

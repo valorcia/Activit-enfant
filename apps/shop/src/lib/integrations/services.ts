@@ -4,7 +4,7 @@
  */
 import type { SecretKey } from "./secrets";
 
-export type ServiceId = "stripe" | "resend" | "anthropic" | "openai" | "meta" | "tiktok" | "runway" | "gemini";
+export type ServiceId = "stripe" | "resend" | "anthropic" | "openai" | "meta" | "tiktok" | "etsy" | "runway" | "gemini";
 
 export interface ServiceField {
   key: SecretKey;
@@ -97,6 +97,19 @@ export const SERVICES: ServiceDef[] = [
       { key: "tiktok.eventsToken", label: "Jeton Events API", optional: true, help: "Ads Manager → Outils → Événements → Paramètres → Générer un jeton" },
     ],
     oauthCallbackPaths: ["/api/admin/social/tiktok/callback"],
+    testable: true,
+  },
+  {
+    id: "etsy",
+    title: "Etsy (boutique)",
+    description: "Publication automatique des e-books sur votre boutique Etsy (produits numériques) et import des ventes Etsy dans la rentabilité.",
+    helpUrl: "https://www.etsy.com/developers/your-apps",
+    helpLabel: "Etsy Developers → Your apps → Keystring et Shared secret",
+    fields: [
+      { key: "etsy.apiKey", label: "Keystring (clé de l'application)", plain: true },
+      { key: "etsy.sharedSecret", label: "Shared secret", help: "Etsy exige désormais keystring et shared secret dans l'en-tête x-api-key : renseignez les deux." },
+    ],
+    oauthCallbackPaths: ["/api/admin/social/etsy/callback"],
     testable: true,
   },
   {

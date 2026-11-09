@@ -129,7 +129,7 @@ La boutique est une **plateforme** : des **audiences** (Familles & enfants, Mais
 
 ## Intégrations (clés saisies dans l'administration)
 
-Admin → Paramètres → **Intégrations** : une carte par service (Stripe, Resend, Claude, OpenAI, Meta, TikTok, Runway, Google Gemini/Veo) avec saisie des clés, bouton **Tester** (appel en lecture seule au fournisseur) et état de chaque clé : *via la plateforme*, *via l'hébergement (Vercel)* ou *manquante*.
+Admin → Paramètres → **Intégrations** : une carte par service (Stripe, Resend, Claude, OpenAI, Meta, TikTok, Etsy, Runway, Google Gemini/Veo) avec saisie des clés, bouton **Tester** (appel en lecture seule au fournisseur) et état de chaque clé : *via la plateforme*, *via l'hébergement (Vercel)* ou *manquante*.
 
 - Stockage : table `IntegrationSecret`, valeurs chiffrées AES-256-GCM (clé dérivée de `MARKETING_ENCRYPTION_KEY`, sinon d'`AUTH_SECRET` : sans l'une des deux, la saisie est désactivée). Seuls les 4 derniers caractères sont affichés ; aucune valeur n'est renvoyée au navigateur ni journalisée.
 - Priorité : valeur saisie dans l'admin, puis variable d'environnement (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `RESEND_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `META_APP_ID`, `META_APP_SECRET`, `META_CAPI_TOKEN`, `TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET`, `TIKTOK_ADS_ACCESS_TOKEN`, `TIKTOK_ADVERTISER_IDS`, `TIKTOK_EVENTS_TOKEN`, `RUNWAY_API_KEY`, `GEMINI_API_KEY`). « Supprimer » une clé dans l'admin rend la main à la variable d'environnement.
@@ -141,6 +141,8 @@ Admin → Paramètres → **Intégrations** : une carte par service (Stripe, Res
 ## Marketing social
 
 Admin → Marketing social : connexion Meta (Pages, Instagram, comptes pub) et TikTok, génération de posts et publicités par e-book (API Claude ou copier-coller), publication/programmation, attribution des ventes par UTM, conversions serveur et rentabilité par e-book et par campagne. Voir `docs/MARKETING.md` (prérequis, validation des apps, mode dégradé).
+
+**Etsy** : connexion OAuth de votre boutique, publication de chaque e-book en téléchargement numérique (titre, 13 mots-clés, description texte, prix majoré/arrondi, mention IA, catégorie Etsy) depuis la fiche produit, l'API (`POST /api/v1/products/:id/etsy`) ou l'autopilote du studio ; synchronisation quotidienne des fiches et import des ventes Etsy dans la rentabilité (brut, frais estimés, net). Voir `docs/ETSY.md`.
 
 ## API d'importation
 

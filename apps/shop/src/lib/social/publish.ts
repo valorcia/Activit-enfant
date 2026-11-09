@@ -27,8 +27,9 @@ export async function publishSocialPost(postId: string, db: PrismaClient = defau
 
   await db.socialPost.update({ where: { id: postId }, data: { status: "PUBLISHING", error: null } });
   try {
+    if (post.provider === "ETSY") throw new SocialApiError("Les fiches Etsy se publient depuis l'onglet Etsy du produit");
     const connector = getConnector(post.provider);
-    const text = composePostText({ hook: post.hook, body: post.body, cta: post.cta, hashtags: post.hashtags, linkUrl: post.linkUrl }, channelOfPost(post));
+    const text = composePostText({ hook: post.hook, body: post.body, cta: post.cta, hashtags: post.hashtags, linkUrl: post.linkUrl }, channelOfPost({ ...post, provider: post.provider }));
     let result;
     if (post.videoUrl) {
       if (!connector.publishVideoPost) throw new SocialApiError("Publication vidéo non prise en charge pour ce réseau : publiez-la manuellement");

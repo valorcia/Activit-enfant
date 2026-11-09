@@ -128,6 +128,28 @@ Erreurs :
 - `422` : corps invalide, ou `copy` ne respectant pas le schéma (`details.issues`).
 - `404` produit inconnu, `403` scope manquant.
 
+### `POST /products/:id/etsy` — publier sur Etsy
+
+Scope `products:write`. Crée la fiche Etsy du produit (téléchargement numérique) ou la met à jour si elle existe déjà : l'appel est **idempotent** (une seule fiche par produit et par boutique ; images et fichiers renvoyés seulement s'ils ont changé). Titre, mots-clés, description et prix sont générés depuis la fiche produit et les réglages Etsy de l'univers (surcharges saisies dans l'admin prioritaires).
+
+```json
+{ "state": "draft", "accountId": null }
+```
+
+- `state` : `draft` (défaut des réglages, recommandé) ou `active` (Etsy facture 0,20 $ de mise en vente). Une fiche déjà active n'est jamais repassée en brouillon (avertissement dans `warnings`).
+- `accountId` : boutique Etsy précise (sinon : celle des réglages, puis la première rattachée à l'univers du produit).
+
+Réponse `200` :
+```json
+{ "data": { "listingId": "1234567890", "url": "https://www.etsy.com/listing/1234567890", "state": "draft", "warnings": [], "created": true } }
+```
+
+Erreurs :
+- `409` `{"error":"etsy_not_connected"}` : aucune boutique Etsy connectée pour l'univers du produit (ou autorisation expirée, `code: "etsy_reconnect"`).
+- `409` `{"error":"etsy_disabled"}` : publication Etsy désactivée dans Marketing social → Etsy pour cet univers.
+- `422` `{"error":"…","code":"file_too_large" | "too_many_files" | "no_file" | "no_image" | "taxonomy_missing"}` : PDF > 20 Mo, plus de 5 fichiers, pas de PDF ou d'image, catégorie Etsy non définie.
+- `502` : erreur renvoyée par Etsy (message dans `error`).
+
 ### `GET /products/:id/marketing` — campagnes du produit
 
 Scope `products:read`. `{"data":{"campaigns":[{"id","slug","name","status","source","channel","landingUrl","posts":[{"id","provider","format","status","label","hook","linkUrl","videoUrl","scheduledAt","publishedAt","externalUrl","accountName","error"}],"stats":{"orders","revenueCents","revenueHtCents","spendCents","roas"}}]}}` (statistiques sur toute la période, ventes attribuées par `utm_campaign`).
@@ -168,6 +190,6 @@ Déplace le produit dans un autre univers. Sans `categorySlug`, la catégorie et
 | Route | Fréquence (vercel.json) | Rôle |
 |---|---|---|
 | `GET /api/cron/publish` | toutes les 15 min | publie les produits et articles programmés |
-| `GET /api/cron/marketing` | toutes les heures | relances de paniers abandonnés (avec consentement), annonces de nouveautés aux abonnés |
+| `GET /api/cron/marketing` | toutes les heures (une fois par jour sur Vercel Hobby) | relances de paniers abandonnés (avec consentement), annonces de nouveautés aux abonnés, posts programmés ; Etsy : rafraîchissement des jetons, synchronisation des fiches, import des ventes |
 
 Les routes cron acceptent le header `x-vercel-cron` (Vercel) ou `Authorization: Bearer <CRON_SECRET>`.

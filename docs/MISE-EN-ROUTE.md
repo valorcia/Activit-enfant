@@ -118,7 +118,17 @@ Sans stockage S3, les PDF et images envoyés par le studio ou l'admin **disparai
 - [ ] **[Admin]** Paramètres → Intégrations → TikTok : Client Key, Client Secret, jeton Marketing API, ID annonceur, jeton Events. **Tester**.
 - [ ] **[Admin]** Marketing social → Connecteurs → **Connecter TikTok**.
 
-### 3.4 Mesure d'audience (facultatif)
+### 3.4 Etsy (vendre aussi les e-books sur Etsy)
+- [ ] **[Vous]** Boutique Etsy ouverte (vendeur vérifié, Etsy Payments actif).
+- [ ] **[Vous]** etsy.com/developers → *Create a New App* → URL de rappel : `https://<boutique>/api/admin/social/etsy/callback`. Notez la **keystring** et le **shared secret**. Une app neuve est en accès personnel : suffisant pour votre propre boutique.
+- [ ] **[Admin]** Paramètres → Intégrations → Etsy : keystring + shared secret. **Tester**.
+- [ ] **[Admin]** Marketing social → Connecteurs → **Connecter Etsy** ; cochez les univers servis par la boutique (aucun = tous).
+- [ ] **[Admin]** Marketing social → Etsy : activer, état par défaut (brouillon conseillé), majoration du prix, mention IA, **catégorie Etsy pour chaque catégorie** (recherche intégrée).
+- [ ] **[Admin]** Fiche produit → section Etsy : vérifier l'aperçu, puis **Publier en brouillon** ; valider sur Etsy.
+- [ ] **[Studio]** Paramètres → Pilote automatique → « Publier aussi sur Etsy » (brouillon ou active).
+- Détails, règles Etsy (produits numériques, IA, frais) : `apps/shop/docs/ETSY.md`.
+
+### 3.5 Mesure d'audience (facultatif)
 - [ ] **[Admin]** Paramètres → Analytics : ID Google Analytics 4, Google Ads, Pinterest. Ils ne se chargent qu'après le consentement du visiteur.
 
 > Tant que les applications Meta et TikTok ne sont pas validées, tout fonctionne en **mode dégradé** : les posts et vidéos sont prêts, à publier en un clic depuis Business Suite ou TikTok, et les dépenses se saisissent à la main. L'attribution des ventes par campagne et la rentabilité fonctionnent dès maintenant.
@@ -148,6 +158,7 @@ Sans stockage S3, les PDF et images envoyés par le studio ou l'admin **disparai
 | OpenAI | Illustrations | à l'usage (≈ 1 à 5 $ par e-book) |
 | Runway | Clips vidéo | à l'usage (≈ 0,05 $/s) |
 | Meta Business + app développeur | Pages, pubs, publication auto | gratuit (hors budget pub) |
+| Etsy (boutique + app développeur) | Vente des e-books sur Etsy | 0,20 $ par fiche (et par vente) + 6,5 % de commission + frais de paiement |
 | TikTok for Business + app développeur | Comptes, pubs, publication auto | gratuit (hors budget pub) |
 | Registrar (OVH, Gandi…) | Noms de domaine | ≈ 10 €/an par domaine |
 

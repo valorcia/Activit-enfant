@@ -220,10 +220,11 @@ Page **Créer depuis un brief** → bouton **« Tout lancer en automatique »** 
 | 6 | Mise en page | Assemblage des pages |
 | 7 | PDF | Export numérique (+ imprimable si activé) ; débordements corrigés automatiquement (police réduite, 2 tentatives), sinon arrêt |
 | 8 | Boutique | Fiche, couverture, aperçus, PDF privé, coût de création ; publication directe ou brouillon à valider |
-| 9 | Vidéos pub | Formats choisis, clip Runway si activé et sous le plafond (sinon montage seul), envoi à la boutique |
-| 10 | Publicités | `POST /api/v1/products/:id/marketing/autopilot` de la boutique ; si la boutique n'a pas de clé Claude (409), le studio rédige les textes (IA du studio ou demande « À coller ») |
+| 9 | Etsy (facultatif) | « Publier aussi sur Etsy » : `POST /api/v1/products/:id/etsy` de la boutique (fiche brouillon ou active, 0,20 $ de mise en vente) ; sans boutique Etsy connectée (409) ou produit incomplet pour Etsy (422), l'étape est **ignorée** avec l'explication et le run continue |
+| 10 | Vidéos pub | Formats choisis, clip Runway si activé et sous le plafond (sinon montage seul), envoi à la boutique |
+| 11 | Publicités | `POST /api/v1/products/:id/marketing/autopilot` de la boutique ; si la boutique n'a pas de clé Claude (409), le studio rédige les textes (IA du studio ou demande « À coller ») |
 
-Suivi : page **Pilote automatique** (barre latérale, badge des runs actifs) avec la frise des 10 étapes, durées, coûts, liens (kit, PDF, fiche boutique, admin, vidéos, campagne) et les actions **Reprendre**, **Relancer l'étape**, **Valider et continuer**, **Annuler**. Chaque étape est idempotente : une reprise ne refait jamais ce qui est terminé.
+Suivi : page **Pilote automatique** (barre latérale, badge des runs actifs) avec la frise des 11 étapes, durées, coûts, liens (kit, PDF, fiche boutique, admin, vidéos, campagne) et les actions **Reprendre**, **Relancer l'étape**, **Valider et continuer**, **Annuler**. Chaque étape est idempotente : une reprise ne refait jamais ce qui est terminé.
 
 Réglages (**Paramètres → Pilote automatique**) : étapes actives, publication directe ou brouillon, PDF imprimable, formats et durée des vidéos, clip d'accroche, canaux, variantes, posts en brouillon ou programmés (décalage, espacement), budget quotidien indicatif, points de validation (après rédaction, après illustrations, avant boutique, avant publicités : par défaut seulement si les posts sont programmés), **plafond de coût par e-book** (10 $ par défaut : au-delà, le run attend une validation).
 

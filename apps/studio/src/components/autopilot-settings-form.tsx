@@ -11,6 +11,7 @@ const STAGES: Array<[keyof AutopilotSettings["stages"], string]> = [
   ["character", "Planche de personnages (référence des illustrations)"],
   ["pdf", "Export PDF"],
   ["publish", "Publication dans la boutique"],
+  ["etsy", "Publier aussi sur Etsy (via la boutique)"],
   ["video", "Vidéos publicitaires"],
   ["ads", "Campagne et posts publicitaires"],
 ];
@@ -70,6 +71,14 @@ export function AutopilotSettingsForm({ initial, allowMock }: { initial: Autopil
           <h3 className="text-sm font-bold">Boutique et PDF</h3>
           <Check2 label="Publier directement (sinon brouillon à valider dans la boutique)" checked={s.publishDirect} onChange={(v) => set("publishDirect", v)} />
           <Check2 label="Produire aussi la version imprimable du PDF" checked={s.printPdf} onChange={(v) => set("printPdf", v)} />
+          {s.stages.etsy === true && (
+            <Field label="Fiche Etsy" hint="La boutique doit avoir une boutique Etsy connectée (Marketing social → Connecteurs) ; sinon l'étape est ignorée. Etsy facture 0,20 $ par fiche activée.">
+              <Select value={s.etsyState} onChange={(e) => set("etsyState", e.target.value as AutopilotSettings["etsyState"])}>
+                <option value="draft">Brouillon (à vérifier puis activer sur Etsy)</option>
+                <option value="active">Active (en vente immédiatement)</option>
+              </Select>
+            </Field>
+          )}
           <Field label="Plafond de coût par e-book ($)" hint="Au-delà, le run s'arrête pour validation. Le clip Runway est remplacé par le montage seul s'il dépasse le plafond.">
             <Input type="number" min={0} max={500} step={1} value={s.maxCostUsd} onChange={(e) => set("maxCostUsd", Number(e.target.value))} />
           </Field>

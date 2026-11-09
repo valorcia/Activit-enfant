@@ -26,14 +26,14 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
   const scope = { siteId: adminSite?.id ?? null, audienceId: audience?.id ?? null };
   const [products, campaigns] = await Promise.all([productRoi(period, undefined, scope), campaignRoi(period, undefined, undefined, scope)]);
   const qs = (p: Record<string, string | undefined>) => { const u = new URLSearchParams(); for (const [k, v] of Object.entries({ periode, audience: audience?.slug, ...p })) if (v) u.set(k, v); return u.toString(); };
-  const totals = products.reduce((t, p) => ({ ht: t.ht + p.revenueHtCents, spend: t.spend + p.adSpendCents, orders: t.orders + p.orders, margin: t.margin + p.marginCents, creation: t.creation + p.creationCostCents }), { ht: 0, spend: 0, orders: 0, margin: 0, creation: 0 });
+  const totals = products.reduce((t, p) => ({ ht: t.ht + p.revenueHtCents, spend: t.spend + p.adSpendCents, orders: t.orders + p.orders, margin: t.margin + p.marginCents, creation: t.creation + p.creationCostCents, etsyGross: t.etsyGross + p.etsy.grossCents, etsyFees: t.etsyFees + p.etsy.feesCents, etsyNet: t.etsyNet + p.etsy.netCents, etsyOrders: t.etsyOrders + p.etsy.orders }), { ht: 0, spend: 0, orders: 0, margin: 0, creation: 0, etsyGross: 0, etsyFees: 0, etsyNet: 0, etsyOrders: 0 });
   const maxHt = Math.max(1, ...products.map((p) => p.revenueHtCents));
   const sources = new Map<string, { orders: number; ht: number }>();
   for (const p of products) for (const [src, v] of Object.entries(p.bySource)) { const s = sources.get(src) ?? { orders: 0, ht: 0 }; s.orders += v.orders; s.ht += v.revenueHtCents; sources.set(src, s); }
 
   return (
     <div>
-      <AdminPageHeader title="Marketing social" description="Rentabilité de chaque e-book : revenus (remboursements déduits), dépenses publicitaires, coût de création et marge."
+      <AdminPageHeader title="Marketing social" description="Rentabilité de chaque e-book : revenus de la boutique (remboursements déduits) et d'Etsy (frais déduits), dépenses publicitaires, coût de création et marge."
         actions={<>
           <div className="flex rounded-full bg-white border border-line p-0.5">{PERIODS.map(([k, l]) => <Link key={k} href={`/admin/marketing?${qs({ periode: k })}`} className={`rounded-full px-3 py-1 text-xs font-bold ${periode === k ? "bg-ink text-white" : "text-ink-soft hover:text-ink"}`}>{l}</Link>)}</div>
           <Button asChild variant="outline" size="sm"><a href={`/api/admin/marketing/export?${qs({})}`}>Exporter CSV</a></Button>
@@ -59,7 +59,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
           {products.length === 0 ? <p className="text-sm text-ink-soft">Aucun produit.</p> : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead><tr className="text-left text-xs uppercase tracking-wide text-ink-muted border-b border-line"><th className="py-2 pr-3">E-book</th><th className="py-2 pr-3 text-right">Cmd.</th><th className="py-2 pr-3 text-right">Revenus HT</th><th className="py-2 pr-3 text-right">Pub</th><th className="py-2 pr-3 text-right">Création</th><th className="py-2 pr-3 text-right">Marge</th><th className="py-2 pr-3 text-right">ROAS</th><th className="py-2 text-right">Coût/cmd</th></tr></thead>
+                <thead><tr className="text-left text-xs uppercase tracking-wide text-ink-muted border-b border-line"><th className="py-2 pr-3">E-book</th><th className="py-2 pr-3 text-right">Cmd.</th><th className="py-2 pr-3 text-right">Revenus HT</th><th className="py-2 pr-3 text-right" title="Ventes Etsy : brut / net après frais">Etsy</th><th className="py-2 pr-3 text-right">Pub</th><th className="py-2 pr-3 text-right">Création</th><th className="py-2 pr-3 text-right">Marge</th><th className="py-2 pr-3 text-right">ROAS</th><th className="py-2 text-right">Coût/cmd</th></tr></thead>
                 <tbody>
                   {products.map((p) => (
                     <tr key={p.productId} className="border-b border-line/60 last:border-0 align-top">
@@ -69,6 +69,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
                       </td>
                       <td className="py-2.5 pr-3 text-right">{p.orders}</td>
                       <td className="py-2.5 pr-3 text-right font-semibold">{formatPrice(p.revenueHtCents)}</td>
+                      <td className="py-2.5 pr-3 text-right">{p.etsy.orders ? <><span className="font-semibold">{formatPrice(p.etsy.netCents)}</span><span className="block text-xs text-ink-muted">{p.etsy.orders} vente(s) · brut {formatPrice(p.etsy.grossCents)} · frais {formatPrice(p.etsy.feesCents)}</span></> : "—"}</td>
                       <td className="py-2.5 pr-3 text-right">{formatPrice(p.adSpendCents)}</td>
                       <td className="py-2.5 pr-3 text-right">{formatPrice(p.creationCostCents)}</td>
                       <td className={`py-2.5 pr-3 text-right font-bold ${p.marginCents < 0 ? "text-red-600" : "text-sage-dark"}`}>{formatPrice(p.marginCents)} <span className="text-xs font-normal text-ink-muted">({pct(p.marginRate)})</span></td>
@@ -82,13 +83,23 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
           )}
         </AdminCard>
         <div className="space-y-6">
-          <AdminCard title="Ventes par source" description="D'après les paramètres UTM capturés au premier contact (30 jours).">
+          <AdminCard title="Ventes par source" description="D'après les paramètres UTM capturés au premier contact (30 jours) ; « etsy » = ventes importées depuis Etsy (net).">
             {sources.size === 0 ? <p className="text-sm text-ink-soft">Aucune vente sur la période.</p> : (
               <ul className="space-y-2 text-sm">{[...sources.entries()].sort((a, b) => b[1].ht - a[1].ht).map(([src, v]) => (
                 <li key={src} className="flex items-center justify-between"><span className="font-semibold capitalize">{src}</span><span>{v.orders} cmd · {formatPrice(v.ht)}</span></li>
               ))}</ul>
             )}
           </AdminCard>
+          {totals.etsyOrders > 0 && (
+            <AdminCard title="Canal Etsy" actions={<Button asChild size="sm" variant="outline"><Link href="/admin/marketing/etsy">Détail</Link></Button>}>
+              <dl className="space-y-1 text-sm">
+                <div className="flex justify-between"><dt>Ventes</dt><dd>{totals.etsyOrders}</dd></div>
+                <div className="flex justify-between"><dt>Brut (payé par les acheteurs)</dt><dd>{formatPrice(totals.etsyGross)}</dd></div>
+                <div className="flex justify-between"><dt>Frais Etsy estimés</dt><dd>− {formatPrice(totals.etsyFees)}</dd></div>
+                <div className="flex justify-between font-bold"><dt>Net (compté en revenus HT)</dt><dd>{formatPrice(totals.etsyNet)}</dd></div>
+              </dl>
+            </AdminCard>
+          )}
           <AdminCard title="Campagnes" actions={<Button asChild size="sm" variant="outline"><Link href="/admin/marketing/campagnes">Toutes</Link></Button>}>
             {campaigns.length === 0 ? <p className="text-sm text-ink-soft">Aucune campagne. <Link href="/admin/marketing/campagnes/nouvelle" className="underline">Créer la première</Link>.</p> : (
               <ul className="space-y-2 text-sm">{campaigns.slice(0, 6).map((c) => (

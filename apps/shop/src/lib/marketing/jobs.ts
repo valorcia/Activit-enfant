@@ -6,6 +6,7 @@ import { abandonedCartEmail, newProductEmail } from "@/lib/email/templates";
 import { getSetting } from "@/lib/settings";
 import { sendPurchaseConversions } from "@/lib/social/conversions";
 import { runSocialJobs } from "@/lib/social/jobs";
+import { runEtsyJobs } from "@/lib/channels/etsy";
 import { emailBrandForSite } from "@/lib/sites/email";
 
 export interface Brand { name: string; appUrl: string; contactEmail?: string | null; color?: string }
@@ -121,5 +122,8 @@ export async function runMarketingJobs(db: PrismaClient = defaultPrisma) {
   const published = await processProductPublishedEvents(db);
   const conversions = await processOrderPaidEvents(db);
   const social = await runSocialJobs(db);
-  return { abandoned, published, conversions, social };
+  // Etsy : rafraîchissement des jetons, synchro des fiches, import des ventes (une fois par jour sur Vercel Hobby)
+  const etsy = await runEtsyJobs(db).catch((e: unknown) => ({ refreshed: 0, synced: 0, imported: 0, errors: [e instanceof Error ? e.message : String(e)] }));
+  if (etsy.errors.length) console.warn("[cron:etsy]", etsy.errors);
+  return { abandoned, published, conversions, social, etsy };
 }

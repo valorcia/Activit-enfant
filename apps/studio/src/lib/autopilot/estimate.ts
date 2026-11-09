@@ -13,7 +13,7 @@ export interface EstimateInput {
   /** Le contenu complet est déjà fourni (JSON collé) : pas de rédaction ni de plan par l'IA */
   contentProvided: boolean;
   ai: Pick<AiSettings, "mode" | "manualFor" | "textProvider" | "textModel" | "imageProvider" | "imageModel" | "imageQuality"> & Partial<Pick<AiSettings, "sketchQuality">>;
-  autopilot: Pick<AutopilotSettings, "stages" | "videoFormats" | "clipProvider" | "clipDurationSeconds"> & Partial<Pick<AutopilotSettings, "sketchFirst">>;
+  autopilot: Pick<AutopilotSettings, "stages" | "videoFormats" | "clipProvider" | "clipDurationSeconds"> & Partial<Pick<AutopilotSettings, "sketchFirst" | "etsyState">>;
   runwayUsdPerSecond: number;
 }
 
@@ -23,6 +23,9 @@ export interface CostEstimate {
   images: number;
   notes: string[];
 }
+
+/** Frais Etsy de mise en vente d'une fiche (USD). */
+export const ETSY_LISTING_FEE_USD = 0.2;
 
 /** Tokens moyens (entrée, sortie) par appel texte. */
 const TOKENS = {
@@ -64,6 +67,9 @@ export function estimateRun(input: EstimateInput): CostEstimate {
   stages.layout = 0;
   stages.pdf = 0;
   stages.publish = 0;
+  // Etsy : frais de mise en vente (0,20 $ par fiche, facturés par Etsy à l'activation), hors IA
+  const etsyOn = autopilot.stages.etsy === true && autopilot.stages.publish !== false && autopilot.stages.pdf !== false;
+  stages.etsy = etsyOn ? ETSY_LISTING_FEE_USD : 0;
   const clipOn = autopilot.stages.video !== false && autopilot.clipProvider === "runway";
   stages.video = clipOn ? round(autopilot.videoFormats.length * autopilot.clipDurationSeconds * input.runwayUsdPerSecond) : 0;
   stages.ads = autopilot.stages.ads !== false ? text(TOKENS.ads[0], TOKENS.ads[1]) : 0;
@@ -74,6 +80,7 @@ export function estimateRun(input: EstimateInput): CostEstimate {
   if (!manualImagesOn && ai.imageProvider === "mock") notes.push("Fournisseur d'images de démonstration : images étiquetées « DÉMO », coût nul.");
   if (sketchOn && ai.imageProvider !== "mock") notes.push(`Mode esquisse : ${nImages} esquisse(s) à ${perSketch("1024x1024").toFixed(3)} $ puis version finale des images validées (les images refusées ne sont pas payées en qualité finale).`);
   if (clipOn) notes.push(`Clip Runway : ${autopilot.videoFormats.length} format(s) × ${autopilot.clipDurationSeconds} s.`);
+  if (etsyOn) notes.push(`Etsy : ${ETSY_LISTING_FEE_USD.toFixed(2)} $ de mise en vente par fiche (${autopilot.etsyState === "active" ? "fiche activée directement" : "facturés quand vous activez le brouillon"}), puis commission Etsy sur chaque vente.`);
   if (stages.ads) notes.push("Publicités : textes générés par la boutique si elle a une clé Claude, sinon par le studio (coût indiqué).");
 
   const totalUsd = round(Object.values(stages).reduce((a, b) => a + (b ?? 0), 0));

@@ -87,6 +87,10 @@ export async function testServiceConnection(service: ServiceId): Promise<Connect
         if (problems.length) return { ok: false, message: `Format à vérifier : ${problems.join(" ; ")}.` };
         return { ok: true, message: "Format des identifiants correct. La validation définitive a lieu lors de la connexion du compte TikTok (Marketing social → Connecteurs)." };
       }
+      case "etsy": {
+        const { testEtsyApiKey } = await import("@/lib/channels/etsy");
+        return await testEtsyApiKey();
+      }
       case "runway": {
         const s = await getSecrets(["runway.apiKey"]);
         if (!s["runway.apiKey"]) return missing("La clé Runway");

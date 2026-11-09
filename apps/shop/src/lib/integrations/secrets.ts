@@ -25,6 +25,8 @@ export const SECRET_DEFS = {
   "tiktok.eventsToken": { env: "TIKTOK_EVENTS_TOKEN", label: "Jeton Events API TikTok" },
   "tiktok.advertiserIds": { env: "TIKTOK_ADVERTISER_IDS", label: "Identifiants des comptes publicitaires TikTok" },
   "runway.apiKey": { env: "RUNWAY_API_KEY", label: "Clé API Runway" },
+  "etsy.apiKey": { env: "ETSY_API_KEY", label: "Keystring de l'application Etsy" },
+  "etsy.sharedSecret": { env: "ETSY_SHARED_SECRET", label: "Shared secret de l'application Etsy" },
   "google.geminiApiKey": { env: "GEMINI_API_KEY", label: "Clé API Google Gemini (Veo)" },
 } as const;
 

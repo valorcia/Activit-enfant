@@ -56,6 +56,7 @@ export async function previewAutopilotAction(text: string, siteSlug?: string | n
       ai.mode === "manual" && ai.manualFor !== "text" ? "Images en mode copier-coller : le run attendra vos images dans « À coller »." : `Illustrations : ${estimate.images} image(s) (${ai.imageProvider === "mock" ? "démonstration" : `${ai.imageModel}, qualité ${ai.imageQuality}`}).`,
       on("pdf") ? `PDF numérique${cfg.printPdf ? " + imprimable" : ""}, contrôlé (débordements, images manquantes).` : "PDF : désactivé.",
       on("publish") && on("pdf") ? `Boutique : ${cfg.publishDirect ? "publication directe" : "brouillon à valider"}, avec couverture, aperçus et PDF privé.` : "Boutique : désactivée.",
+      cfg.stages.etsy === true && on("publish") && on("pdf") ? `Etsy : fiche ${cfg.etsyState === "active" ? "active" : "en brouillon"} créée par la boutique (0,20 $ de mise en vente ; étape ignorée sans boutique Etsy connectée).` : "Etsy : non.",
       on("video") ? `Vidéos : ${cfg.videoFormats.join(", ")} de ${cfg.videoDurationSeconds} s${cfg.clipProvider === "runway" ? `, clip Runway de ${cfg.clipDurationSeconds} s` : cfg.clipProvider === "manual" ? ", clip à téléverser" : ""}.` : "Vidéos : désactivées.",
       on("ads") && on("publish") ? `Publicités : ${cfg.channels.join(", ")} · ${cfg.variantsPerChannel} variante(s) par canal · ${cfg.postsMode === "auto" ? "programmation automatique" : "brouillons"}.` : "Publicités : désactivées.",
     ];

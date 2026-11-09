@@ -24,6 +24,7 @@ export default async function AutopilotRunPage({ params }: { params: Promise<{ i
   }
   if (state.publicUrl) links.push({ label: "Fiche boutique", href: state.publicUrl, external: true });
   if (state.editUrl) links.push({ label: "Admin boutique", href: state.editUrl, external: true });
+  if (state.etsy?.url) links.push({ label: state.etsy.state === "active" ? "Fiche Etsy" : "Fiche Etsy (brouillon)", href: state.etsy.url, external: true });
   if (state.videoIds?.length && run.book) links.push({ label: "Vidéos pub", href: `/books/${run.book.id}?tab=videos` });
   if (state.campaign?.adminUrl) links.push({ label: "Campagne publicitaire", href: state.campaign.adminUrl, external: true });
   const or = [run.bookId ? { bookId: run.bookId } : null, run.jobId ? { jobId: run.jobId } : null].filter(Boolean) as Array<{ bookId?: string; jobId?: string }>;

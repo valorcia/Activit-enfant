@@ -42,7 +42,7 @@ function duration(a: string | null, b: string | null) {
 
 const usd = (n: number) => `${n.toFixed(2).replace(".", ",")} $`;
 
-/** Frise du pilote automatique : 10 étapes, actions, rafraîchissement automatique tant que le run est actif. */
+/** Frise du pilote automatique : 11 étapes, actions, rafraîchissement automatique tant que le run est actif. */
 export function AutopilotRunView({ run }: { run: RunViewData }) {
   const router = useRouter();
   const [pending, start] = useTransition();

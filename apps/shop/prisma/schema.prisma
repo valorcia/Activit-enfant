@@ -325,6 +325,8 @@ model Product {
   reviews          Review[]
   campaigns        Campaign[]
   socialPosts      SocialPost[]
+  etsyListings     EtsyListing[]
+  externalSales    ExternalSale[]
 
   @@index([status, publishedAt])
   @@index([categoryId, status])
@@ -843,6 +845,7 @@ model DailyStat {
 enum SocialProvider {
   META
   TIKTOK
+  ETSY
 }
 
 enum SocialAccountKind {
@@ -850,6 +853,7 @@ enum SocialAccountKind {
   INSTAGRAM
   TIKTOK
   AD_ACCOUNT
+  SHOP // boutique de vente externe (Etsy)
 }
 
 enum CampaignChannel {
@@ -916,10 +920,14 @@ model SocialAccount {
   connectedBy     User?             @relation(fields: [connectedById], references: [id], onDelete: SetNull)
   isActive        Boolean           @default(true)
   needsReconnect  Boolean           @default(false)
+  // Univers servis par ce compte (boutiques Etsy) ; vide = tous les univers
+  siteIds         String[]          @default([])
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
-  posts SocialPost[]
+  posts         SocialPost[]
+  etsyListings  EtsyListing[]
+  externalSales ExternalSale[]
 
   @@unique([provider, kind, externalId])
   @@index([audienceId])
@@ -1026,4 +1034,68 @@ model ConversionEvent {
   createdAt DateTime         @default(now())
 
   @@unique([orderId, provider, eventName])
+}
+
+// ---------------------------------------------------------------------------
+// Etsy : fiches publiées et ventes importées
+// ---------------------------------------------------------------------------
+
+enum SalesChannel {
+  ETSY
+}
+
+// Fiche Etsy d'un produit sur une boutique Etsy connectée (une par produit et par boutique)
+model EtsyListing {
+  id            String        @id @default(cuid())
+  productId     String
+  product       Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  accountId     String
+  account       SocialAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  etsyListingId String?       @unique // null tant que la fiche n'a pas été créée chez Etsy
+  state         String        @default("pending") // pending | draft | active | inactive | sold_out | expired | removed
+  url           String?
+  priceCents    Int?
+  currency      String        @default("EUR")
+  overrides     Json?         // surcharges saisies dans l'admin : { title, description, tags, priceCents }
+  imagesHash    String?
+  filesHash     String?
+  remoteImages  Json?         // [{ listingImageId, source }]
+  remoteFiles   Json?         // [{ listingFileId, source }]
+  lastSyncedAt  DateTime?
+  lastError     String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  sales ExternalSale[]
+
+  @@unique([productId, accountId])
+  @@index([accountId, state])
+}
+
+// Vente réalisée hors de la boutique (Etsy), importée pour la rentabilité
+model ExternalSale {
+  id            String         @id @default(cuid())
+  channel       SalesChannel
+  externalId    String         @unique // « <receipt_id>:<transaction_id> »
+  accountId     String?
+  account       SocialAccount? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  productId     String?
+  product       Product?       @relation(fields: [productId], references: [id], onDelete: SetNull)
+  siteId        String?
+  listingId     String?
+  listing       EtsyListing?   @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  etsyListingId String?
+  receiptId     String?
+  quantity      Int            @default(1)
+  grossCents    Int
+  feesCents     Int?           // frais estimés (commission + paiement)
+  netCents      Int?
+  currency      String         @default("EUR")
+  soldAt        DateTime
+  raw           Json?
+  createdAt     DateTime       @default(now())
+
+  @@index([channel, soldAt])
+  @@index([productId, soldAt])
+  @@index([siteId, soldAt])
 }
