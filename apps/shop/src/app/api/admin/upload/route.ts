@@ -25,6 +25,15 @@ async function authorize() {
  *    de la limite de taille des requêtes Vercel).
  */
 export async function POST(req: Request) {
+  try {
+    return await handle(req);
+  } catch (e) {
+    console.error("[upload]", e);
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Erreur serveur" }, { status: 500 });
+  }
+}
+
+async function handle(req: Request) {
   const denied = await authorize();
   if (denied) return denied;
 

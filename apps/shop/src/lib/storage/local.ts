@@ -24,6 +24,8 @@ export function signLocalKey(key: string, expires: number): string {
 export function localStorageDriver(): StorageDriver {
   return {
     async put(key, body, _contentType) {
+      // Sur Vercel le disque est en lecture seule : message explicite plutôt qu'un ENOENT obscur
+      if (process.env.VERCEL) throw new Error("Stockage de fichiers non configuré : ajoutez STORAGE_DRIVER=s3 et les variables S3_* (Cloudflare R2) dans Vercel, puis redéployez.");
       const full = resolveKey(key);
       await fs.mkdir(path.dirname(full), { recursive: true });
       await fs.writeFile(full, body);

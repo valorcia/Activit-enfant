@@ -9,6 +9,15 @@ export const dynamic = "force-dynamic";
 
 /** Reçoit un morceau (≤ 3,5 Mo) d'un gros fichier, stocké temporairement dans l'espace privé. */
 export async function POST(req: Request) {
+  try {
+    return await handle(req);
+  } catch (e) {
+    console.error("[upload]", e);
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Erreur serveur" }, { status: 500 });
+  }
+}
+
+async function handle(req: Request) {
   const user = await getAdminUser();
   if (!user) return NextResponse.json({ error: "Authentification requise" }, { status: 401 });
   if (!roleCan(user.role, "products:write") && !roleCan(user.role, "appearance:write") && !roleCan(user.role, "blog:write")) {
