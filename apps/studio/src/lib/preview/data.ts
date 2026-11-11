@@ -93,7 +93,7 @@ export async function loadBookPreview(bookId: string, opts: { assetParam?: strin
       autoFocalX: i.asset?.focalX ?? null,
       autoFocalY: i.asset?.focalY ?? null,
     };
-    info.set(i.id, { width: i.asset?.width ?? null, height: i.asset?.height ?? null, contrast: i.asset?.contrast ?? null, isSketch: i.isSketch, isDemo: i.isDemo, fit: i.fit, zoom: i.zoom });
+    info.set(i.id, { width: i.asset?.width ?? null, height: i.asset?.height ?? null, contrast: i.asset?.contrast ?? null, isSketch: i.isSketch, isDemo: i.isDemo, fit: i.fit, zoom: i.zoom, vector: i.asset?.mime === "image/svg+xml" });
   }
   const issues = checkLayoutImages(pages, info);
   const inPages = all.filter((i) => referenced.has(i.id));

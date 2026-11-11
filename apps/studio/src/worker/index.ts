@@ -39,7 +39,7 @@ async function main() {
             continue;
           }
           if (isManualInputRequired(err)) {
-            await markWaitingInput(data.jobId, 1);
+            await markWaitingInput(data.jobId, (err as { pending?: number }).pending ?? 1);
             console.log(`[worker] ${queue} #${data.jobId} en attente d'une réponse à coller : ${err.title}`);
             continue;
           }

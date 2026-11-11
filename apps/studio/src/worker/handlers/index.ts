@@ -16,8 +16,13 @@ import { getAiSettings } from "@/lib/settings";
 import type { IllustrationKind, Prisma } from "@prisma/client";
 import { isManualInputRequired } from "@/lib/ai/manual-core";
 import { markWaitingInput } from "@/lib/manual/requests";
-import { isStructuredKit } from "@/lib/kits/types";
-import { generateKitContent, generateKitIllustration, kitIllustrationPlan, readKitContent } from "@/lib/kits/generate";
+import { isStructuredKit, kitType } from "@/lib/kits/types";
+import { generateKitContent, generateKitIllustration, isCharacterSheetSlot, kitIllustrationPlan, pendingCount, readKitContent } from "@/lib/kits/generate";
+import { runPool } from "@/lib/kits/batches";
+import { bookImageSettings, realImageProvider } from "@/lib/ai/book-settings";
+import { manualImages } from "@/lib/ai/registry";
+import { isDrawingSlot } from "@/lib/kits/coloring";
+import { ensureSheetBatchRequest, processSheetBatch, rejectedSheetSlots, sheetGridOf } from "@/lib/coloring/sheet-batch";
 import { mainCount } from "@/lib/kits/content";
 import { runClipStep, runRenderStep } from "@/lib/video/worker";
 import { processAutopilotRun } from "@/lib/autopilot/runner";
@@ -53,6 +58,13 @@ async function gate(jobId: string) {
 }
 
 export const handlers: Record<string, Handler> = {
+  // Copier-coller « en lot » : découpage des planches déposées (puis écran de vérification)
+  [QUEUES.coloringSheets]: async ({ jobId, requestId }) => {
+    await setJob(jobId, { status: "RUNNING", step: "Découpage des planches", progress: 5 });
+    const p = await processSheetBatch(requestId as string, (m) => setJob(jobId, { step: m }));
+    if (p.error) throw new Error(p.error);
+    await setJob(jobId, { status: "COMPLETED", progress: 100, step: `${p.cells.length} dessin(s) découpé(s) : à vérifier`, result: { cells: p.cells.length } });
+  },
   // Vidéos publicitaires : clip d'accroche (Runway / copier-coller / démo) puis montage Remotion
   [QUEUES.adClip]: async ({ jobId, adVideoId }) => runClipStep(adVideoId as string, jobId),
   [QUEUES.adRender]: async ({ jobId, adVideoId }) => runRenderStep(adVideoId as string, jobId),
@@ -63,13 +75,14 @@ export const handlers: Record<string, Handler> = {
     if (isStructuredKit(kb.kitType)) {
       await setJob(jobId, { status: "RUNNING", step: "Rédaction du contenu du kit", progress: 10 });
       try {
-        const r = await generateKitContent(bookId!, { jobId });
+        const r = await generateKitContent(bookId!, { jobId, onProgress: (step) => setJob(jobId, { step }) });
         const n = mainCount(r.content);
-        await setJob(jobId, { status: "COMPLETED", progress: 100, step: `Contenu du kit rédigé (${n} éléments)`, costUsd: r.usage.costUsd, result: { count: n } });
+        await setJob(jobId, { status: "COMPLETED", progress: 100, step: `Contenu du kit rédigé (${n} éléments${r.batches > 1 ? `, ${r.batches} lots` : ""})`, costUsd: r.usage.costUsd, result: { count: n } });
       } catch (err) {
         if (isManualInputRequired(err)) {
-          await markWaitingInput(jobId, 1);
-          throw new WaitingInputSignal(1);
+          const n = pendingCount(err);
+          await markWaitingInput(jobId, n);
+          throw new WaitingInputSignal(n);
         }
         throw err;
       }
@@ -376,28 +389,60 @@ async function runKitPipeline(jobId: string, bookId: string, opts: { withIllustr
   if (!content) return finish(jobId, bookId, "FAILED", "Contenu du kit invalide");
 
   if (opts.withIllustrations) {
-    const plan = kitIllustrationPlan(content);
-    for (let i = 0; i < plan.length; i++) {
-      if (!(await gate(jobId))) return finish(jobId, bookId, "CANCELLED");
-      const it = plan[i];
-      // Pas de regénération implicite : une image acceptée, générée ou collée est conservée
-      const current = await prisma.illustration.findFirst({ where: { bookId, kind: "KIT", slot: it.slot, isCurrent: true }, orderBy: { version: "desc" } });
-      if (!needsGeneration(current, { realProvider: settings.imageProvider !== "mock" || settings.mode === "manual" })) continue;
-      if ((await spentOnBook(bookId)) > settings.maxBudgetPerBookUsd) {
-        await jobLog(jobId, `Budget du livre dépassé (${settings.maxBudgetPerBookUsd} $) : illustrations interrompues`, "warn");
-        break;
+    const imgSettings = bookImageSettings(settings, book);
+    const coloring = kitType(book.kitType).format === "coloring";
+    // Cahier de coloriage : esquisses seulement si activées pour le type / le livre
+    const sketch = coloring ? Boolean(opts.sketch ?? imgSettings.sketchMode) && imgSettings.sketchMode : opts.sketch;
+    const plan = kitIllustrationPlan(content, book);
+    const real = realImageProvider(imgSettings);
+    const rejected = coloring ? await rejectedSheetSlots(bookId) : new Set<string>();
+    // Copier-coller « en lot » (cahier de coloriage) : une seule demande pour toutes les planches
+    if (coloring && manualImages(imgSettings) && sheetGridOf(book) > 1) {
+      const r = await ensureSheetBatchRequest(bookId, jobId, plan);
+      if (r.pending) {
+        await jobLog(jobId, `Lot d'images : ${r.drawings} dessin(s) en ${r.sheets} planche(s) à produire dans ChatGPT puis à déposer (page « À coller »)`);
+        waiting++;
       }
-      await setJob(jobId, { step: `Illustration ${i + 1}/${plan.length} : ${it.label}`, progress: 10 + Math.round((i / plan.length) * 70) });
+    }
+    // Reprise image par image : seules les images manquantes (ou de démonstration à remplacer) sont générées
+    const current = await prisma.illustration.findMany({ where: { bookId, kind: "KIT", isCurrent: true }, orderBy: { version: "desc" } });
+    const bySlot = new Map<string, (typeof current)[number]>();
+    for (const c of current) if (c.slot && !bySlot.has(c.slot)) bySlot.set(c.slot, c);
+    const todo = plan.filter((it) => needsGeneration(bySlot.get(it.slot) ?? null, { realProvider: real }) && !(waiting && coloring && isDrawingSlot(it.slot)));
+    const total = plan.length;
+    let done = total - todo.length;
+    let stopped: "budget" | "cancelled" | null = null;
+    const step = (label: string) => setJob(jobId, { step: `Illustrations ${done}/${total}${label ? ` : ${label}` : ""}`, progress: 10 + Math.round((done / Math.max(1, total)) * 70) });
+    const one = async (it: (typeof plan)[number]) => {
+      if (stopped) return;
+      if (!(await gate(jobId))) { stopped = "cancelled"; return; }
+      if ((await spentOnBook(bookId)) > settings.maxBudgetPerBookUsd) {
+        if (!stopped) await jobLog(jobId, `Budget du livre dépassé (${settings.maxBudgetPerBookUsd} $, Paramètres → IA) : illustrations interrompues à ${done}/${total}, relancez pour continuer`, "warn");
+        stopped = "budget";
+        return;
+      }
       try {
-        const r = await generateKitIllustration({ bookId, slot: it.slot, prompt: it.prompt, label: it.label, jobId, sketch: opts.sketch });
+        const via = rejected.has(it.slot) && settings.imageProvider === "openai" ? ("api" as const) : undefined;
+        const r = await generateKitIllustration({ bookId, slot: it.slot, prompt: it.prompt, label: it.label, jobId, sketch, via });
         await setJob(jobId, { costUsd: r.costUsd });
       } catch (err) {
-        if (isManualInputRequired(err)) { waiting++; continue; }
+        if (isManualInputRequired(err)) { waiting++; return; }
         const m = err instanceof Error ? err.message : String(err);
         errors.push(`${it.label} : ${m}`);
         await jobLog(jobId, `Échec illustration « ${it.label} » : ${m}`, "error");
+      } finally {
+        done++;
+        await step(it.label);
       }
-    }
+    };
+    await step("");
+    // La planche de personnages d'abord (elle sert de référence aux autres), puis une file avec concurrence réglable
+    const sheets = todo.filter((it) => isCharacterSheetSlot(it.slot) || it.slot === "dessin-1");
+    for (const it of sheets) await one(it);
+    const rest = todo.filter((it) => !sheets.includes(it));
+    const concurrency = imgSettings.mode === "manual" ? 1 : Math.max(1, Math.min(10, settings.maxConcurrentGenerations));
+    await runPool(rest.map((it) => () => one(it)), concurrency);
+    if (stopped === "cancelled") return finish(jobId, bookId, "CANCELLED");
   }
 
   if (opts.withCover) {

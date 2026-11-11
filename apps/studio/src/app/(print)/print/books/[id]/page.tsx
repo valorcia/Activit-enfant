@@ -26,13 +26,17 @@ export default async function PrintBookPage({ params, searchParams }: { params: 
   }
   if (sp.only === "cover") pages = pages.filter((p) => p.templateKey === "cover" || p.templateKey === "back_cover");
   const numbers = numberPages(pages);
+  // Rendu par tranches (gros livres) : ?from=0&to=30 — numéros de page calculés sur le livre entier
+  const from = Math.max(0, Number(sp.from ?? 0) || 0);
+  const to = sp.to !== undefined ? Math.min(pages.length, Number(sp.to) || pages.length) : pages.length;
+  const variant = sp.mode === "digital" ? ("digital" as const) : undefined;
 
   return (
     <>
       <style>{`@page { size: ${ctx.widthMm}mm ${ctx.heightMm}mm; margin: 0; } html, body { margin: 0; padding: 0; }`}</style>
         <div className="print-root">
-          {pages.map((p, i) => (
-            <PageRenderer key={p.id} layout={p.layout} theme={ctx.theme} mode="print" pageIndex={i} pageNumber={numbers[i]} />
+          {pages.slice(from, to).map((p, k) => (
+            <PageRenderer key={p.id} layout={p.layout} theme={ctx.theme} mode="print" pageIndex={from + k} pageNumber={numbers[from + k]} imageVariant={variant} />
           ))}
         </div>
       <PrintReady />

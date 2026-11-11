@@ -31,12 +31,13 @@ export async function renderPdf(opts: RenderOptions): Promise<RenderResult> {
     extraHTTPHeaders: process.env.INTERNAL_TOKEN ? { "x-internal-token": process.env.INTERNAL_TOKEN } : undefined,
   });
   const page = await context.newPage();
+  page.setDefaultTimeout(Math.max(120_000, opts.timeoutMs ?? 0));
   const url = new URL(opts.url);
   if (opts.mode) url.searchParams.set("mode", opts.mode);
   if (process.env.INTERNAL_TOKEN) url.searchParams.set("token", process.env.INTERNAL_TOKEN);
   try {
     await page.goto(url.toString(), { waitUntil: "networkidle", timeout: opts.timeoutMs ?? 120_000 });
-    await page.waitForFunction(() => (window as unknown as { __INVENTOR_READY__?: boolean }).__INVENTOR_READY__ === true, null, { timeout: 60_000 });
+    await page.waitForFunction(() => (window as unknown as { __INVENTOR_READY__?: boolean }).__INVENTOR_READY__ === true, null, { timeout: Math.max(60_000, opts.timeoutMs ?? 0) });
     await page.evaluate(() => document.fonts.ready);
 
     // Contrôles : débordements de blocs, images manquantes, polices utilisées

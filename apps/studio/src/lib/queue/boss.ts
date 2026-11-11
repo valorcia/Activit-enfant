@@ -18,6 +18,7 @@ export const QUEUES = {
   autopilotRun: "autopilot.run",
   illustrationRework: "illustration.rework",
   bookFinalize: "book.finalize",
+  coloringSheets: "coloring.sheets",
 } as const;
 export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];
 

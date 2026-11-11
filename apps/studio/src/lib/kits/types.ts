@@ -100,6 +100,15 @@ const SCIENCE_SECTIONS = (count = 12): KitSection[] => [
   { key: "diplome", label: "Diplôme de petit scientifique", pages: 1, icon: "award" },
 ];
 
+/** Cahier de coloriage : une page par dessin (+ page blanche au dos en recto-verso). */
+export const COLORING_SECTIONS = (count = 30): KitSection[] => [
+  { key: "couverture", label: "Couverture en couleur", pages: 1, icon: "image" },
+  { key: "appartient", label: "Page « Ce cahier appartient à… »", pages: 1, icon: "user-round-pen" },
+  { key: "exemple", label: "Page d'exemple colorée", pages: 1, icon: "palette" },
+  { key: "dessins", label: "Dessins à colorier", count, pages: count, icon: "brush" },
+  { key: "diplome", label: "Diplôme « Artiste en herbe »", pages: 1, icon: "award" },
+];
+
 const KIDS: UniversePreset[] = ["kit-enfants"];
 
 export const KIT_TYPES: KitTypeDef[] = [
@@ -116,6 +125,7 @@ export const KIT_TYPES: KitTypeDef[] = [
   { key: "histoire-illustree", label: "Histoire illustrée", description: "Livre illustré à lire et à imprimer.", icon: "book-open", family: "activites", shopCategory: "histoires-et-aventures", template: "STORY", defaultAge: "3-10", defaultPriceCents: 590, defaultCount: 12, countLabel: "doubles pages", sections: ACTIVITY_SECTIONS(12), presets: KIDS },
   { key: "histoire-du-soir", label: "Histoires du soir", description: "Recueil d'histoires courtes pour le coucher.", icon: "moon", family: "activites", shopCategory: "histoires-et-aventures", template: "STORY", defaultAge: "3-5", defaultPriceCents: 590, defaultCount: 7, countLabel: "histoires", sections: ACTIVITY_SECTIONS(7), presets: KIDS },
   { key: "livre-personnalisable", label: "Livre personnalisable", description: "Histoire dont l'enfant est le héros (prénom à compléter).", icon: "user-round-pen", family: "activites", shopCategory: "histoires-et-aventures", template: "STORY", defaultAge: "3-10", defaultPriceCents: 790, defaultCount: 12, countLabel: "pages", sections: ACTIVITY_SECTIONS(12), presets: KIDS },
+  { key: "cahier-coloriage", label: "Cahier de coloriage", description: "Dessins au trait noir sur blanc (une page par dessin, de 10 à plusieurs centaines), page « Ce cahier appartient à… », exemple coloré et diplôme « Artiste en herbe ».", icon: "palette", family: "kit", format: "coloring", shopCategory: "activites-educatives", template: "ACTIVITY", defaultAge: "3-10", defaultPriceCents: 590, defaultCount: 30, countLabel: "dessins", defaultUniverse: "Dinosaures", sections: COLORING_SECTIONS(30), presets: ["kit-enfants", "sciences-enfants"] },
   // Guides, recettes, sciences (autres univers de la boutique)
   { key: "guide-pratique", label: "Guide pratique expert", description: "Guide pour adultes : problème, causes, diagnostic, méthode pas à pas, erreurs fréquentes, checklist, calendrier, FAQ et glossaire.", icon: "book-marked", family: "kit", format: "guide", shopCategory: "guides-pratiques", template: "GUIDE", defaultAge: "18-99", defaultPriceCents: 1490, defaultCount: 8, countLabel: "chapitres", sections: GUIDE_SECTIONS(8), presets: ["guide-expert"] },
   { key: "livre-recettes", label: "Livre de recettes", description: "Recettes testables : ingrédients, étapes, temps, portions, astuces et allergènes.", icon: "chef-hat", family: "kit", format: "recipes", shopCategory: "recettes", template: "RECIPES", defaultAge: "18-99", defaultPriceCents: 990, defaultCount: 20, countLabel: "recettes", sections: RECIPES_SECTIONS(20), presets: ["recettes"] },
@@ -176,6 +186,7 @@ export function kitTypeFromShop(p: { categorySlug?: string | null; template?: st
   const text = `${p.name ?? ""} ${p.universe ?? ""}`.toLowerCase();
   if (p.template === "GUIDE") return "guide-pratique";
   if (p.template === "RECIPES") return "livre-recettes";
+  if (/coloriage|à colorier|a colorier/.test(text)) return "cahier-coloriage";
   if (/lutin/.test(text)) return "lutins-farceurs";
   if (/no[eë]l/.test(text) && p.categorySlug === "evenements") return "kit-noel";
   if (/p[âa]ques|oeuf|œuf/.test(text)) return "kit-paques";
@@ -207,10 +218,10 @@ export function kitContentsFor(def: KitTypeDef, counts: { main?: number } = {}):
     .filter((s) => s.key !== "couverture" && s.key !== "sommaire")
     .map((s) => {
       const count = s.count != null ? (MAIN_SECTION_KEYS.includes(s.key) ? counts.main ?? s.count : s.count) : undefined;
-      const label = count && /^(Cartes|Idées|Activités|Défis|Mots|Chapitres|Recettes|Fiches)/.test(s.label) ? `${count} ${s.label.charAt(0).toLowerCase()}${s.label.slice(1)}` : s.label;
+      const label = count && /^(Cartes|Idées|Activités|Défis|Mots|Chapitres|Recettes|Fiches|Dessins)/.test(s.label) ? `${count} ${s.label.charAt(0).toLowerCase()}${s.label.slice(1)}` : s.label;
       return { title: label, description: "", icon: s.icon, quantity: count ?? undefined };
     });
 }
 
 /** Sections dont la quantité suit le nombre d'éléments principaux du kit. */
-export const MAIN_SECTION_KEYS = ["enigmes-texte", "enigmes-images", "idees", "activites", "chapitres", "recettes", "experiences"];
+export const MAIN_SECTION_KEYS = ["enigmes-texte", "enigmes-images", "idees", "activites", "chapitres", "recettes", "experiences", "dessins"];

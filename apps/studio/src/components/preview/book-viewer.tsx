@@ -129,25 +129,33 @@ export function BookViewer({ data, readOnly = false }: { data: BookPreviewData; 
   });
 
   // Débordements de texte : même règle que l'export PDF, mesurée sur les miniatures (toutes les pages)
+  // Miniatures rendues à la demande (livres de 100+ pages) : la mesure se refait quand de nouvelles miniatures apparaissent
+  const [shownTick, setShownTick] = useState(0);
+  const onThumbShown = useCallback(() => setShownTick((t) => t + 1), []);
   useEffect(() => {
     let cancelled = false;
     const measure = () => {
       const root = thumbsRef.current;
       if (!root || cancelled) return;
-      const map = new Map<number, string[]>();
-      root.querySelectorAll<HTMLElement>("[data-page-index]").forEach((pg) => {
-        const idx = Number(pg.dataset.pageIndex);
-        pg.querySelectorAll<HTMLElement>("[data-block-id]").forEach((el) => {
-          if (el.dataset.blockType === "image" || el.dataset.blockType === "shape") return;
-          const inner = el.querySelector<HTMLElement>("[data-measure]") ?? el;
-          if (inner.scrollHeight > el.clientHeight + 3) map.set(idx, [...(map.get(idx) ?? []), el.dataset.blockId!]);
+      setOverflows((prev) => {
+        const map = new Map(prev);
+        root.querySelectorAll<HTMLElement>("[data-page-index]").forEach((pg) => {
+          const idx = Number(pg.dataset.pageIndex);
+          const ids: string[] = [];
+          pg.querySelectorAll<HTMLElement>("[data-block-id]").forEach((el) => {
+            if (el.dataset.blockType === "image" || el.dataset.blockType === "shape") return;
+            const inner = el.querySelector<HTMLElement>("[data-measure]") ?? el;
+            if (inner.scrollHeight > el.clientHeight + 3) ids.push(el.dataset.blockId!);
+          });
+          if (ids.length) map.set(idx, ids);
+          else map.delete(idx);
         });
+        return map;
       });
-      setOverflows(map);
     };
-    document.fonts.ready.then(() => setTimeout(measure, 150));
-    return () => { cancelled = true; };
-  }, [pages]);
+    const t = setTimeout(() => document.fonts.ready.then(() => setTimeout(measure, 150)), 120);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [pages, shownTick]);
 
   const badgesByPage = useMemo(() => {
     const m = new Map<number, PageBadge[]>();
@@ -224,7 +232,7 @@ export function BookViewer({ data, readOnly = false }: { data: BookPreviewData; 
               const p = pages[pi];
               return (
                 <div key={p.id} className="preview-sheet relative overflow-hidden bg-white" style={{ width: pageW * scale, height: pageH * scale }} data-preview-page={pi}>
-                  <PageRenderer layout={p.layout} theme={theme} mode="preview" scale={scale} pageIndex={pi} pageNumber={p.number} />
+                  <PageRenderer layout={p.layout} theme={theme} mode="preview" scale={scale} pageIndex={pi} pageNumber={p.number} imageVariant={zoom === "fit" ? "screen" : undefined} />
                   {controls && (
                     <ControlsOverlay
                       page={p}
@@ -270,9 +278,9 @@ export function BookViewer({ data, readOnly = false }: { data: BookPreviewData; 
             const worst = (badgesByPage.get(i) ?? []).reduce<PageBadge["severity"] | null>((a, b) => (a === "blocking" || b.severity === "blocking" ? "blocking" : a === "warning" || b.severity === "warning" ? "warning" : a ?? (b.severity === "info" ? "info" : null)), null);
             return (
               <button key={p.id} onClick={() => goToPage(i)} className={`relative shrink-0 rounded-sm text-left ${active ? "ring-2 ring-blue-600 ring-offset-1" : "opacity-80 hover:opacity-100"}`} aria-label={`Aller à la page ${i + 1}`} aria-current={active ? "page" : undefined}>
-                <div className="overflow-hidden bg-white shadow-sm" style={{ width: 64, height: pageH * tScale }}>
-                  <PageRenderer layout={p.layout} theme={theme} mode="preview" scale={tScale} pageIndex={i} pageNumber={p.number} />
-                </div>
+                <LazyThumb width={64} height={pageH * tScale} root={thumbsRef} onShow={onThumbShown} eager={Math.abs(i - cur) < 6}>
+                  <PageRenderer layout={p.layout} theme={theme} mode="preview" scale={tScale} pageIndex={i} pageNumber={p.number} imageVariant="thumb" />
+                </LazyThumb>
                 <div className={`mt-0.5 text-center text-[10px] ${fullscreen ? "text-slate-300" : "text-slate-500"}`}>{i + 1}</div>
                 {worst && worst !== "info" && <span className={`absolute right-0.5 top-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-white ${worst === "blocking" ? "bg-red-600" : "bg-amber-400"}`} />}
               </button>
@@ -464,6 +472,34 @@ function SketchBanner({ data }: { data: BookPreviewData }) {
         >Valider les esquisses et générer la version finale</Button>
       )}
       {error && <p className="w-full text-red-700">{error}</p>}
+    </div>
+  );
+}
+
+/**
+ * Miniature rendue seulement à l'approche de la zone visible (IntersectionObserver) :
+ * un livre de 130 pages n'affiche que la vingtaine de miniatures utiles, avec des vignettes légères.
+ */
+function LazyThumb({ width, height, root, onShow, eager, children }: { width: number; height: number; root: React.RefObject<HTMLDivElement | null>; onShow: () => void; eager?: boolean; children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(Boolean(eager));
+  useEffect(() => {
+    if (visible) return;
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === "undefined") return setVisible(true);
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) {
+        setVisible(true);
+        io.disconnect();
+      }
+    }, { root: root.current?.firstElementChild ?? null, rootMargin: "0px 600px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [visible, root]);
+  useEffect(() => { if (visible) onShow(); }, [visible, onShow]);
+  return (
+    <div ref={ref} className="overflow-hidden bg-white shadow-sm" style={{ width, height }} data-thumb-visible={visible ? "1" : "0"}>
+      {visible ? children : null}
     </div>
   );
 }

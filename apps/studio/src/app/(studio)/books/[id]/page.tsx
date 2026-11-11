@@ -72,7 +72,7 @@ export default async function BookPage({ params, searchParams }: { params: Promi
       hasContent: Boolean(content),
       heroName: content ? heroOf(content) : null,
       elements: content ? mainItems(content).map((e) => ({ title: e.title, detail: e.detail })) : [],
-      slots: content ? kitIllustrationPlan(content).map((p) => { const i = bySlot.get(p.slot); return { slot: p.slot, label: p.label, status: i?.status ?? null, src: i ? assetUrl(i.assetId) ?? null : null, isDemo: i?.isDemo ?? false, provider: i?.provider ?? null, isSketch: i?.isSketch ?? false, framing: i?.assetId ? { id: i.id, label: p.label, src: assetUrl(i.assetId)!, width: i.asset?.width ?? null, height: i.asset?.height ?? null, focalX: i.focalX, focalY: i.focalY, zoom: i.zoom, fit: i.fit === "cover" || i.fit === "contain" ? i.fit : null, targetRatio: i.targetRatio } : null }; }) : [],
+      slots: content ? kitIllustrationPlan(content, book).map((p) => { const i = bySlot.get(p.slot); return { slot: p.slot, label: p.label, status: i?.status ?? null, src: i ? assetUrl(i.assetId) ?? null : null, isDemo: i?.isDemo ?? false, provider: i?.provider ?? null, isSketch: i?.isSketch ?? false, framing: i?.assetId ? { id: i.id, label: p.label, src: assetUrl(i.assetId)!, width: i.asset?.width ?? null, height: i.asset?.height ?? null, focalX: i.focalX, focalY: i.focalY, zoom: i.zoom, fit: i.fit === "cover" || i.fit === "contain" ? i.fit : null, targetRatio: i.targetRatio } : null }; }) : [],
     };
   }
 

@@ -3,7 +3,9 @@
  * explicitement marqués comme générés hors ligne. Ils permettent de tester tout le parcours
  * kit → illustrations → pages → PDF sans clé API.
  */
-import type { Guide, KitPlan, PranksKit, Recipes, Science, TreasureHunt } from "./schemas";
+import type { Coloring, Guide, KitPlan, PranksKit, Recipes, Science, TreasureHunt } from "./schemas";
+import { MAX_ITEMS_PER_BOOK } from "./limits";
+import { HIDING_PLACES } from "./prompts";
 
 type Ctx = Record<string, unknown>;
 const s = (v: unknown, d: string) => (typeof v === "string" && v.trim() ? v : d);
@@ -64,6 +66,17 @@ export function mockKitPlan(ctx: Ctx): KitPlan {
       notes: "[DÉMO] Plan généré hors ligne à partir du brief.",
     };
   }
+  if (/coloriage|colorier/.test(brief)) {
+    const m = /(\d{1,3})\s*(dessins|coloriages|pages)/.exec(brief);
+    const universe = /dino/.test(brief) ? "Dinosaures" : /licorne/.test(brief) ? "Licornes" : /espace/.test(brief) ? "Espace" : /animal|ferme/.test(brief) ? "Animaux de la ferme" : "Dinosaures";
+    const count = Math.max(1, Math.min(MAX_ITEMS_PER_BOOK, m ? Number(m[1]) : 30));
+    const age = /4\s*(?:-|à)\s*6|3\s*(?:-|à)\s*5/.test(brief) ? "3-5" : /8\s*(?:-|à)\s*10/.test(brief) ? "8-10" : "5-8";
+    return {
+      kitType: "cahier-coloriage", title: `[DÉMO] Mon grand cahier de coloriage — ${universe}`, subtitle: `${count} dessins à colorier`, ageRange: age,
+      universe, heroName: "", heroDescription: "", companion: "", place: "", tone: "Joyeux et tendre", count, priceCents: 590,
+      shopCategorySlug: "activites-educatives", siteSlug: pickSite(ctx, "kit-enfants"), notes: "[DÉMO] Plan généré hors ligne à partir du brief.",
+    };
+  }
   if (/recette|cuisine|goûter|gouter|repas|pâtisserie|patisserie/.test(brief)) {
     return {
       kitType: "livre-recettes", title: "[DÉMO] Goûters maison en 20 minutes", subtitle: "Des recettes simples pour tous les jours", ageRange: "18-99",
@@ -100,12 +113,13 @@ export function mockKitPlan(ctx: Ctx): KitPlan {
 }
 
 export function mockTreasureHunt(ctx: Ctx): TreasureHunt {
-  const count = Math.max(1, Math.min(12, n(ctx.count, 10)));
+  const count = Math.max(1, Math.min(MAX_ITEMS_PER_BOOK, n(ctx.count, 10)));
   const hero = s(ctx.heroName, "Capitaine Plume");
   const companion = s(ctx.companion, "Noisette");
   const title = s(ctx.title, "[DÉMO] La grande chasse au trésor");
   const universe = s(ctx.universe, "aventure");
-  const enigmes = PLACES.slice(0, count).map((cachette, i) => ({
+  const places = Array.from({ length: count }, (_, i) => (i < HIDING_PLACES.length ? HIDING_PLACES[i] : `${HIDING_PLACES[i % HIDING_PLACES.length]} (${Math.floor(i / HIDING_PLACES.length) + 1})`));
+  const enigmes = places.map((cachette, i) => ({
     numero: i + 1,
     cachette,
     texte: `[DÉMO] ${RIDDLES[cachette] ?? "Cherche bien autour de toi !"}`,
@@ -146,7 +160,7 @@ export function mockTreasureHunt(ctx: Ctx): TreasureHunt {
 }
 
 export function mockPranksKit(ctx: Ctx): PranksKit {
-  const count = Math.max(1, Math.min(40, n(ctx.count, 30)));
+  const count = Math.max(1, Math.min(MAX_ITEMS_PER_BOOK, n(ctx.count, 30)));
   const hero = s(ctx.heroName, "Pompon");
   const idees = Array.from({ length: count }, (_, i) => ({
     numero: i + 1,
@@ -254,7 +268,7 @@ const POOL_CHAPTERS: { titre: string; resume: string; contenu: string; etapes: s
 ];
 
 export function mockGuide(ctx: Ctx): Guide {
-  const count = Math.max(1, Math.min(24, n(ctx.count, 8)));
+  const count = Math.max(1, Math.min(MAX_ITEMS_PER_BOOK, n(ctx.count, 8)));
   const title = s(ctx.title, "[DÉMO] Fini l'eau verte : retrouver une piscine claire en 72 h");
   const chapitres = Array.from({ length: count }, (_, i) => {
     const base = POOL_CHAPTERS[i % POOL_CHAPTERS.length];
@@ -331,7 +345,7 @@ export function mockGuide(ctx: Ctx): Guide {
 // ---------------------------------------------------------------------------
 
 export function mockRecipes(ctx: Ctx): Recipes {
-  const count = Math.max(1, Math.min(60, n(ctx.count, 12)));
+  const count = Math.max(1, Math.min(MAX_ITEMS_PER_BOOK, n(ctx.count, 12)));
   const recettes = Array.from({ length: count }, (_, i) => ({
     numero: i + 1,
     titre: `[DÉMO] Recette n° ${i + 1}`,
@@ -362,7 +376,7 @@ export function mockRecipes(ctx: Ctx): Recipes {
 // ---------------------------------------------------------------------------
 
 export function mockScience(ctx: Ctx): Science {
-  const count = Math.max(1, Math.min(40, n(ctx.count, 12)));
+  const count = Math.max(1, Math.min(MAX_ITEMS_PER_BOOK, n(ctx.count, 12)));
   const hero = s(ctx.heroName, "Docteure Éprouvette");
   const experiences = Array.from({ length: count }, (_, i) => ({
     numero: i + 1,
@@ -388,5 +402,79 @@ export function mockScience(ctx: Ctx): Science {
     securite_generale: ["Toujours avec un adulte", "On ne goûte pas les expériences", "On se lave les mains après"],
     illustrations: [{ page: "couverture", prompt: `[DÉMO] ${hero} entourée d'éprouvettes colorées` }],
     boutique: { tagline: "[DÉMO] Des expériences simples et sûres à la maison", tags: ["sciences", "expériences", "enfants"] },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Cahier de coloriage et rédaction par lots (démonstration)
+// ---------------------------------------------------------------------------
+
+const DINO_SUBJECTS = ["Tricératops qui mange des feuilles", "Bébé T-rex qui sort de son œuf", "Diplodocus au long cou près d'un lac", "Ptérodactyle qui vole au-dessus d'un volcan", "Stégosaure qui fait la sieste", "Ankylosaure et sa queue en massue", "Maman dinosaure et son petit", "Dinosaure qui joue au ballon", "Œufs de dinosaure dans un nid", "Brachiosaure qui croque une branche", "Vélociraptor qui court", "Dinosaure sous la pluie avec un parapluie", "Fossile dans la roche", "Dinosaure qui fête son anniversaire", "Parasaurolophus qui chante", "Petit dinosaure dans une flaque", "Dinosaure astronaute", "Dinosaure qui lit un livre", "Iguanodon et une fleur", "Dinosaure pirate sur un radeau"];
+const POSES = ["de face", "de profil", "en gros plan", "avec un papillon", "près d'un palmier", "sous le soleil", "la nuit sous les étoiles", "dans la jungle", "au bord de la mer", "en train de danser"];
+
+function drawingSubject(i: number, universe: string): string {
+  const base = /dino/i.test(universe) ? DINO_SUBJECTS[i % DINO_SUBJECTS.length] : `${universe} : scène ${i + 1}`;
+  const round = Math.floor(i / DINO_SUBJECTS.length);
+  return round ? `${base}, ${POSES[(i + round) % POSES.length]}` : base;
+}
+
+export function mockColoring(ctx: Ctx): Coloring {
+  const count = Math.max(1, Math.min(MAX_ITEMS_PER_BOOK, n(ctx.count, 30)));
+  const universe = s(ctx.universe, "Dinosaures");
+  const titles = Array.isArray(ctx.titles) ? (ctx.titles as string[]) : [];
+  return {
+    titre: s(ctx.title, `[DÉMO] Mon cahier de coloriage — ${universe}`),
+    sous_titre: `[DÉMO] ${count} dessins à colorier`,
+    theme: universe,
+    introduction: "[DÉMO] Choisis un dessin, prends tes crayons et amuse-toi ! Conseil aux parents : imprimez sur du papier 120 g pour les feutres.",
+    dessins: Array.from({ length: count }, (_, i) => {
+      const titre = titles[i] ?? drawingSubject(i, universe);
+      return { numero: i + 1, titre, description: `[DÉMO] ${titre}, au centre de la page, sourire, décor simple.`, legende: "", niveau_detail: "moyen" as const };
+    }),
+    page_appartient: { titre: "Ce cahier appartient à", texte: "Écris ton prénom et dessine-toi !" },
+    diplome: { titre: "Diplôme d'artiste en herbe", texte: "[DÉMO] a colorié tout son cahier avec talent et imagination." },
+    conseils: ["[DÉMO] Imprimez une page à la fois.", "[DÉMO] Papier 120 g conseillé pour les feutres."],
+    illustrations: [{ page: "couverture", prompt: `[DÉMO] Couverture en couleur : des ${universe.toLowerCase()} joyeux et des crayons de couleur.` }],
+    boutique: { name: `[DÉMO] Cahier de coloriage ${universe}`, shortDescription: `[DÉMO] ${count} dessins à imprimer.`, tags: ["coloriage", universe.toLowerCase()] },
+  };
+}
+
+/** Contenu du format demandé, pour un nombre d'éléments donné (démonstration). */
+function mockForFormat(format: string, ctx: Ctx): Record<string, unknown> {
+  switch (format) {
+    case "treasure_hunt": return mockTreasureHunt(ctx);
+    case "pranks": return mockPranksKit(ctx);
+    case "guide": return mockGuide(ctx);
+    case "recipes": return mockRecipes(ctx);
+    case "science": return mockScience(ctx);
+    default: return mockColoring(ctx);
+  }
+}
+
+const KEYS: Record<string, string> = { treasure_hunt: "enigmes", pranks: "idees", guide: "chapitres", recipes: "recettes", science: "experiences", coloring: "dessins" };
+
+/** Sommaire de démonstration (rédaction par lots). */
+export function mockOutline(ctx: Ctx): { elements: Array<{ numero: number; titre: string; idee: string }> } {
+  const format = s(ctx.format, "coloring");
+  const count = Math.max(1, Math.min(MAX_ITEMS_PER_BOOK, n(ctx.count, 30)));
+  const items = (mockForFormat(format, { ...ctx, count })[KEYS[format]] as Array<Record<string, unknown>>) ?? [];
+  return { elements: items.map((it, i) => ({ numero: i + 1, titre: String(it.titre ?? it.cachette ?? `Élément ${i + 1}`), idee: "[DÉMO]" })) };
+}
+
+/** Lot d'éléments de démonstration (numéros from..to, titres du sommaire). */
+export function mockItems(ctx: Ctx): { items: Array<Record<string, unknown>> } {
+  const format = s(ctx.format, "coloring");
+  const from = Math.max(1, n(ctx.from, 1));
+  const to = Math.max(from, n(ctx.to, from));
+  const titles = Array.isArray(ctx.titles) ? (ctx.titles as string[]) : [];
+  const all = (mockForFormat(format, { ...ctx, count: to, titles: undefined })[KEYS[format]] as Array<Record<string, unknown>>) ?? [];
+  return {
+    items: all.slice(from - 1, to).map((it, i) => {
+      const t = titles[i];
+      if (!t) return it;
+      if (format === "treasure_hunt") return { ...it, cachette: t };
+      if (format === "coloring") return { ...it, titre: t, description: `[DÉMO] ${t}, au centre de la page, sourire, décor simple.` };
+      return { ...it, titre: t };
+    }),
   };
 }

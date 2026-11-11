@@ -3,6 +3,7 @@ import * as React from "react";
 import type { Block, BookTheme, PageLayout } from "@/lib/schemas/layout";
 import { cn } from "@/lib/utils";
 import { framingStyle } from "@/lib/images/framing";
+import { withVariant } from "@/lib/images/variant-url";
 
 export interface PageRendererProps {
   layout: PageLayout;
@@ -16,11 +17,16 @@ export interface PageRendererProps {
   onBlockPointerDown?: (e: React.PointerEvent, block: Block, handle: "move" | "resize") => void;
   onTextCommit?: (id: string, text: string) => void;
   className?: string;
+  /** Déclinaison des images servies (vignette, écran, PDF numérique léger) ; original par défaut */
+  imageVariant?: "thumb" | "screen" | "digital";
 }
+
+
+const VariantContext = React.createContext<PageRendererProps["imageVariant"]>(undefined);
 
 const HEADING_ROLES = new Set(["title", "subtitle", "heading", "label"]);
 
-export function PageRenderer({ layout, theme, pageNumber, pageIndex, mode = "preview", scale = 1, selectedId, onSelect, onBlockPointerDown, onTextCommit, className }: PageRendererProps) {
+export function PageRenderer({ layout, theme, pageNumber, pageIndex, mode = "preview", scale = 1, selectedId, onSelect, onBlockPointerDown, onTextCommit, className, imageVariant }: PageRendererProps) {
   const style: React.CSSProperties = {
     width: `${layout.widthMm}mm`,
     height: `${layout.heightMm}mm`,
@@ -32,6 +38,7 @@ export function PageRenderer({ layout, theme, pageNumber, pageIndex, mode = "pre
     transformOrigin: "top left",
   };
   return (
+    <VariantContext.Provider value={imageVariant}>
     <div className={cn("book-page", className)} style={style} data-page-index={pageIndex} onPointerDown={mode === "edit" ? () => onSelect?.(null) : undefined}>
       {layout.blocks.map((b) => (
         <BlockView key={b.id} block={b} theme={theme} mode={mode} selected={selectedId === b.id} onSelect={onSelect} onBlockPointerDown={onBlockPointerDown} onTextCommit={onTextCommit} />
@@ -40,10 +47,13 @@ export function PageRenderer({ layout, theme, pageNumber, pageIndex, mode = "pre
         <div style={{ position: "absolute", bottom: "6mm", left: 0, right: 0, textAlign: "center", fontSize: "9pt", color: "#6b7280" }}>{pageNumber}</div>
       )}
     </div>
+    </VariantContext.Provider>
   );
 }
 
 function BlockView({ block, theme, mode, selected, onSelect, onBlockPointerDown, onTextCommit }: { block: Block; theme: BookTheme; mode: "print" | "preview" | "edit"; selected: boolean; onSelect?: (id: string | null) => void; onBlockPointerDown?: PageRendererProps["onBlockPointerDown"]; onTextCommit?: (id: string, text: string) => void }) {
+  const variant = React.useContext(VariantContext);
+  const lazy = mode === "print" ? undefined : ("lazy" as const);
   const s = (block as { style?: Record<string, unknown> }).style ?? {};
   const base: React.CSSProperties = {
     left: `${block.x}mm`,
@@ -158,7 +168,7 @@ function BlockView({ block, theme, mode, selected, onSelect, onBlockPointerDown,
           {hasImg && (
             <div style={{ flex: "0 0 52mm", height: "52mm", position: "relative", borderRadius: "3mm", overflow: "hidden", background: theme.colorPanel }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={block.imageSrc} alt={block.title} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+              <img src={withVariant(block.imageSrc, variant)} loading={lazy} alt={block.title} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
               {block.isDemo && <DemoRibbon />}
             </div>
           )}
@@ -168,18 +178,19 @@ function BlockView({ block, theme, mode, selected, onSelect, onBlockPointerDown,
     case "image": {
       const fr = framingStyle({ fit: block.fit, focalX: block.focalX, focalY: block.focalY, zoom: block.zoom });
       const contain = block.fit === "contain";
+      const whiteBg = (block.bg ?? (s.background as string | undefined))?.toUpperCase() === "#FFFFFF";
       return wrap(
         <div data-measure data-image-frame={block.illustrationId ?? ""} style={{ position: "relative", width: "100%", height: "100%", borderRadius: s.radius ? `${s.radius}mm` : undefined, overflow: "hidden", background: contain && block.src ? block.bg ?? (s.background as string) ?? theme.colorPanel : (s.background as string) ?? theme.colorPanel }}>
           {block.src ? (
             // Calque de découpe : le fond flou et le zoom ne débordent jamais du cadre (ni de la mesure des débordements)
             <div style={{ position: "absolute", inset: 0, overflow: "hidden", borderRadius: "inherit" }}>
-              {contain && (
-                // Fond « ajuster » : l'image elle-même, floutée (jamais de bandes noires)
+              {contain && !whiteBg && (
+                // Fond « ajuster » : l'image elle-même, floutée (jamais de bandes noires) ; pas pour un dessin sur fond blanc (coloriage)
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={block.src} alt="" aria-hidden style={{ position: "absolute", inset: "-4mm", width: "calc(100% + 8mm)", height: "calc(100% + 8mm)", maxWidth: "none", objectFit: "cover", filter: "blur(4mm) saturate(0.9)", opacity: 0.55 }} />
+                <img src={withVariant(block.src, variant === "digital" ? "digital" : "thumb")} loading={lazy} alt="" aria-hidden style={{ position: "absolute", inset: "-4mm", width: "calc(100% + 8mm)", height: "calc(100% + 8mm)", maxWidth: "none", objectFit: "cover", filter: "blur(4mm) saturate(0.9)", opacity: 0.55 }} />
               )}
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={block.src} alt={block.alt} draggable={false} style={{ position: "relative", width: "100%", height: "100%", display: "block", ...fr }} />
+              <img src={withVariant(block.src, variant)} loading={lazy} alt={block.alt} draggable={false} style={{ position: "relative", width: "100%", height: "100%", display: "block", ...fr }} />
             </div>
           ) : (
             <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", border: "0.5mm dashed #cbd5e1", borderRadius: "inherit", color: "#64748b", fontSize: "9pt", textAlign: "center", padding: "4mm" }}>Illustration à générer</div>

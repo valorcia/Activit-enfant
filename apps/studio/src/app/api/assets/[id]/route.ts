@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { getStorage } from "@/lib/storage";
 import { NextResponse } from "next/server";
 import { verifyPreviewToken } from "@/lib/preview/token";
+import { isImageVariant, makeVariant, variantKey } from "@/lib/images/variants";
 
 /** Lien d'aperçu partagé : l'image doit appartenir au livre du jeton (illustration du livre ou de ses activités). */
 async function assetAllowedForPreview(assetId: string, token: string): Promise<boolean> {
@@ -21,6 +22,24 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const asset = await prisma.asset.findUnique({ where: { id } });
   if (!asset) return new NextResponse("Not found", { status: 404 });
   const storage = getStorage();
+  // Déclinaison légère (vignette, écran, PDF numérique) : calculée une fois, mise en cache
+  const v = new URL(req.url).searchParams.get("v");
+  if (isImageVariant(v) && asset.mime.startsWith("image/") && asset.mime !== "image/svg+xml") {
+    try {
+      const vk = variantKey(asset.key, v);
+      let out: { data: Buffer; mime: string };
+      if (await storage.exists(vk)) {
+        const data = await storage.get(vk);
+        out = { data, mime: v === "digital" ? (data[0] === 0x89 ? "image/png" : "image/jpeg") : "image/webp" };
+      } else {
+        out = await makeVariant(await storage.get(asset.key), v);
+        await storage.put(vk, out.data, out.mime).catch(() => undefined);
+      }
+      return new NextResponse(new Uint8Array(out.data), { headers: { "Content-Type": out.mime, "Cache-Control": "private, max-age=86400", "Content-Length": String(out.data.length) } });
+    } catch {
+      /* déclinaison impossible : on sert l'original */
+    }
+  }
   const direct = storage.publicUrl(asset.key);
   if (direct) return NextResponse.redirect(direct);
   try {

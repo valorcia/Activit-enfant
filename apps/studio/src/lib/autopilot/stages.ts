@@ -112,7 +112,7 @@ export type GateDecision = { type: "run" } | { type: "approval"; reason: string 
  * Avant d'exécuter une étape : point de validation, puis plafond de coût.
  * Une étape déjà validée (approved) passe sans redemander.
  */
-export function beforeStage(stage: Stage, cfg: AutopilotSettings, costSoFarUsd: number, estimatedStageUsd: number): GateDecision {
+export function beforeStage(stage: Stage, cfg: AutopilotSettings, costSoFarUsd: number, estimatedStageUsd: number, detail?: string): GateDecision {
   if (stage.approved) return { type: "run" };
   if (stage.status === "running") return { type: "run" }; // reprise d'une étape déjà commencée
   const gate = approvalGateFor(stage.key, cfg);
@@ -121,7 +121,7 @@ export function beforeStage(stage: Stage, cfg: AutopilotSettings, costSoFarUsd: 
   if (cap > 0 && estimatedStageUsd > 0 && costSoFarUsd + estimatedStageUsd > cap + 1e-9) {
     return {
       type: "approval",
-      reason: `Plafond de coût : l'étape « ${stage.label} » est estimée à ${fmt(estimatedStageUsd)} alors que ${fmt(costSoFarUsd)} ont déjà été dépensés (plafond ${fmt(cap)}). Validez pour continuer malgré tout, ou augmentez le plafond dans les réglages.`,
+      reason: `Plafond de coût : l'étape « ${stage.label} » est estimée à ${fmt(estimatedStageUsd)} alors que ${fmt(costSoFarUsd)} ont déjà été dépensés (plafond ${fmt(cap)}).${detail ? ` Détail : ${detail}.` : ""} Validez pour continuer malgré tout, ou augmentez le plafond dans les réglages (Pilote automatique → plafond de coût).`,
     };
   }
   return { type: "run" };

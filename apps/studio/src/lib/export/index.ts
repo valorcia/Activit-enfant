@@ -2,6 +2,33 @@ import { prisma } from "../db";
 import { renderPdf, mergePdfs } from "../pdf/render";
 import { storeAsset } from "../storage";
 import { pageSize } from "../layout/formats";
+import { PDF_CHUNK_PAGES, PDF_CHUNK_THRESHOLD, pdfTimeoutMs } from "../kits/limits";
+
+/**
+ * Rendu d'un livre : en une fois jusqu'à PDF_CHUNK_THRESHOLD pages, sinon par tranches de
+ * PDF_CHUNK_PAGES pages (mémoire de Chromium maîtrisée) fusionnées avec pdf-lib. Délais
+ * proportionnels au nombre de pages.
+ */
+export async function renderBookPdf(o: { baseUrl: string; pages: number; widthMm: number; heightMm: number; mode: "print" | "digital"; log?: (m: string) => unknown }) {
+  if (o.pages <= PDF_CHUNK_THRESHOLD) return renderPdf({ url: o.baseUrl, widthMm: o.widthMm, heightMm: o.heightMm, mode: o.mode, timeoutMs: pdfTimeoutMs(o.pages) });
+  const parts: Buffer[] = [];
+  const overflows: { pageIndex: number; blockId: string; kind: string }[] = [];
+  const fonts = new Set<string>();
+  let missingImages = 0;
+  for (let from = 0; from < o.pages; from += PDF_CHUNK_PAGES) {
+    const to = Math.min(o.pages, from + PDF_CHUNK_PAGES);
+    await o.log?.(`PDF : pages ${from + 1} à ${to} sur ${o.pages}`);
+    const sep = o.baseUrl.includes("?") ? "&" : "?";
+    const r = await renderPdf({ url: `${o.baseUrl}${sep}from=${from}&to=${to}`, widthMm: o.widthMm, heightMm: o.heightMm, mode: o.mode, timeoutMs: pdfTimeoutMs(to - from) });
+    parts.push(r.pdf);
+    overflows.push(...r.overflows);
+    r.fonts.forEach((f) => fonts.add(f));
+    missingImages += r.missingImages;
+  }
+  const pdf = await mergePdfs(parts);
+  const { PDFDocument } = await import("pdf-lib");
+  return { pdf, pageCount: (await PDFDocument.load(pdf)).getPageCount(), overflows, missingImages, fonts: [...fonts] };
+}
 import type { ExportKind, Prisma } from "@prisma/client";
 
 function appUrl() {
@@ -36,7 +63,8 @@ export async function runExport(exportId: string) {
 
     if (exp.kind === "BOOK_PRINT" || exp.kind === "BOOK_DIGITAL") {
       const snapshot = exp.snapshotId ? await prisma.bookSnapshot.findUnique({ where: { id: exp.snapshotId } }) : await createSnapshot(exp.bookId!, `Export ${exp.kind}`);
-      const r = await renderPdf({ url: `${appUrl()}/print/books/${exp.bookId}?snapshot=${snapshot!.id}`, ...size, mode });
+      const pages = await prisma.bookPage.count({ where: { bookId: exp.bookId! } });
+      const r = await renderBookPdf({ baseUrl: `${appUrl()}/print/books/${exp.bookId}?snapshot=${snapshot!.id}`, pages, ...size, mode });
       pdf = r.pdf;
       pageCount = r.pageCount;
       Object.assign(checks, { overflows: r.overflows, missingImages: r.missingImages, fonts: r.fonts });

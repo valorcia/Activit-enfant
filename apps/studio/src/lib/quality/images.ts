@@ -32,6 +32,8 @@ export interface ImageInfo {
   isDemo: boolean;
   fit: string | null;
   zoom: number;
+  /** Image vectorielle (SVG) : nette à toute taille, pas de contrôle de résolution */
+  vector?: boolean;
 }
 
 /** Fonction pure : contrôle des blocs image d'un ensemble de pages. */
@@ -57,7 +59,7 @@ export function checkLayoutImages(pages: { id?: string; layout: PageLayout }[], 
           if (fit === "cover") issues.push({ ...base, code: "ratio_mismatch", severity: "warning", message: `Format très différent du cadre (${Math.round(mismatch * 100)} %) : une partie de l'image est coupée, recadrage conseillé`, actions: ["recadrer"], mismatch });
           else issues.push({ ...base, code: "auto_contain", severity: "info", message: `Format différent du cadre (${Math.round(mismatch * 100)} %) : image ajustée sans coupe`, actions: ["recadrer"], mismatch });
         }
-        const dpi = effectiveDpi({ imgW: ill.width, imgH: ill.height, frameWmm: b.w, frameHmm: b.h, fit, zoom: ill.zoom });
+        const dpi = ill.vector ? Infinity : effectiveDpi({ imgW: ill.width, imgH: ill.height, frameWmm: b.w, frameHmm: b.h, fit, zoom: ill.zoom });
         if (dpi < DPI_BLOCK) issues.push({ ...base, code: "dpi_blocking", severity: "blocking", message: `Résolution insuffisante pour l'impression (${dpi} ppp, minimum ${DPI_BLOCK})`, actions: ["recadrer", "remplacer", "regenerer"], dpi });
         else if (dpi < DPI_WARN) issues.push({ ...base, code: "dpi_low", severity: "warning", message: `Résolution limite à l'impression (${dpi} ppp, conseillé ${DPI_WARN})`, actions: ["recadrer", "remplacer"], dpi });
       }
@@ -77,7 +79,7 @@ export async function checkBookImages(bookId: string) {
   const ids = new Set<string>();
   for (const p of pages) for (const b of p.layout.blocks) if (b.type === "image" && b.illustrationId) ids.add(b.illustrationId);
   const ills = await prisma.illustration.findMany({ where: { id: { in: [...ids] } }, include: { asset: true } });
-  const map = new Map<string, ImageInfo>(ills.map((i) => [i.id, { width: i.asset?.width ?? null, height: i.asset?.height ?? null, contrast: i.asset?.contrast ?? null, isSketch: i.isSketch, isDemo: i.isDemo, fit: i.fit, zoom: i.zoom }]));
+  const map = new Map<string, ImageInfo>(ills.map((i) => [i.id, { width: i.asset?.width ?? null, height: i.asset?.height ?? null, contrast: i.asset?.contrast ?? null, isSketch: i.isSketch, isDemo: i.isDemo, fit: i.fit, zoom: i.zoom, vector: i.asset?.mime === "image/svg+xml" }]));
   const issues = checkLayoutImages(pages, map);
   return {
     issues,

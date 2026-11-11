@@ -9,6 +9,7 @@ import { analyzeBriefAction, createKitFromPlanAction, type BriefAnalysis } from 
 import { kitType } from "@/lib/kits/types";
 import type { KitPlan } from "@/lib/kits/schemas";
 import { KitPlanForm } from "./plan-form";
+import type { ColoringAiView } from "./coloring-options";
 import { AutopilotLaunch } from "@/components/autopilot/launch-panel";
 import { UniverseSelect } from "@/components/universes/universe-select";
 import type { Site } from "@/lib/universes/sites";
@@ -16,7 +17,7 @@ import type { Site } from "@/lib/universes/sites";
 const EXAMPLE = "Fais-moi une chasse au trésor sur les dinosaures pour les 5-8 ans, avec une paléontologue rigolote et un bébé tricératops qui donne les indices. 10 énigmes dans la maison, prix 9,90 €.";
 
 /** Brief libre (ou JSON complet) collé → plan éditable → création du kit et lancement de la production. */
-export function BriefFlow({ mode, categories, sites = [], sitesNote }: { mode: "api" | "manual"; categories?: Array<{ slug: string; name: string }>; sites?: Site[]; sitesNote?: string | null }) {
+export function BriefFlow({ mode, categories, sites = [], sitesNote, coloringAi }: { mode: "api" | "manual"; categories?: Array<{ slug: string; name: string }>; sites?: Site[]; sitesNote?: string | null; coloringAi?: ColoringAiView }) {
   const router = useRouter();
   const [text, setText] = useState("");
   const [siteSlug, setSiteSlug] = useState<string | null>(null);
@@ -97,7 +98,7 @@ export function BriefFlow({ mode, categories, sites = [], sitesNote }: { mode: "
               </span>
             )}
           </div>
-          <KitPlanForm plan={plan} onChange={setPlan} categories={categories} sites={sites} />
+          <KitPlanForm plan={plan} onChange={setPlan} categories={categories} sites={sites} coloringAi={coloringAi} />
           {kitType(plan.kitType).family === "kit" ? (
             <label className="flex items-center gap-2 text-sm font-semibold">
               <input type="checkbox" className="h-4 w-4" checked={start} onChange={(e) => setStart(e.target.checked)} />

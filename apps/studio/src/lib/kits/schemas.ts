@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_ITEMS_PER_BOOK } from "./limits";
 
 /**
  * Contenus structurés des kits, au format produit par les prompts de docs/prompts
@@ -62,7 +63,7 @@ export const TreasureHuntSchema = z.object({
       }),
     )
     .min(1)
-    .max(30),
+    .max(MAX_ITEMS_PER_BOOK),
   carte: z.object({ titre: str(140), consigne_parent: str(600), image_description: str(800) }).partial().default({}),
   defis: z.array(z.object({ titre: z.string().min(1).max(80), consigne: z.string().min(3).max(500) })).max(20).default([]),
   diplome: z.object({ titre: str(120), texte: str(600) }).partial().default({}),
@@ -109,7 +110,7 @@ export const PranksKitSchema = z.object({
       }),
     )
     .min(1)
-    .max(60),
+    .max(MAX_ITEMS_PER_BOOK),
   idees_reserve: z.array(z.object({ titre: z.string().max(120), resume: str(400) })).default([]),
   mots_du_lutin: z.array(z.string().max(300)).default([]),
   lettre_depart: str(3000),
@@ -152,7 +153,7 @@ export const GuideSchema = z.object({
       }),
     )
     .min(1)
-    .max(24),
+    .max(MAX_ITEMS_PER_BOOK),
   erreurs: z.array(z.object({ erreur: z.string().min(1).max(300), solution: str(600) })).max(20).default([]),
   checklist: z.object({ titre: str(160), items: strList(300) }).partial().default({}),
   calendrier: z.array(z.object({ periode: z.string().min(1).max(80), actions: strList(300) })).max(16).default([]),
@@ -190,7 +191,7 @@ export const RecipesSchema = z.object({
       }),
     )
     .min(1)
-    .max(60),
+    .max(MAX_ITEMS_PER_BOOK),
   conseils: strList(500),
   illustrations: illus,
   boutique: ShopListingImportSchema.optional(),
@@ -224,7 +225,7 @@ export const ScienceSchema = z.object({
       }),
     )
     .min(1)
-    .max(40),
+    .max(MAX_ITEMS_PER_BOOK),
   diplome: z.object({ titre: str(120), texte: str(600) }).partial().default({}),
   securite_generale: strList(400),
   illustrations: illus,
@@ -232,7 +233,59 @@ export const ScienceSchema = z.object({
 });
 export type Science = z.infer<typeof ScienceSchema>;
 
-export type KitContentFormat = "treasure_hunt" | "pranks" | "guide" | "recipes" | "science";
+// ---------------------------------------------------------------------------
+// Cahier de coloriage (trait noir sur blanc, une page par dessin)
+// ---------------------------------------------------------------------------
+
+/** Niveau de détail d'un dessin (accepte aussi 1, 2, 3 dans une réponse collée). */
+const DetailLevel = z.preprocess(
+  (v) => (v === 1 || v === "1" ? "simple" : v === 2 || v === "2" ? "moyen" : v === 3 || v === "3" ? "detaille" : typeof v === "string" ? v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() : v),
+  z.enum(["simple", "moyen", "detaille"]).catch("moyen"),
+);
+
+export const ColoringSchema = z.object({
+  titre: z.string().min(2).max(160),
+  sous_titre: str(240),
+  theme: str(160),
+  /** Petit mot d'accueil (enfant et parents) */
+  introduction: z.string().max(3000).default(""),
+  dessins: z
+    .array(
+      z.object({
+        numero: z.number().int().min(1),
+        titre: z.string().min(1).max(120),
+        /** Ce qu'il faut dessiner (sujet, pose, décor simple) : sert de prompt d'image */
+        description: z.string().min(5).max(1200),
+        /** Légende facultative imprimée sous le dessin */
+        legende: str(200),
+        niveau_detail: DetailLevel.default("moyen"),
+      }),
+    )
+    .min(1)
+    .max(MAX_ITEMS_PER_BOOK),
+  page_appartient: z.object({ titre: str(120), texte: str(400) }).partial().default({}),
+  diplome: z.object({ titre: str(120), texte: str(600) }).partial().default({}),
+  conseils: strList(300),
+  illustrations: illus,
+  boutique: ShopListingImportSchema.optional(),
+});
+export type Coloring = z.infer<typeof ColoringSchema>;
+
+/** Options de mise en page du cahier de coloriage (Book.customization.coloring). */
+export const ColoringOptionsSchema = z.object({
+  /** Page d'exemple colorée (le premier dessin mis en couleur, pour donner envie) */
+  sampleColored: z.boolean().default(true),
+  /** Prénom imprimé sur la couverture (vide : ligne « Ce cahier appartient à … » à compléter) */
+  childName: z.string().max(60).default(""),
+  nameOnCover: z.boolean().default(true),
+  /** Sommaire des dessins */
+  toc: z.boolean().default(false),
+  /** Impression recto-verso : une page blanche au dos de chaque dessin (les feutres ne traversent pas sur le dessin suivant) */
+  duplex: z.boolean().default(false),
+});
+export type ColoringOptions = z.infer<typeof ColoringOptionsSchema>;
+
+export type KitContentFormat = "treasure_hunt" | "pranks" | "guide" | "recipes" | "science" | "coloring";
 
 export const KIT_CONTENT_SCHEMAS = {
   treasure_hunt: TreasureHuntSchema,
@@ -240,7 +293,26 @@ export const KIT_CONTENT_SCHEMAS = {
   guide: GuideSchema,
   recipes: RecipesSchema,
   science: ScienceSchema,
+  coloring: ColoringSchema,
 } as const;
+
+/** Clé de la liste des éléments principaux de chaque format (rédaction par lots, fusion). */
+export const ITEMS_KEY = {
+  treasure_hunt: "enigmes",
+  pranks: "idees",
+  guide: "chapitres",
+  recipes: "recettes",
+  science: "experiences",
+  coloring: "dessins",
+} as const satisfies Record<KitContentFormat, string>;
+
+/** Schéma d'un élément principal (un lot = { "items": [...] }). */
+export function itemSchemaFor(format: KitContentFormat): z.ZodTypeAny {
+  const shape = (KIT_CONTENT_SCHEMAS[format] as z.AnyZodObject).shape as Record<string, z.ZodTypeAny>;
+  let list: z.ZodTypeAny = shape[ITEMS_KEY[format]];
+  while (!(list instanceof z.ZodArray)) list = (list as z.ZodEffects<z.ZodTypeAny>)._def.schema ?? (list as z.ZodDefault<z.ZodTypeAny>)._def.innerType;
+  return (list as z.ZodArray<z.ZodTypeAny>).element;
+}
 
 /** Reconnaît un JSON de kit complet (sortie des prompts docs/prompts) et indique son format. */
 export function detectKitContentFormat(data: unknown): KitContentFormat | null {
@@ -251,12 +323,31 @@ export function detectKitContentFormat(data: unknown): KitContentFormat | null {
   if (Array.isArray(o.chapitres)) return "guide";
   if (Array.isArray(o.recettes)) return "recipes";
   if (Array.isArray(o.experiences)) return "science";
+  if (Array.isArray(o.dessins)) return "coloring";
   return null;
 }
 
 // ---------------------------------------------------------------------------
 // Personnalisation d'un kit (Book.customization)
 // ---------------------------------------------------------------------------
+
+/**
+ * Réglages IA propres à un livre (surchargent Paramètres → IA pour ce livre seulement) :
+ * mode mixte « texte en copier-coller (abonnement Claude) · images par l'API OpenAI »,
+ * modèle / qualité d'image, esquisses, couverture.
+ */
+export const BookAiOverridesSchema = z.object({
+  textVia: z.enum(["api", "manual"]).optional(),
+  imagesVia: z.enum(["api", "manual"]).optional(),
+  imageModel: z.string().max(60).optional(),
+  imageQuality: z.enum(["low", "medium", "high"]).optional(),
+  sketch: z.boolean().optional(),
+  coverModel: z.string().max(60).optional(),
+  coverQuality: z.enum(["low", "medium", "high"]).optional(),
+  /** Copier-coller des images d'un cahier de coloriage : dessins par planche (1, 4 = 2×2, 9 = 3×3) */
+  sheetGrid: z.union([z.literal(1), z.literal(4), z.literal(9)]).optional(),
+});
+export type BookAiOverrides = z.infer<typeof BookAiOverridesSchema>;
 
 export const KitCustomizationSchema = z.object({
   universe: z.string().max(80).default(""),
@@ -265,11 +356,15 @@ export const KitCustomizationSchema = z.object({
   companion: z.string().max(160).default(""),
   place: z.string().max(160).default(""), // lieu ou véhicule (bateau, camion-laboratoire, vaisseau…)
   tone: z.string().max(80).default("Joyeux et complice"),
-  count: z.number().int().min(1).max(60).optional(),
+  count: z.number().int().min(1).max(MAX_ITEMS_PER_BOOK).optional(),
   priceCents: z.number().int().min(0).optional(),
   shopCategorySlug: z.string().max(80).optional(),
   shopTemplate: z.enum(["ADVENTURE", "ACTIVITY", "STORY", "EVENT", "CLASSIC", "GUIDE", "RECIPES"]).optional(),
   extraInstructions: z.string().max(4000).default(""),
+  /** Cahier de coloriage : page d'exemple colorée, prénom sur la couverture, sommaire, recto-verso */
+  coloring: ColoringOptionsSchema.optional(),
+  /** Réglages IA du livre (mode mixte, modèle d'image…) */
+  ai: BookAiOverridesSchema.optional(),
 });
 export type KitCustomization = z.infer<typeof KitCustomizationSchema>;
 
@@ -285,11 +380,15 @@ export const KitPlanSchema = z.object({
   companion: z.string().max(160).default(""),
   place: z.string().max(160).default(""),
   tone: z.string().max(80).default(""),
-  count: z.number().int().min(1).max(60).default(10),
+  count: z.number().int().min(1).max(MAX_ITEMS_PER_BOOK).default(10),
   priceCents: z.number().int().min(0).max(100000).optional(),
   shopCategorySlug: z.string().max(80).optional(),
   /** Univers de la boutique ciblé (slug) */
   siteSlug: z.string().max(120).optional(),
   notes: z.string().max(4000).default(""),
+  /** Cahier de coloriage : options de mise en page */
+  coloring: ColoringOptionsSchema.optional(),
+  /** Réglages IA du livre (mode mixte, modèle d'image…) */
+  ai: BookAiOverridesSchema.optional(),
 });
 export type KitPlan = z.infer<typeof KitPlanSchema>;

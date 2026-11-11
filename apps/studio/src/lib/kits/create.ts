@@ -38,6 +38,7 @@ export function kitTypeForContent(format: KitContentFormat, content: Record<stri
   if (format === "guide") return "guide-pratique";
   if (format === "recipes") return "livre-recettes";
   if (format === "science") return "fiches-sciences";
+  if (format === "coloring") return "cahier-coloriage";
   if (format === "pranks") return /lutin/i.test(title) ? "lutins-farceurs" : "kit-noel";
   return kitTypeFromShop({ categorySlug: b.categorySlug ?? "chasses-au-tresor", template: b.template, name: title, universe: b.universe });
 }
@@ -55,7 +56,7 @@ export function planFromContent(format: KitContentFormat, content: KitContent): 
     title: content.titre,
     subtitle: content.sous_titre ?? "",
     ageRange: b.ageMin != null && b.ageMax != null ? `${b.ageMin}-${b.ageMax}` : def.defaultAge,
-    universe: b.universe ?? def.defaultUniverse ?? "",
+    universe: b.universe ?? ("dessins" in content && content.theme ? content.theme : undefined) ?? def.defaultUniverse ?? "",
     heroName: heroOf(content) ?? "",
     heroDescription: hunt?.personnage?.description ?? pranks?.personnages?.[0]?.description ?? sci?.personnage?.description ?? "",
     companion: companionOf(content) ?? "",
@@ -113,7 +114,7 @@ export async function createKitFromPlan(input: { plan: KitPlan; brief?: string; 
     subtitle: plan.subtitle,
     ageRange: plan.ageRange,
     brief: [input.brief?.trim() && !input.contentJson ? input.brief.trim() : "", plan.notes].filter(Boolean).join("\n\n").slice(0, 20000) || undefined,
-    customization: KitCustomizationSchema.parse({ universe: plan.universe, heroName: plan.heroName, heroDescription: plan.heroDescription, companion: plan.companion, place: plan.place, tone: plan.tone || "Joyeux et complice", count: plan.count, priceCents: plan.priceCents, shopCategorySlug: plan.shopCategorySlug, extraInstructions: plan.notes }),
+    customization: KitCustomizationSchema.parse({ universe: plan.universe, heroName: plan.heroName, heroDescription: plan.heroDescription, companion: plan.companion, place: plan.place, tone: plan.tone || "Joyeux et complice", count: plan.count, priceCents: plan.priceCents, shopCategorySlug: plan.shopCategorySlug, extraInstructions: plan.notes, coloring: plan.coloring, ai: plan.ai }),
   });
   let contentImported = false;
   if (input.contentJson) {

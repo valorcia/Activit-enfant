@@ -28,13 +28,14 @@ import { mainCount } from "../kits/content";
 import { isAdultAge, isStructuredKit, kitType } from "../kits/types";
 import { activeSites } from "../universes";
 import { siteBySlug } from "../universes/sites";
-import { MARKETING_SLOTS, generateKitContent, generateKitIllustration, isCharacterSheetSlot, kitIllustrationPlan, readKitContent } from "../kits/generate";
+import { MARKETING_SLOTS, pendingCount, generateKitContent, generateKitIllustration, isCharacterSheetSlot, kitIllustrationPlan, readKitContent } from "../kits/generate";
 import { rebuildBookPages } from "../layout/book";
 import { createExport } from "../export";
 import { publishBookToShop } from "../shop/publish";
 import { adFormDefaults, animationPromptFor, createAdVideos, sendAdVideoToShop } from "../video/service";
 import { checkKitContent, summarizeQuality } from "./quality";
 import { estimateRun } from "./estimate";
+import { bookImageSettings, effectiveEstimateSettings } from "../ai/book-settings";
 import { applyOutcome, beforeStage, currentStage, markStarted, parseStages, type Stage, type StageOutcome, type RunStatus } from "./stages";
 import { buildMarketingBody, callMarketingAutopilot } from "./marketing";
 import { callEtsyPublish, etsyStageOutcome } from "./etsy";
@@ -43,6 +44,8 @@ import { callEtsyPublish, etsyStageOutcome } from "./etsy";
 export const EUR_PER_USD = 0.92;
 
 export interface RunState {
+  /** Images du livre par l'API pour ce run (bouton « Générer les images par l'API » d'un cahier de coloriage en copier-coller) */
+  imagesViaApi?: boolean;
   illustrationsJobId?: string;
   /** Mode esquisse : validation des esquisses demandée, puis tâche des versions finales */
   sketchApprovalRequested?: boolean;
@@ -98,9 +101,10 @@ export async function scheduleRun(runId: string, jobId: string, delaySeconds = 0
 }
 
 /** Crée un run et lance son traitement. */
-export async function startRun(input: { brief: string; config: AutopilotSettings; title?: string | null; stages: Stage[]; siteSlug?: string | null }) {
+export async function startRun(input: { brief: string; config: AutopilotSettings; title?: string | null; stages: Stage[]; siteSlug?: string | null; imagesViaApi?: boolean }) {
+  const initial: Partial<RunState> = { ...(input.siteSlug ? { siteSlug: input.siteSlug } : {}), ...(input.imagesViaApi ? { imagesViaApi: true } : {}) };
   const run = await prisma.autopilotRun.create({
-    data: { brief: input.brief, title: input.title ?? null, config: input.config as unknown as Prisma.InputJsonValue, stages: input.stages as unknown as Prisma.InputJsonValue, maxCostUsd: input.config.maxCostUsd, status: "RUNNING", ...(input.siteSlug ? { state: { siteSlug: input.siteSlug } as Prisma.InputJsonValue } : {}) },
+    data: { brief: input.brief, title: input.title ?? null, config: input.config as unknown as Prisma.InputJsonValue, stages: input.stages as unknown as Prisma.InputJsonValue, maxCostUsd: input.config.maxCostUsd, status: "RUNNING", ...(Object.keys(initial).length ? { state: initial as Prisma.InputJsonValue } : {}) },
   });
   const job = await enqueue(QUEUES.autopilotRun, { runId: run.id });
   await prisma.autopilotRun.update({ where: { id: run.id }, data: { jobId: job.id } });
@@ -129,7 +133,8 @@ export async function processAutopilotRun(runId: string, jobId: string) {
       return;
     }
     const cost = await runCost(run);
-    const decision = beforeStage(stage, cfg, cost, await estimateStage(run, stage.key, cfg));
+    const est = await estimateStage(run, stage.key, cfg);
+    const decision = beforeStage(stage, cfg, cost, est.usd, est.detail);
     if (decision.type === "approval") {
       await saveTransition(run, applyOutcome({ status: run.status as RunStatus, stages }, stage.key, { type: "approval", reason: decision.reason }, cost), cost, jobId);
       return;
@@ -143,8 +148,9 @@ export async function processAutopilotRun(runId: string, jobId: string) {
       outcome = await runStage(stage.key, (await loadRun(runId))!, cfg, jobId);
     } catch (err) {
       if (isManualInputRequired(err)) {
-        await markWaitingInput(jobId, 1);
-        outcome = { type: "waiting_input", detail: `Réponse à coller : ${err.title} (page « À coller »)`, poll: false };
+        const n = pendingCount(err);
+        await markWaitingInput(jobId, n);
+        outcome = { type: "waiting_input", detail: `${n > 1 ? `${n} réponses à coller` : "Réponse à coller"} : ${err.title} (page « À coller »)`, poll: false };
       } else {
         const message = err instanceof Error ? err.message : String(err);
         await jobLog(jobId, `${stage.label} : ${message}`, "error");
@@ -189,26 +195,28 @@ async function patchState(runId: string, patch: Partial<RunState>) {
 }
 
 /** Coût estimé de l'étape à venir (plafond de coût). */
-async function estimateStage(run: RunRow, key: AutopilotStageKey, cfg: AutopilotSettings): Promise<number> {
+async function estimateStage(run: RunRow, key: AutopilotStageKey, cfg: AutopilotSettings): Promise<{ usd: number; detail?: string }> {
   const ai = await getAiSettings();
   const video = await getVideoSettings();
   let format: KitContentFormat = "treasure_hunt";
   let count = 10;
   let contentProvided = false;
+  let aiForBook = ai;
   if (run.bookId) {
-    const book = await prisma.book.findUnique({ where: { id: run.bookId }, select: { kitType: true, targetCount: true, kitContent: true } });
+    const book = await prisma.book.findUnique({ where: { id: run.bookId }, select: { kitType: true, targetCount: true, kitContent: true, customization: true } });
     if (book) {
       const def = kitType(book.kitType);
       format = def.format ?? "treasure_hunt";
       count = book.targetCount || def.defaultCount;
       contentProvided = Boolean(book.kitContent);
+      aiForBook = effectiveEstimateSettings(ai, book);
     }
   }
-  const est = estimateRun({ format, count, contentProvided, ai, autopilot: cfg, runwayUsdPerSecond: video.usdPerSecond });
+  const est = estimateRun({ format, count, contentProvided, ai: aiForBook, autopilot: cfg, runwayUsdPerSecond: video.usdPerSecond });
   // L'étape vidéo bascule sur le montage seul si le clip dépasse le plafond : pas de blocage.
   // Etsy : frais facturés par Etsy, hors budget IA du run.
-  if (key === "video" || key === "etsy") return 0;
-  return est.stages[key] ?? 0;
+  if (key === "video" || key === "etsy") return { usd: 0 };
+  return { usd: est.stages[key] ?? 0, detail: est.lines[key] };
 }
 
 // ---------------------------------------------------------------------------
@@ -248,6 +256,11 @@ async function stagePlan(run: RunRow, jobId: string): Promise<StageOutcome> {
   }
   await patchState(run.id, { siteSlug: resolved.plan.siteSlug ?? null });
   const { bookId, contentImported } = await createKitFromPlan({ plan: resolved.plan, brief: run.brief ?? undefined, contentJson: resolved.contentJson });
+  if (stateOf(run).imagesViaApi) {
+    const b = await prisma.book.findUniqueOrThrow({ where: { id: bookId }, select: { customization: true } });
+    const cust = (b.customization ?? {}) as Record<string, unknown>;
+    await prisma.book.update({ where: { id: bookId }, data: { customization: { ...cust, ai: { ...((cust.ai as object) ?? {}), imagesVia: "api" } } as Prisma.InputJsonValue } });
+  }
   await prisma.autopilotRun.update({ where: { id: run.id }, data: { bookId, title: resolved.plan.title } });
   await patchState(run.id, { contentSource: resolved.source });
   const source = resolved.source === "contenu" ? "contenu complet importé tel quel" : resolved.source === "json" ? "plan JSON importé" : "plan proposé par l'IA";
@@ -300,7 +313,10 @@ async function stageIllustrations(run: RunRow, cfg: AutopilotSettings): Promise<
   const bookId = requireBook(run);
   const state = stateOf(run);
   // Mode esquisse (sauf copier-coller : les images faites dans ChatGPT ne coûtent rien à l'unité)
-  const sketchFirst = cfg.sketchFirst !== false && !manualImages(await getAiSettings());
+  const bk = await prisma.book.findUniqueOrThrow({ where: { id: bookId }, select: { kitType: true, customization: true } });
+  const imgAi = bookImageSettings(await getAiSettings(), bk);
+  // Cahier de coloriage : esquisses seulement si activées pour le type ou le livre
+  const sketchFirst = cfg.sketchFirst !== false && !manualImages(imgAi) && (kitType(bk.kitType).format !== "coloring" || imgAi.sketchMode);
   if (!state.illustrationsJobId) {
     const job = await enqueue(QUEUES.bookPipeline, { bookId, withIllustrations: true, withCover: true, sketch: sketchFirst });
     await patchState(run.id, { illustrationsJobId: job.id });
@@ -315,7 +331,7 @@ async function stageIllustrations(run: RunRow, cfg: AutopilotSettings): Promise<
   // Vérification : chaque emplacement a son image, et la couverture existe
   const book = await prisma.book.findUniqueOrThrow({ where: { id: bookId } });
   const content = readKitContent(book);
-  const plan = content ? kitIllustrationPlan(content) : [];
+  const plan = content ? kitIllustrationPlan(content, book) : [];
   const done = await prisma.illustration.findMany({ where: { bookId, kind: "KIT", isCurrent: true, status: { in: ["GENERATED", "ACCEPTED"] } }, select: { slot: true, isDemo: true } });
   const have = new Set(done.map((d) => d.slot));
   const missing = plan.filter((p) => !have.has(p.slot));

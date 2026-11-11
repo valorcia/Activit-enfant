@@ -199,6 +199,52 @@ Accès : avec `STUDIO_PASSWORD` défini, toute l'interface demande le mot de pas
 - Moteur de mise en page : marges, pas de texte coupé (mesure réelle des débordements au rendu), images non déformées, numérotation automatique, nombre de pages adapté à la longueur de chaque activité, aperçu identique au PDF (même composant de rendu).
 - Exports reproductibles à partir d'un snapshot versionné du livre.
 
+## Grands volumes (120 dessins et plus)
+
+Aucun plafond éditorial sur le nombre d'éléments ni d'images : seule la constante `MAX_ITEMS_PER_BOOK` (500, `src/lib/kits/limits.ts`)
+protège la plateforme. Un cahier de coloriage de 120 dessins, un recueil de 200 recettes ou une chasse de 40 énigmes se
+produisent comme un kit de 10 éléments.
+
+- **Texte par lots** (au-delà de 20 éléments) : sommaire de tous les titres (aucun doublon possible), puis cadre du livre
+  avec les 15 premiers éléments, puis lots de 15. Les lots sont indépendants : en parallèle par l'API, ou collés dans
+  n'importe quel ordre en copier-coller (leur prompt ne dépend que du sommaire). Chaque lot validé est conservé
+  (`Book.kitDraft`) : une reprise ne relance que le lot manquant ; un lot tronqué est relancé seul, en deux moitiés.
+  Fusion sans doublons, renumérotation, lot complémentaire si des éléments manquent.
+- **Images en file** : concurrence réglable (Paramètres → IA → « Générations simultanées », 1 à 10), reprise image par
+  image (une image faite n'est jamais refaite), progression « Illustrations 37/120 », budget par livre vérifié avant
+  chaque image (relancer reprend où le budget s'est arrêté). La planche de personnages, ou le premier dessin, passe d'abord.
+- **Coût** : estimation par poste avant lancement (« 123 images × 0,017 $ + couverture 0,17 $ = 2,20 $ ») ; le plafond
+  de coût du pilote automatique affiche ce détail quand il s'arrête.
+- **PDF** : au-delà de 40 pages, rendu par tranches de 30 pages fusionnées avec pdf-lib ; délais proportionnels au
+  nombre de pages. Le PDF « numérique léger » sert des images allégées (JPEG 1600 px, PNG 2 couleurs pour un dessin au
+  trait, SVG tel quel) ; le PDF « qualité d'impression » garde les originaux.
+- **Aperçu** : miniatures rendues à l'approche (IntersectionObserver) avec des vignettes 320 px, page affichée en 1400 px
+  (déclinaisons `?v=thumb|screen|digital` de `/api/assets`, calculées une fois et mises en cache). Onglet Kit :
+  illustrations filtrées (à générer, faites, démo, esquisses) et paginées par 48.
+- **Boutique** : couverture + 8 aperçus répartis sur le livre (au lieu des 3 premières pages) ; un PDF de plus de 4 Mo
+  est déposé directement dans le stockage privé de la boutique par URL signée (limite de 4,5 Mo des requêtes Vercel),
+  jusqu'à 500 Mo. Etsy : 10 images et 20 Mo par fichier (préférez le PDF numérique léger).
+
+### Cahier de coloriage (`cahier-coloriage`)
+
+Univers « Kit enfants » et « Sciences enfants », catégorie `activites-educatives`, gabarit `ACTIVITY`. Une page A4 portrait par
+dessin (dessin non rogné sur fond blanc, titre en pied), page « Ce cahier appartient à… », exemple colorié (premier dessin
+mis en couleur, il sert de référence), sommaire facultatif, diplôme « Artiste en herbe », option recto-verso (page blanche
+au dos de chaque dessin), prénom ou ligne à compléter sur la couverture (en couleur). Complexité selon l'âge (3–5 très
+simple, 6–8 moyen, 8–10 détaillé). Charte « coloriage » éditable (Paramètres → Univers) ; chaque dessin est contrôlé
+(sharp) et converti en noir et blanc pur par seuillage, sans regénération.
+
+Images : par l'API par défaut avec des réglages propres au type (`gpt-image-1-mini` medium, sans esquisse ; couverture
+`gpt-image-1` high), modifiables dans Paramètres → IA et dans le plan, avec le mode mixte « Texte : copier-coller ·
+Images : API OpenAI ». En copier-coller, **une seule** demande « Lot d'images » (prompt maître, planches 2×2 par défaut,
+1 ou 3×3 en option), dépôt groupé (fichiers ou ZIP, tri par nom puis date, réordonnables), découpage automatique
+(gouttières détectées par profils de projection, repli régulier), rognage, noir et blanc, vectorisation du trait
+(imagetracerjs, domaine public ; potrace est sous GPL, écarté) avec repli raster agrandi, écran de vérification
+(permuter, rejeter → demande individuelle ou API, régler la découpe), puis « Valider » : la production reprend seule.
+Le lot est propre au coloriage (les autres kits mélangent formats et personnages récurrents, peu adaptés aux planches).
+
+Modèle de prompt : `docs/prompts/cahier-coloriage-modele.md`. Démonstration : `pnpm tsx scripts/demo-coloring.ts`.
+
 ## Limites connues / prochaines étapes
 
 - Pas d'authentification ni de gestion multi-utilisateurs.

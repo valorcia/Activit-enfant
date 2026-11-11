@@ -7,6 +7,8 @@ import { ManualRequestCard, BatchPaste, type ManualRequestView } from "@/compone
 import { buildBatchPrompt } from "@/lib/ai/manual-core";
 import { labelFor } from "@/lib/jobs-labels";
 import { formatDate } from "@/lib/utils";
+import { SheetBatchCard, type SheetBatchView } from "@/components/manual/sheet-batch-card";
+import { paramsOf } from "@/lib/coloring/sheet-batch";
 
 export const dynamic = "force-dynamic";
 
@@ -24,11 +26,30 @@ export default async function ManualPage() {
   ]);
   const bookTitle = (id: string | null) => books.find((b) => b.id === id)?.title ?? "Sans livre";
   const groups = new Map<string, ManualRequestView[]>();
+  const sheetGroups = new Map<string, SheetBatchView[]>();
+  const batchBooks = await prisma.book.findMany({ where: { id: { in: pending.filter((r) => r.kind === "IMAGE_BATCH").map((r) => r.bookId!).filter(Boolean) } }, select: { id: true, ageRange: true } });
   for (const r of pending) {
+    if (r.kind !== "IMAGE_BATCH") continue;
+    const p = paramsOf(r.params);
+    const job = p.processJobId ? await prisma.job.findUnique({ where: { id: p.processJobId }, select: { status: true, step: true, error: true } }) : null;
+    const byNum = new Map(p.drawings.map((d) => [d.slot, d]));
+    const view: SheetBatchView = {
+      id: r.id, title: r.title, prompt: r.prompt, error: r.error, bookId: r.bookId, ageRange: batchBooks.find((b) => b.id === r.bookId)?.ageRange ?? "5-8",
+      grid: p.grid, stage: p.stage, drawings: p.drawings.length, sheets: Math.ceil(p.drawings.length / p.grid),
+      processError: p.error ?? (job?.status === "FAILED" ? job.error : null), processStep: job?.step ?? null,
+      uploads: p.uploads.map((u) => ({ ...u, url: assetUrl(u.assetId)! })),
+      cells: p.cells.map((c) => ({ index: c.index, sheet: c.sheet, url: assetUrl(c.svgAssetId ?? c.pngAssetId)!, vector: Boolean(c.svgAssetId), slot: c.slot, numero: c.slot ? byNum.get(c.slot)?.numero ?? null : null, titre: c.slot ? byNum.get(c.slot)?.titre ?? null : null, rejected: Boolean(c.rejected) })),
+    };
+    const key = r.bookId ?? "—";
+    sheetGroups.set(key, [...(sheetGroups.get(key) ?? []), view]);
+    if (!groups.has(key)) groups.set(key, []);
+  }
+  for (const r of pending) {
+    if (r.kind === "IMAGE_BATCH") continue;
     const key = r.bookId ?? "—";
     const job = jobs.find((j) => j.id === r.jobId);
     const view: ManualRequestView = {
-      id: r.id, kind: r.kind, title: r.title, prompt: r.prompt, expectedFormat: r.expectedFormat, error: r.error, createdAt: r.createdAt.toISOString(),
+      id: r.id, kind: r.kind as ManualRequestView["kind"], title: r.title, prompt: r.prompt, expectedFormat: r.expectedFormat, error: r.error, createdAt: r.createdAt.toISOString(),
       bookId: r.bookId, activityId: r.activityId, activityTitle: activities.find((a) => a.id === r.activityId)?.title ?? null,
       jobId: r.jobId, jobLabel: job ? labelFor(job.type) : null,
       sourceUrl: r.kind === "VIDEO" ? assetUrl(((r.params ?? {}) as { sourceAssetId?: string }).sourceAssetId) ?? null : null,
@@ -63,10 +84,11 @@ export default async function ManualPage() {
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-lg font-black">
                 {bookId === "—" ? "Sans livre" : <Link href={`/books/${bookId}`} className="hover:underline">{bookTitle(bookId)}</Link>}
-                <span className="ml-2 text-sm font-semibold text-slate-500">{items.length} demande{items.length > 1 ? "s" : ""}</span>
+                <span className="ml-2 text-sm font-semibold text-slate-500">{items.length + (sheetGroups.get(bookId)?.length ?? 0)} demande{items.length + (sheetGroups.get(bookId)?.length ?? 0) > 1 ? "s" : ""}</span>
               </h2>
             </div>
             {batch && <BatchPaste prompt={batch} count={texts.length} />}
+            {(sheetGroups.get(bookId) ?? []).map((sb) => <div key={sb.id} className="mb-4"><SheetBatchCard v={sb} /></div>)}
             <div className="space-y-4">
               {items.map((r) => <ManualRequestCard key={r.id} request={r} />)}
             </div>
@@ -80,7 +102,7 @@ export default async function ManualPage() {
           <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white text-sm">
             {recent.map((r) => (
               <li key={r.id} className="flex items-center justify-between gap-3 px-4 py-2">
-                <span className="truncate"><span className="text-slate-400 mr-2">{r.kind === "TEXT" ? "Texte" : r.kind === "VIDEO" ? "Vidéo" : "Image"}</span>{r.title}<span className="ml-2 text-xs text-slate-400">{bookTitle(r.bookId)}</span></span>
+                <span className="truncate"><span className="text-slate-400 mr-2">{r.kind === "TEXT" ? "Texte" : r.kind === "VIDEO" ? "Vidéo" : r.kind === "IMAGE_BATCH" ? "Lot d'images" : "Image"}</span>{r.title}<span className="ml-2 text-xs text-slate-400">{bookTitle(r.bookId)}</span></span>
                 <span className={`shrink-0 text-xs font-semibold ${r.status === "DONE" ? "text-emerald-700" : "text-slate-400"}`}>{r.status === "DONE" ? "Collée" : "Annulée"} · {r.resolvedAt ? formatDate(r.resolvedAt) : ""}</span>
               </li>
             ))}

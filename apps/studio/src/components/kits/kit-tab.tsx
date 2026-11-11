@@ -32,6 +32,16 @@ export function KitTab({ bookId, kit, activeJobId }: { bookId: string; kit: KitT
   const [pending, start] = useTransition();
   const [tool, setTool] = useState<{ ill: FramingTarget; isSketch: boolean } | null>(null);
   const done = kit.slots.filter((s) => s.status === "GENERATED" || s.status === "ACCEPTED").length;
+  // Grands volumes (120 dessins…) : filtre et pagination de la liste d'illustrations
+  const [filter, setFilter] = useState<"all" | "todo" | "done" | "demo" | "sketch">("all");
+  const [pageNo, setPageNo] = useState(0);
+  const PER_PAGE = 48;
+  const filtered = kit.slots.filter((s) => {
+    const ok = s.status === "GENERATED" || s.status === "ACCEPTED";
+    return filter === "all" || (filter === "todo" && !ok) || (filter === "done" && ok) || (filter === "demo" && s.isDemo) || (filter === "sketch" && s.isSketch);
+  });
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
+  const visible = filtered.slice(Math.min(pageNo, pageCount - 1) * PER_PAGE, (Math.min(pageNo, pageCount - 1) + 1) * PER_PAGE);
 
   const act = (fn: () => Promise<{ jobId: string } | void>, ok?: string) =>
     start(async () => {
@@ -84,15 +94,31 @@ export function KitTab({ bookId, kit, activeJobId }: { bookId: string; kit: KitT
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <h3 className="font-bold">Illustrations ({done}/{kit.slots.length})</h3>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="font-bold">Illustrations ({done}/{kit.slots.length})</h3>
+          {kit.slots.length > 12 && (
+            <div className="flex flex-wrap items-center gap-1 text-xs">
+              {([["all", "Toutes"], ["todo", "À générer"], ["done", "Faites"], ["demo", "Démo"], ["sketch", "Esquisses"]] as const).map(([k, l]) => (
+                <button key={k} type="button" onClick={() => { setFilter(k); setPageNo(0); }} className={`rounded-full px-2 py-0.5 ${filter === k ? "bg-slate-800 text-white" : "bg-slate-100 hover:bg-slate-200"}`}>{l}</button>
+              ))}
+              {pageCount > 1 && (
+                <span className="ml-2 flex items-center gap-1">
+                  <button type="button" disabled={pageNo === 0} onClick={() => setPageNo((n) => Math.max(0, n - 1))} className="rounded px-1.5 hover:bg-slate-100 disabled:opacity-40">‹</button>
+                  {Math.min(pageNo, pageCount - 1) + 1}/{pageCount}
+                  <button type="button" disabled={pageNo >= pageCount - 1} onClick={() => setPageNo((n) => Math.min(pageCount - 1, n + 1))} className="rounded px-1.5 hover:bg-slate-100 disabled:opacity-40">›</button>
+                </span>
+              )}
+            </div>
+          )}
+        </div>
         {kit.slots.length === 0 ? <p className="mt-2 text-sm text-slate-500">La liste des illustrations apparaît une fois le contenu rédigé.</p> : (
           <ul className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-6">
-            {kit.slots.map((s) => (
+            {visible.map((s) => (
               <li key={s.slot} className="overflow-hidden rounded-lg border border-slate-200">
                 <div className="relative aspect-square bg-slate-100">
                   {s.src ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={s.src} alt={s.label} className="h-full w-full object-contain" />
+                    <img src={s.src.startsWith("/api/assets/") ? `${s.src}?v=thumb` : s.src} alt={s.label} loading="lazy" className="h-full w-full object-contain" />
                   ) : <div className="flex h-full items-center justify-center p-2 text-center text-[11px] text-slate-400">À générer</div>}
                   {s.isDemo && <span className="absolute left-1 top-1 rounded bg-red-600 px-1 text-[9px] font-bold text-white">DÉMO</span>}
                   {s.isSketch && <span className="absolute right-1 top-1 rounded bg-amber-400 px-1 text-[9px] font-bold text-amber-950">ESQUISSE</span>}

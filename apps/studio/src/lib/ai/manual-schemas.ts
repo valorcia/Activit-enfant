@@ -1,6 +1,6 @@
-import type { z } from "zod";
+import { z } from "zod";
 import { ActivityContentSchema, BookOutlineSchema, CoverDataSchema, VisualReferenceSheetSchema } from "../schemas/activity";
-import { GuideSchema, KitPlanSchema, PranksKitSchema, RecipesSchema, ScienceSchema, TreasureHuntSchema } from "../kits/schemas";
+import { ColoringSchema, GuideSchema, KitPlanSchema, PranksKitSchema, RecipesSchema, ScienceSchema, TreasureHuntSchema } from "../kits/schemas";
 
 /** Schémas de validation des réponses collées, par finalité (les mêmes que ceux du mode API). */
 export const MANUAL_SCHEMA_BY_PURPOSE: Record<string, { name: string; schema: z.ZodTypeAny }> = {
@@ -13,6 +13,9 @@ export const MANUAL_SCHEMA_BY_PURPOSE: Record<string, { name: string; schema: z.
   kit_guide: { name: "Guide", schema: GuideSchema },
   kit_recipes: { name: "Recipes", schema: RecipesSchema },
   kit_science: { name: "Science", schema: ScienceSchema },
+  kit_coloring: { name: "Coloring", schema: ColoringSchema },
+  kit_outline: { name: "KitOutline", schema: z.object({ elements: z.array(z.object({ numero: z.number(), titre: z.string() }).passthrough()).min(1) }) },
+  kit_items: { name: "KitItems", schema: z.object({ items: z.array(z.record(z.string(), z.unknown())).min(1) }) },
   kit_plan: { name: "KitPlan", schema: KitPlanSchema },
 };
 

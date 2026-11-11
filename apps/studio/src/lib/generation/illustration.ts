@@ -1,3 +1,4 @@
+import { bookCoverSettings } from "../ai/book-settings";
 import { prisma } from "../db";
 import { getAiSettings } from "../settings";
 import { getImageProvider, effectiveImageModel } from "../ai/registry";
@@ -27,7 +28,10 @@ export async function generateIllustration(opts: {
   /** Esquisse (qualité basse) ; par défaut : réglage « mode esquisse » */
   sketch?: boolean;
 }) {
-  const settings = await getAiSettings();
+  const base = await getAiSettings();
+  // Couverture d'un kit : réglages du livre (cahier de coloriage : gpt-image-1 qualité high, mode mixte…)
+  const coverBook = opts.kind === "COVER" && opts.bookId ? await prisma.book.findUnique({ where: { id: opts.bookId }, select: { kitType: true, customization: true } }) : null;
+  const settings = coverBook ? bookCoverSettings(base, coverBook) : base;
   const provider = getImageProvider(settings, { activityId: opts.activityId, bookId: opts.bookId, jobId: opts.jobId });
   const model = effectiveImageModel(settings);
 

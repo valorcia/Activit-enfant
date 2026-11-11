@@ -1,6 +1,6 @@
 import type { TextProvider, TextResult } from "../types";
 import { mockOutline, mockActivity, mockVisualReference, mockCover } from "./mock-content";
-import { mockGuide, mockKitPlan, mockPranksKit, mockRecipes, mockScience, mockTreasureHunt } from "../../kits/mock";
+import { mockColoring, mockGuide, mockItems, mockKitPlan, mockOutline as mockKitOutline, mockPranksKit, mockRecipes, mockScience, mockTreasureHunt } from "../../kits/mock";
 
 /**
  * Fournisseur de démonstration : produit des contenus plausibles, structurés et
@@ -24,6 +24,9 @@ export class MockTextProvider implements TextProvider {
     else if (purpose === "kit_guide") out = mockGuide(ctx);
     else if (purpose === "kit_recipes") out = mockRecipes(ctx);
     else if (purpose === "kit_science") out = mockScience(ctx);
+    else if (purpose === "kit_coloring") out = mockColoring(ctx);
+    else if (purpose === "kit_outline") out = mockKitOutline(ctx);
+    else if (purpose === "kit_items") out = mockItems(ctx);
     else out = { note: "mock" };
     await new Promise((r) => setTimeout(r, 150));
     return { text: JSON.stringify(out), provider: this.name, model: "mock", usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 } };

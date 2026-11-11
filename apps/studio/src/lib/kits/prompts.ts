@@ -7,6 +7,8 @@ import type { KitContentFormat, KitCustomization } from "./schemas";
 import { KIT_TYPES, isAdultAge, typesForPreset, type KitTypeDef } from "./types";
 import { PRESETS, type PresetDef } from "../universes/presets";
 import type { Site } from "../universes/sites";
+import { coloringComplexity } from "./coloring";
+import { ITEMS_KEY } from "./schemas";
 
 export const SYSTEM_KIT_EDITOR = PRESETS["kit-enfants"].system;
 
@@ -36,6 +38,7 @@ export function contentPromptFor(format: KitContentFormat, a: ContentPromptArgs)
     case "guide": return guidePrompt(a);
     case "recipes": return recipesPrompt(a);
     case "science": return sciencePrompt(a);
+    case "coloring": return coloringPrompt(a);
   }
 }
 
@@ -128,7 +131,16 @@ FORMAT : uniquement un objet JSON :
 "experiences" contient exactement ${o.count} éléments et "illustrations" une entrée "experience-N" par expérience.`;
 }
 
-const HIDING_PLACES = ["frigo", "canapé", "lave-linge", "chaussures de l'entrée", "pot de plante", "baignoire", "étagère à livres", "boîte aux lettres", "oreiller", "coffre à jouets", "tiroir à couverts", "panier à linge"];
+export const HIDING_PLACES = [
+  "frigo", "canapé", "lave-linge", "chaussures de l'entrée", "pot de plante", "baignoire", "étagère à livres", "boîte aux lettres", "oreiller", "coffre à jouets", "tiroir à couverts", "panier à linge",
+  "sous le tapis", "derrière un rideau", "dans une botte", "sous la table", "dans le placard à balais", "derrière la porte d'entrée", "dans un sac à dos", "sous un coussin du fauteuil", "dans la boîte à chaussures", "près de la poubelle de tri", "dans le porte-parapluie", "sous l'escabeau",
+];
+
+/** Cachettes imposées (liste au-delà de laquelle l'auteur invente des cachettes variées, sans répétition). */
+export function hidingPlacesFor(count: number): string {
+  const listed = HIDING_PLACES.slice(0, Math.min(count, HIDING_PLACES.length)).join(", ");
+  return count > HIDING_PLACES.length ? `${listed}, puis ${count - HIDING_PLACES.length} autres cachettes de la maison ou du jardin que tu choisis (toutes différentes, aucune répétition)` : listed;
+}
 
 function persona(c: KitCustomization, def: KitTypeDef) {
   return [
@@ -141,7 +153,7 @@ function persona(c: KitCustomization, def: KitTypeDef) {
 }
 
 export function treasureHuntPrompt(o: ContentPromptArgs) {
-  const places = HIDING_PLACES.slice(0, o.count).join(", ");
+  const places = hidingPlacesFor(o.count);
   return `MISSION : écrire le contenu complet d'un kit « ${o.title} » (${o.def.label.toLowerCase()}) pour enfants de ${ageRangeLabel(o.ageRange)}, sur la mécanique de « Le trésor de la Capitaine Coquelicot » :
 - PDF A4 à imprimer.
 ${persona(o.c, o.def)}
@@ -244,4 +256,93 @@ N'invente rien qui contredise la demande ; laisse une chaîne vide si une inform
 /** Prompt d'image : scène, personnage récurrent, puis charte d'illustration du studio. */
 export function kitImagePrompt(charter: string, prompt: string, characterNote?: string) {
   return [prompt.trim(), characterNote ? `Personnage récurrent : ${characterNote}.` : "", charter.trim()].filter(Boolean).join("\n\n");
+}
+
+export function coloringPrompt(o: ContentPromptArgs) {
+  const cx = coloringComplexity(o.ageRange);
+  return `MISSION : écrire le contenu complet du cahier de coloriage « ${o.title} » pour enfants de ${ageRangeLabel(o.ageRange)}, à imprimer (PDF A4 portrait, une page par dessin) : ${o.count} dessins à colorier.
+Thème : ${o.c.universe || "libre (choisis un thème cohérent avec le titre)"}.
+Ton : ${o.tone || o.c.tone || "joyeux et tendre"}.
+Complexité : ${cx.label}. ${cx.rule}
+Chaque dessin : numero, titre (court, ce que l'enfant voit : « Tricératops qui mange des feuilles »), description (la scène à dessiner : sujet, pose, expression, 1 à 3 éléments de décor ; c'est le prompt du dessinateur, au présent, sans couleur puisque le dessin est au trait), legende (phrase courte et douce imprimée sous le dessin, ou chaîne vide), niveau_detail ("simple" | "moyen" | "detaille").
+Variété : alterne gros plans et scènes, poses et décors ; aucun dessin en double ; progression du plus simple au plus détaillé si l'âge le permet.
+Ajoute : une introduction (40 à 80 mots : comment utiliser le cahier, conseil papier 120 g pour les feutres), la page « Ce cahier appartient à… » (titre + texte court), un diplôme « Artiste en herbe » (titre + texte), 3 à 6 conseils aux parents.
+RÈGLES : aucun personnage sous licence, aucune marque, rien d'effrayant ; les dessins ne contiennent jamais de texte.
+${o.c.extraInstructions ? `Consignes supplémentaires : ${o.c.extraInstructions}` : ""}
+${o.brief ? `Demande initiale : ${o.brief}` : ""}
+
+FORMAT : uniquement un objet JSON :
+{
+  "titre": "${o.title}", "sous_titre": "…", "theme": "…",
+  "introduction": "…",
+  "dessins": [ { "numero": 1, "titre": "…", "description": "…", "legende": "…", "niveau_detail": "${cx.level}" } ],
+  "page_appartient": { "titre": "Ce cahier appartient à", "texte": "…" },
+  "diplome": { "titre": "Diplôme d'artiste en herbe", "texte": "…" },
+  "conseils": ["…"],
+  "illustrations": [ { "page": "couverture", "prompt": "… (couverture EN COULEUR, joyeuse, personnages du thème)" } ],
+  ${BOUTIQUE_JSON}
+}
+"dessins" contient exactement ${o.count} éléments.`;
+}
+
+// ---------------------------------------------------------------------------
+// Rédaction par lots (livres de plus de 20 éléments)
+// ---------------------------------------------------------------------------
+
+/** Forme JSON d'un élément principal, par format (rappel dans les prompts de lots). */
+export const ITEM_JSON_EXAMPLE: Record<KitContentFormat, string> = {
+  treasure_hunt: `{ "numero": 1, "cachette": "…", "texte": "…", "indice_secours": "…", "image_description": "…" }`,
+  pranks: `{ "numero": 1, "titre": "…", "resume": "…", "materiel": ["…"], "preparation": ["…"], "temps_minutes": 5, "difficulte": 1, "age_conseille": "3+", "message_du_lutin": "…", "variante_sans_materiel": null, "illustration_description": "…" }`,
+  guide: `{ "numero": 1, "titre": "…", "resume": "…", "contenu": "…", "etapes": ["…"], "conseil": "…", "attention": "…", "tableau": null, "illustration_description": "…" }`,
+  recipes: `{ "numero": 1, "titre": "…", "resume": "…", "portions": 4, "temps_preparation_minutes": 15, "temps_cuisson_minutes": 20, "difficulte": 1, "ingredients": ["…"], "etapes": ["…"], "astuce": "…", "allergenes": ["…"], "illustration_description": "…" }`,
+  science: `{ "numero": 1, "titre": "…", "question": "…", "materiel": ["…"], "etapes": ["…"], "explication": "…", "pour_aller_plus_loin": "…", "securite": ["…"], "duree_minutes": 20, "difficulte": 1, "age_conseille": "6+", "illustration_description": "…" }`,
+  coloring: `{ "numero": 1, "titre": "…", "description": "…", "legende": "…", "niveau_detail": "moyen" }`,
+};
+
+const ITEM_NOUN: Record<KitContentFormat, string> = { treasure_hunt: "énigmes", pranks: "idées", guide: "chapitres", recipes: "recettes", science: "expériences", coloring: "dessins" };
+
+/** Sommaire complet (titres seulement) : garantit l'absence de doublons entre les lots. */
+export function outlinePrompt(format: KitContentFormat, o: ContentPromptArgs) {
+  const noun = ITEM_NOUN[format];
+  return `MISSION : établir le SOMMAIRE de « ${o.title} » (${o.def.label.toLowerCase()}, ${audienceLabel(o.ageRange)}) : exactement ${o.count} ${noun}, tous différents.
+${o.c.universe ? `Thème / univers : ${o.c.universe}.` : ""}
+${format === "treasure_hunt" ? `Cachettes, dans cet ordre : ${hidingPlacesFor(o.count)}.` : ""}
+${format === "coloring" ? coloringComplexity(o.ageRange).rule : ""}
+Pour chacun : numero, titre (court et explicite), idee (une phrase : l'angle ou la scène, pour qu'aucun élément ne ressemble à un autre). Varie les sujets, les situations et la difficulté.
+${o.c.extraInstructions ? `Consignes supplémentaires : ${o.c.extraInstructions}` : ""}
+${o.brief ? `Demande initiale : ${o.brief}` : ""}
+
+FORMAT : uniquement un objet JSON :
+{ "elements": [ { "numero": 1, "titre": "…", "idee": "…" } ] }
+"elements" contient exactement ${o.count} entrées, numérotées de 1 à ${o.count}.`;
+}
+
+/** Note ajoutée au prompt complet quand il ne rédige que le premier lot (cadre du livre + éléments 1 à n). */
+export function firstBatchNote(format: KitContentFormat, total: number, slice: Array<{ numero: number; titre: string; idee?: string }>) {
+  const noun = ITEM_NOUN[format];
+  return `
+
+IMPORTANT — LIVRE RÉDIGÉ PAR LOTS : le livre complet compte ${total} ${noun}. Dans cette réponse, rédige toutes les autres parties (introduction, lettres, guide, fiche boutique…) pour l'ensemble des ${total} ${noun}, mais seulement les ${slice.length} premiers ${noun} du sommaire, dans "${ITEMS_KEY[format]}" :
+${slice.map((x) => `${x.numero}. ${x.titre}${x.idee ? ` — ${x.idee}` : ""}`).join("\n")}
+Les autres ${noun} seront rédigés ensuite, à part.`;
+}
+
+/** Lot d'éléments (sans le reste du livre) à partir des titres du sommaire. */
+export function itemsBatchPrompt(format: KitContentFormat, o: ContentPromptArgs, slice: Array<{ numero: number; titre: string; idee?: string }>, context: { hero?: string; companion?: string; total: number }) {
+  const noun = ITEM_NOUN[format];
+  const first = slice[0]?.numero ?? 1;
+  const last = slice[slice.length - 1]?.numero ?? first;
+  return `MISSION : rédiger les ${noun} ${first} à ${last} (sur ${context.total}) de « ${o.title} » (${o.def.label.toLowerCase()}, ${audienceLabel(o.ageRange)}).
+${o.c.universe ? `Thème / univers : ${o.c.universe}.` : ""}
+${context.hero ? `Personnage : ${context.hero}${context.companion ? `, compagnon : ${context.companion}` : ""}.` : ""}
+Ton : ${o.tone || o.c.tone || "joyeux"}.
+${format === "coloring" ? coloringComplexity(o.ageRange).rule : ""}
+Rédige exactement ces ${slice.length} ${noun}, avec ces numéros et ces titres (tu peux affiner un titre sans changer son sujet) :
+${slice.map((x) => `${x.numero}. ${x.titre}${x.idee ? ` — ${x.idee}` : ""}`).join("\n")}
+Même niveau d'exigence que le reste du livre ; aucune répétition avec les autres ${noun}.
+${o.c.extraInstructions ? `Consignes supplémentaires : ${o.c.extraInstructions}` : ""}
+
+FORMAT : uniquement un objet JSON :
+{ "items": [ ${ITEM_JSON_EXAMPLE[format]} ] }
+"items" contient exactement ${slice.length} éléments.`;
 }

@@ -6,7 +6,7 @@ import { applyFramingToBookPages } from "../images/service";
 import { pageSize } from "./formats";
 import { themeFor, defaultThemeForBook } from "./themes";
 import { getCover } from "../generation/cover";
-import { buildKitInteriorPages } from "../kits/layout";
+import { buildKitInteriorPages, decorateKitCover } from "../kits/layout";
 import { isStructuredKit } from "../kits/types";
 import { buildActivityPages, buildBackCoverPage, buildConclusionPage, buildCoverPage, buildDiplomaPage, buildIntroPage, buildTocPages, TOC_PER_PAGE, type BuildContext, type BuiltPage, type IllustrationRef } from "./engine";
 
@@ -41,7 +41,7 @@ export async function rebuildBookPages(bookId: string, opts?: { force?: boolean;
     const interior = await buildKitInteriorPages(book, ctx);
     if (interior) {
       const coverRef = coverIll ? { id: coverIll.id, kind: "COVER" as const, stepIndex: null, src: assetUrl(coverIll.assetId), isDemo: coverIll.isDemo, status: coverIll.status } : undefined;
-      const all = [{ key: "__cover", pages: [buildCoverPage(cover, ctx, coverRef)] }, { key: "__kit", pages: interior }, { key: "__back_cover", pages: [buildBackCoverPage(cover, ctx)] }];
+      const all = [{ key: "__cover", pages: [decorateKitCover(book, buildCoverPage(cover, ctx, coverRef), ctx)] }, { key: "__kit", pages: interior }, { key: "__back_cover", pages: [buildBackCoverPage(cover, ctx)] }];
       await prisma.$transaction(async (tx) => {
         await tx.bookPage.deleteMany({ where: { bookId } });
         let position = 0;

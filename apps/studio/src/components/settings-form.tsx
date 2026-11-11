@@ -98,14 +98,35 @@ export function SettingsForm({ initial, availability }: { initial: AiSettings; a
           </Select>
         </Field>
         <Field label="Nombre maximal d'illustrations d'étapes par activité">
-          <Input type="number" min={0} max={15} value={s.maxStepIllustrations} onChange={(e) => set("maxStepIllustrations", Number(e.target.value))} />
+          <Input type="number" min={0} max={60} value={s.maxStepIllustrations} onChange={(e) => set("maxStepIllustrations", Number(e.target.value))} />
         </Field>
-        <Field label="Budget maximal par livre (USD)" hint="Le pipeline s'arrête quand les dépenses enregistrées du livre dépassent ce montant.">
+        <Field label="Budget maximal par livre (USD)" hint="Le pipeline s'arrête quand les dépenses enregistrées du livre dépassent ce montant (un cahier de 120 dessins par l'API ≈ 2 $ en gpt-image-1-mini medium). Une relance reprend là où il s'est arrêté.">
           <Input type="number" min={0} step="0.5" value={s.maxBudgetPerBookUsd} onChange={(e) => set("maxBudgetPerBookUsd", Number(e.target.value))} />
         </Field>
-        <Field label="Générations simultanées (worker)" hint="Pris en compte au redémarrage du worker.">
+        <Field label="Générations simultanées (worker)" hint="Tâches en parallèle et images générées en parallèle dans un même livre (1 à 10). Pris en compte au redémarrage du worker pour les tâches, immédiatement pour les images.">
           <Input type="number" min={1} max={10} value={s.maxConcurrentGenerations} onChange={(e) => set("maxConcurrentGenerations", Number(e.target.value))} />
         </Field>
+      </div>
+      <div className="rounded-lg border border-violet-200 bg-violet-50/40 p-4">
+        <div className="mb-2 text-sm font-semibold">Cahiers de coloriage (images par l&apos;API)</div>
+        <div className="grid gap-3 md:grid-cols-3">
+          <Field label="Modèle des dessins">
+            <Select value={s.coloring.imageModel} onChange={(e) => set("coloring", { ...s.coloring, imageModel: e.target.value })}>{IMAGE_MODELS.openai.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}</Select>
+          </Field>
+          <Field label="Qualité des dessins">
+            <Select value={s.coloring.imageQuality} onChange={(e) => set("coloring", { ...s.coloring, imageQuality: e.target.value as AiSettings["imageQuality"] })}><option value="low">Basse</option><option value="medium">Moyenne (conseillée)</option><option value="high">Haute</option></Select>
+          </Field>
+          <Field label="Esquisses">
+            <Select value={s.coloring.sketch ? "1" : "0"} onChange={(e) => set("coloring", { ...s.coloring, sketch: e.target.value === "1" })}><option value="0">Désactivées (conseillé)</option><option value="1">Activées</option></Select>
+          </Field>
+          <Field label="Modèle de la couverture (en couleur)">
+            <Select value={s.coloring.coverModel} onChange={(e) => set("coloring", { ...s.coloring, coverModel: e.target.value })}>{IMAGE_MODELS.openai.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}</Select>
+          </Field>
+          <Field label="Qualité de la couverture">
+            <Select value={s.coloring.coverQuality} onChange={(e) => set("coloring", { ...s.coloring, coverQuality: e.target.value as AiSettings["imageQuality"] })}><option value="medium">Moyenne</option><option value="high">Haute (conseillée)</option><option value="low">Basse</option></Select>
+          </Field>
+        </div>
+        <p className="mt-2 text-xs text-slate-500">Un dessin au trait n&apos;a pas besoin du modèle le plus cher ; une esquisse coûterait presque autant qu&apos;un dessin final. Ces valeurs se modifient aussi livre par livre dans le plan.</p>
       </div>
       <div className="rounded-lg bg-slate-50 p-4 text-sm">
         <div className="font-semibold mb-1">Clés API (serveur uniquement)</div>

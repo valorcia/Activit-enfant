@@ -5,7 +5,8 @@
  * font échouer l'étape avec une explication lisible.
  */
 import type { KitContent } from "../kits/generate";
-import type { Guide, PranksKit, Recipes, Science, TreasureHunt } from "../kits/schemas";
+import type { Coloring, Guide, PranksKit, Recipes, Science, TreasureHunt } from "../kits/schemas";
+import { normalizeTitle } from "../kits/batches";
 
 export interface QualityIssue {
   level: "error" | "warning";
@@ -69,6 +70,7 @@ export function checkKitContent(input: KitContent, opts: { expectedCount: number
   else if ("chapitres" in content) checkGuide(content, expected, fixes, issues);
   else if ("recettes" in content) checkRecipes(content, expected, fixes, issues);
   else if ("experiences" in content) checkScience(content, expected, fixes, issues);
+  else if ("dessins" in content) checkColoring(content, expected, fixes, issues);
   else checkPranks(content as PranksKit, expected, fixes, issues);
 
   // Fiche boutique : longueurs SEO
@@ -179,6 +181,23 @@ function checkScience(c: Science, expected: number, fixes: string[], issues: Qua
   renumber(c.experiences, "Expériences", fixes);
   if (!c.securite_generale.length) issues.push({ level: "error", message: "Règles de sécurité générales absentes (présence d'un adulte, ne pas goûter…)." });
   for (const e of c.experiences) if (!e.materiel.length) issues.push({ level: "warning", message: `Expérience ${e.numero} sans liste de matériel.` });
+}
+
+function checkColoring(c: Coloring, expected: number, fixes: string[], issues: QualityIssue[]) {
+  if (c.dessins.length < expected) issues.push({ level: "error", message: `${c.dessins.length} dessin(s) au lieu de ${expected} attendu(s).` });
+  if (c.dessins.length > expected) { c.dessins = c.dessins.slice(0, expected); fixes.push(`Dessins réduits à ${expected}`); }
+  renumber(c.dessins, "Dessins", fixes);
+  const seen = new Map<string, number>();
+  for (const d of c.dessins) {
+    const k = normalizeTitle(d.titre);
+    if (seen.has(k)) issues.push({ level: "warning", message: `Dessins ${seen.get(k)} et ${d.numero} identiques (« ${d.titre} »).` });
+    else seen.set(k, d.numero);
+    if (/\b(couleur|colori[ée]|rouge|bleu|vert|jaune|ombr|dégradé)/i.test(d.description)) issues.push({ level: "warning", message: `Dessin ${d.numero} : la description évoque des couleurs ou des ombres (le dessin sera au trait noir).` });
+  }
+  if (!c.diplome?.texte?.trim()) {
+    c.diplome = { titre: c.diplome?.titre || "Diplôme d'artiste en herbe", texte: "a colorié ce cahier avec talent et imagination." };
+    fixes.push("Texte du diplôme complété");
+  }
 }
 
 /** Résumé lisible pour la frise du pilote automatique. */

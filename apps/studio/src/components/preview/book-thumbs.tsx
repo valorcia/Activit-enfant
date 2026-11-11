@@ -12,7 +12,7 @@ export function BookThumbs({ bookId, data, height = 72 }: { bookId: string; data
     <Link href={`/books/${bookId}/apercu`} className="group flex items-end gap-1" title="Ouvrir l'aperçu">
       {data.pages.map((p, i) => (
         <div key={i} className={`overflow-hidden rounded-sm bg-white shadow-sm ring-1 ring-slate-200 group-hover:ring-blue-400 ${i === 0 ? "" : "opacity-90"}`} style={{ width: i === 0 ? w : Math.round(w * 0.8), height: i === 0 ? height : Math.round(height * 0.8) }}>
-          <PageRenderer layout={p} theme={data.theme} mode="preview" scale={i === 0 ? scale : scale * 0.8} />
+          <PageRenderer layout={p} theme={data.theme} mode="preview" scale={i === 0 ? scale : scale * 0.8} imageVariant="thumb" />
         </div>
       ))}
     </Link>

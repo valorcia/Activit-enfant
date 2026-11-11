@@ -25,10 +25,10 @@ export function AutopilotLaunch({ text, disabled, siteSlug }: { text: string; di
       else setError(r.error);
     });
 
-  const launch = () =>
+  const launch = (imagesViaApi = false) =>
     start(async () => {
       setError(null);
-      const r = await startAutopilotAction(text, siteSlug);
+      const r = await startAutopilotAction(text, siteSlug, { imagesViaApi });
       if (r.ok) router.push(`/autopilot/${r.data.runId}`);
       else setError(r.error);
     });
@@ -52,11 +52,16 @@ export function AutopilotLaunch({ text, disabled, siteSlug }: { text: string; di
             <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-slate-600 sm:grid-cols-3">
               {Object.entries(preview.estimate.stages).filter(([, v]) => (v ?? 0) > 0).map(([k, v]) => <span key={k} className="flex justify-between"><span>{STAGE_LABELS[k as keyof typeof STAGE_LABELS]}</span><span>{usd(v ?? 0)}</span></span>)}
             </div>
+            {Object.values(preview.estimate.lines).some(Boolean) && <ul className="mt-2 space-y-0.5 text-xs text-slate-500">{Object.entries(preview.estimate.lines).map(([k, l]) => l && <li key={k}><b>{STAGE_LABELS[k as keyof typeof STAGE_LABELS]}</b> : {l}</li>)}</ul>}
+            {preview.coloringApi && <p className="mt-2 rounded-md bg-violet-50 px-2 py-1.5 text-xs text-violet-900">Images du cahier par l&apos;API : <b>{preview.coloringApi.label}</b></p>}
             {preview.estimate.notes.length > 0 && <p className="mt-2 text-xs text-slate-500">{preview.estimate.notes.join(" ")}</p>}
             <p className="mt-2 text-xs text-slate-500">Plafond par e-book : {usd(preview.maxCostUsd)} (le run s&apos;arrête pour validation s&apos;il risque de le dépasser).</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <Button size="lg" onClick={launch} disabled={pending} className="bg-emerald-600 hover:bg-emerald-700"><Rocket className="h-4 w-4" /> {pending ? "Lancement…" : "Confirmer et lancer"}</Button>
+            <Button size="lg" onClick={() => launch()} disabled={pending} className="bg-emerald-600 hover:bg-emerald-700"><Rocket className="h-4 w-4" /> {pending ? "Lancement…" : "Confirmer et lancer"}</Button>
+            {preview.coloringApi?.manualImagesNow && (
+              <Button size="lg" onClick={() => launch(true)} disabled={pending} className="bg-violet-600 hover:bg-violet-700">Générer les images par l&apos;API (≈ {usd(preview.coloringApi.totalUsd)}, aucune intervention)</Button>
+            )}
             <Button variant="ghost" onClick={() => setPreview(null)} disabled={pending}>Annuler</Button>
             <Link href="/settings#autopilot" className="text-sm text-emerald-900 underline">Modifier les réglages du pilote</Link>
           </div>

@@ -67,6 +67,7 @@ enum ManualRequestKind {
   TEXT
   IMAGE
   VIDEO // clip d'animation produit à la main (Runway, Sora, Veo) puis téléversé
+  IMAGE_BATCH // lot d'images (planches de coloriage) : un prompt maître, dépôt groupé, découpage automatique
 }
 
 enum AdVideoStatus {
@@ -144,6 +145,7 @@ model Book {
   kitType        String    @default("activites") // « activites » = livre d'activités historique (fiches + étapes)
   customization  Json?     // KitCustomization : univers, personnage, compagnon, lieu, ton, nombre d'éléments…
   kitContent     Json?     // contenu structuré du kit (énigmes, idées, lettre, diplôme…) validé par le schéma du type
+  kitDraft       Json?     // rédaction par lots en cours (sommaire, cadre, lots validés) — effacé une fois le contenu fusionné
 
   activities BookActivity[]
   pages      BookPage[]

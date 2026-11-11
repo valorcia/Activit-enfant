@@ -15,10 +15,25 @@ export const AiSettingsSchema = z.object({
   sketchMode: z.boolean().default(false),
   sketchQuality: z.enum(["low", "medium"]).default("low"),
   stepIllustrations: z.boolean().default(true),
-  maxStepIllustrations: z.number().int().min(0).max(15).default(8),
+  /** Illustrations d'étapes par activité (livres d'activités) — borne haute technique, pas éditoriale */
+  maxStepIllustrations: z.number().int().min(0).max(60).default(8),
   maxBudgetPerBookUsd: z.number().min(0).default(50),
   maxConcurrentGenerations: z.number().int().min(1).max(10).default(2),
   language: z.string().default("fr"),
+  /**
+   * Réglages d'image propres au cahier de coloriage (mode API) : un dessin au trait n'a pas
+   * besoin du modèle le plus cher, et une esquisse coûterait presque autant qu'un dessin final.
+   * La couverture, en couleur, garde un modèle et une qualité supérieurs.
+   */
+  coloring: z
+    .object({
+      imageModel: z.string().default("gpt-image-1-mini"),
+      imageQuality: z.enum(["low", "medium", "high"]).default("medium"),
+      sketch: z.boolean().default(false),
+      coverModel: z.string().default("gpt-image-1"),
+      coverQuality: z.enum(["low", "medium", "high"]).default("high"),
+    })
+    .default({}),
 });
 export type AiSettings = z.infer<typeof AiSettingsSchema>;
 export const DEFAULT_AI_SETTINGS: AiSettings = AiSettingsSchema.parse({});

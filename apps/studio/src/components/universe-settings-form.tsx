@@ -9,12 +9,14 @@ import { PRESETS, UNIVERSE_PRESETS, charterFor } from "@/lib/universes/presets";
 import { groupByAudience, SITE_STATUS_LABELS, type SitesResult } from "@/lib/universes/sites";
 import { typesForPreset } from "@/lib/kits/types";
 import { UniverseSelect } from "@/components/universes/universe-select";
+import { COLORING_CHARTER_KEY, DEFAULT_COLORING_CHARTER, coloringCharterFor } from "@/lib/kits/coloring";
 
 /** Paramètres « Univers » : liste lue dans la boutique, univers par défaut, charte d'illustration par préréglage. */
 export function UniverseSettingsForm({ initial, defaultSiteSlug, charters, legacyCharter }: { initial: SitesResult; defaultSiteSlug: string | null; charters: Record<string, string>; legacyCharter: string }) {
   const [result, setResult] = useState(initial);
   const [def, setDef] = useState<string | null>(defaultSiteSlug);
   const [values, setValues] = useState<Record<string, string>>(() => Object.fromEntries(UNIVERSE_PRESETS.map((p) => [p, charterFor(p, charters, legacyCharter)])));
+  const [coloring, setColoring] = useState(() => coloringCharterFor(charters));
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -26,7 +28,8 @@ export function UniverseSettingsForm({ initial, defaultSiteSlug, charters, legac
       setError(null);
       try {
         // On n'enregistre que les chartes différentes de la charte intégrée du préréglage.
-        const overrides = Object.fromEntries(Object.entries(values).filter(([p, v]) => v.trim() && v.trim() !== PRESETS[p as keyof typeof PRESETS].charter));
+        const overrides: Record<string, string> = Object.fromEntries(Object.entries(values).filter(([p, v]) => v.trim() && v.trim() !== PRESETS[p as keyof typeof PRESETS].charter));
+        if (coloring.trim() && coloring.trim() !== DEFAULT_COLORING_CHARTER) overrides[COLORING_CHARTER_KEY] = coloring.trim();
         await saveUniverseSettingsAction({ defaultSiteSlug: def, illustrationCharters: overrides });
         setSaved(true);
         setTimeout(() => setSaved(false), 2000);
@@ -74,6 +77,10 @@ export function UniverseSettingsForm({ initial, defaultSiteSlug, charters, legac
             <button type="button" className="mt-1 text-xs text-blue-700 hover:underline" onClick={() => setValues({ ...values, [p]: PRESETS[p].charter })}>Rétablir la charte par défaut</button>
           </Field>
         ))}
+        <Field label="Coloriage (dessins à colorier, tous univers)" hint="Remplace la charte de l'univers pour les dessins des cahiers de coloriage (la couverture et les visuels restent en couleur).">
+          <Textarea rows={4} value={coloring} onChange={(e) => setColoring(e.target.value)} />
+          <button type="button" className="mt-1 text-xs text-blue-700 hover:underline" onClick={() => setColoring(DEFAULT_COLORING_CHARTER)}>Rétablir la charte par défaut</button>
+        </Field>
       </div>
       <div className="flex items-center gap-3">
         <Button disabled={pending} onClick={save}>Enregistrer</Button>

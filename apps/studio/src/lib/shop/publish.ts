@@ -125,7 +125,14 @@ export function buildListingFromKit(book: BookForListing, settings: ShopSettings
   const hero = content ? heroOf(content) : null;
   const shortDescription = (o.shortDescription ?? b.shortDescription ?? (adult ? `${def.label} au format PDF : ${count} ${def.countLabel} clairs et concrets. Téléchargement immédiat.` : `${def.label} à imprimer pour les ${ageRangeLabel(book.ageRange)} : ${count} ${def.countLabel}${hero ? ` avec ${hero}` : ""}. Téléchargement immédiat.`)).slice(0, 400);
   const story = o.story ?? b.story ?? (content ? introOf(content) : undefined);
-  const heroBadges = b.heroBadges?.length ? b.heroBadges : adult ? ["PDF immédiat", `${count} ${def.countLabel}`, "Pas à pas"] : ["PDF A4 immédiat", ageRangeLabel(book.ageRange), `${count} ${def.countLabel}`];
+  const coloring = def.format === "coloring";
+  const heroBadges = b.heroBadges?.length ? b.heroBadges : coloring ? ["PDF A4 immédiat", `${count} dessins à colorier`, ageRangeLabel(book.ageRange), "À imprimer à volonté"] : adult ? ["PDF immédiat", `${count} ${def.countLabel}`, "Pas à pas"] : ["PDF A4 immédiat", ageRangeLabel(book.ageRange), `${count} ${def.countLabel}`];
+  const coloringFaq = [
+    { question: "Quel papier utiliser ?", answer: "Du papier A4 classique convient aux crayons de couleur. Pour les feutres, un papier de 120 g évite qu'ils traversent la feuille." },
+    { question: "Puis-je imprimer un dessin plusieurs fois ?", answer: "Oui, pour l'usage de votre famille ou de votre classe : imprimez vos dessins préférés autant de fois que vous le souhaitez." },
+    { question: "Comment imprimer seulement certaines pages ?", answer: "Dans la fenêtre d'impression, indiquez les numéros de page voulus (par exemple 5-8)." },
+    { question: "Les dessins sont-ils adaptés à l'âge de mon enfant ?", answer: `Ils sont pensés pour les ${ageRangeLabel(book.ageRange)} : traits épais et contours fermés, avec une difficulté adaptée.` },
+  ];
   const tags = o.tags ?? b.tags ?? [def.label.toLowerCase(), universe.toLowerCase(), "à imprimer"];
   return {
     name: o.name ?? book.title,
@@ -154,7 +161,7 @@ export function buildListingFromKit(book: BookForListing, settings: ShopSettings
     salePriceCents: o.salePriceCents ?? undefined,
     currency: "EUR",
     kitContents: o.kitContents ?? (b.kitContents?.length ? b.kitContents : kitContentsFor(def, { main: count })),
-    faq: o.faq ?? b.faq ?? [],
+    faq: o.faq ?? (b.faq?.length ? b.faq : coloring ? coloringFaq : b.faq ?? []),
     sellingPoints: o.sellingPoints ?? b.sellingPoints ?? [],
     seoTitle: (o.seoTitle ?? b.seoTitle ?? `${book.title} — ${def.label.toLowerCase()} à imprimer`).slice(0, 70),
     seoDescription: (o.seoDescription ?? b.seoDescription ?? shortDescription).slice(0, 170),
@@ -295,26 +302,39 @@ async function currentCoverAsset(book: Book): Promise<{ data: Buffer; mime: stri
   return { data, mime: ill.asset.mime, name: `couverture.${ill.asset.mime.split("/")[1] ?? "png"}` };
 }
 
-/** Rend les premières pages du livre en PNG via la route d'impression (Chromium déjà utilisé pour les PDF). */
+/** Pages à montrer en aperçu : les premières pages intérieures, puis (gros livres) des pages réparties sur tout le livre. */
+export function previewPageIndices(total: number, count: number): number[] {
+  const start = total > 1 ? 1 : 0; // on saute la couverture
+  const last = total > 2 ? total - 2 : total - 1; // et la quatrième de couverture
+  const n = Math.min(count, Math.max(0, last - start + 1));
+  if (n <= 0) return [];
+  if (last - start + 1 <= count) return Array.from({ length: n }, (_, i) => start + i);
+  // 2 premières pages, puis réparties
+  const out = new Set<number>([start, start + 1]);
+  for (let i = 0; out.size < n && i < n * 4; i++) out.add(start + Math.round(((i + 1) * (last - start)) / (n - 1)));
+  return [...out].filter((x) => x <= last).sort((a, b) => a - b).slice(0, n);
+}
+
+/** Rend des pages du livre en JPEG via la route d'impression, une page à la fois (rapide même pour 130 pages). */
 export async function renderPagePreviews(book: Book, count = 3): Promise<Array<{ data: Buffer; mime: string; name: string }>> {
   const { getBrowser } = await import("../pdf/browser");
   const appUrl = (process.env.APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
-  const url = new URL(`${appUrl}/print/books/${book.id}`);
-  url.searchParams.set("mode", "digital");
-  if (process.env.INTERNAL_TOKEN) url.searchParams.set("token", process.env.INTERNAL_TOKEN);
+  const total = await prisma.bookPage.count({ where: { bookId: book.id } });
+  const indices = previewPageIndices(total, total > 40 ? Math.max(count, 8) : count);
   const browser = await getBrowser();
   const context = await browser.newContext({ deviceScaleFactor: 1, viewport: { width: 900, height: 1300 } });
   const page = await context.newPage();
+  const out: Array<{ data: Buffer; mime: string; name: string }> = [];
   try {
-    await page.goto(url.toString(), { waitUntil: "networkidle", timeout: 90_000 });
-    await page.waitForFunction(() => (window as unknown as { __INVENTOR_READY__?: boolean }).__INVENTOR_READY__ === true, null, { timeout: 60_000 });
-    const pages = page.locator("[data-page-index]");
-    const total = await pages.count();
-    const out: Array<{ data: Buffer; mime: string; name: string }> = [];
-    // On saute la couverture (index 0) si le livre a plus d'une page
-    const start = total > 1 ? 1 : 0;
-    for (let i = start; i < Math.min(total, start + count); i++) {
-      const buf = await pages.nth(i).screenshot({ type: "jpeg", quality: 82 });
+    for (const i of indices) {
+      const url = new URL(`${appUrl}/print/books/${book.id}`);
+      url.searchParams.set("mode", "digital");
+      url.searchParams.set("from", String(i));
+      url.searchParams.set("to", String(i + 1));
+      if (process.env.INTERNAL_TOKEN) url.searchParams.set("token", process.env.INTERNAL_TOKEN);
+      await page.goto(url.toString(), { waitUntil: "networkidle", timeout: 90_000 });
+      await page.waitForFunction(() => (window as unknown as { __INVENTOR_READY__?: boolean }).__INVENTOR_READY__ === true, null, { timeout: 60_000 });
+      const buf = await page.locator("[data-page-index]").first().screenshot({ type: "jpeg", quality: 82 });
       out.push({ data: Buffer.from(buf), mime: "image/jpeg", name: `apercu-page-${i + 1}.jpg` });
     }
     return out;

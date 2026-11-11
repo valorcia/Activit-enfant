@@ -86,7 +86,8 @@ export function applyFramingToLayout(layout: PageLayout, ills: Map<string, IllFo
     const ill = ills.get(b.illustrationId);
     if (!ill) return b;
     const fit = effectiveFit({ fit: ill.fit, imgW: ill.asset?.width, imgH: ill.asset?.height, frameW: b.w, frameH: b.h });
-    const next = { ...b, fit, focalX: ill.focalX, focalY: ill.focalY, zoom: ill.zoom, bg: ill.asset?.dominantColor ?? b.bg };
+    // Fond blanc imposé par le gabarit (dessins à colorier) : on le garde
+    const next = { ...b, fit, focalX: ill.focalX, focalY: ill.focalY, zoom: ill.zoom, bg: b.style?.background === "#FFFFFF" ? "#FFFFFF" : ill.asset?.dominantColor ?? b.bg };
     if (next.fit !== b.fit || next.focalX !== b.focalX || next.focalY !== b.focalY || next.zoom !== b.zoom || next.bg !== b.bg) changed = true;
     return next;
   });

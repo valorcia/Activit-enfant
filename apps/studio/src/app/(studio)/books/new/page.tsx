@@ -9,16 +9,23 @@ import { DemoModeBanner } from "@/components/demo-mode-banner";
 
 export const dynamic = "force-dynamic";
 
+/** Réglages d'image du cahier de coloriage transmis au plan (aucune clé). */
+function coloringAiOf(s: Awaited<ReturnType<typeof getAiSettings>>) {
+  return { ...s.coloring, manualImagesNow: s.mode === "manual" && s.manualFor !== "text", manualTextNow: s.mode === "manual" && s.manualFor !== "images" };
+}
+
+
 export default async function NewBookPage() {
   const studio = await getStudioSettings();
+  const ai = await getAiSettings();
   const client = await shopClient();
   const categories = client ? await client.categories().then((c) => c.map((x) => ({ slug: x.slug, name: x.name }))).catch(() => undefined) : undefined;
   const [sites, defaultSite] = await Promise.all([activeSites(), defaultSiteSlug()]);
   return (
     <div className="p-8 max-w-5xl">
       <PageHeader title="Nouvel e-book" description="Univers de la boutique, type d'e-book, personnalisation (thème, personnage, âge, prix…), style, puis production automatique." />
-      <DemoModeBanner {...usesDemoProviders(await getAiSettings())} keys={providerAvailability()} />
-      <KitWizard categories={categories} prices={studio.priceByKitType} sites={sites} defaultSiteSlug={defaultSite} />
+      <DemoModeBanner {...usesDemoProviders(ai)} keys={providerAvailability()} />
+      <KitWizard coloringAi={coloringAiOf(ai)} categories={categories} prices={studio.priceByKitType} sites={sites} defaultSiteSlug={defaultSite} />
     </div>
   );
 }

@@ -114,6 +114,15 @@ export class ShopClient {
     return (await this.request<{ id: string; url: string; role: string }>(`/products/${id}/images`, { method: "POST", body: fd })).data;
   }
   async uploadFile(id: string, file: { data: Buffer; mime: string; name: string }, opts: { kind: string; description?: string; replace?: boolean }) {
+    // Gros PDF (> 4 Mo, limite des requêtes Vercel) : dépôt direct dans le stockage privé par URL signée
+    if (file.data.length > 4 * 1024 * 1024) {
+      const presigned = await this.request<{ key: string; uploadUrl: string } | null>(`/products/${id}/files/presign`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: file.name, mime: file.mime }) }).then((r) => r.data).catch(() => null);
+      if (presigned?.uploadUrl) {
+        const put = await fetch(presigned.uploadUrl, { method: "PUT", body: new Uint8Array(file.data), headers: { "Content-Type": file.mime } });
+        if (!put.ok) throw new Error(`Dépôt du PDF dans le stockage refusé (${put.status})`);
+        return (await this.request<{ id: string; name: string; kind: string; sizeBytes: number }>(`/products/${id}/files/register`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: presigned.key, name: file.name, mime: file.mime, kind: opts.kind, description: opts.description, replace: Boolean(opts.replace) }) })).data;
+      }
+    }
     const fd = new FormData();
     fd.set("file", new Blob([new Uint8Array(file.data)], { type: file.mime }), file.name);
     fd.set("kind", opts.kind);

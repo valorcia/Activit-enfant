@@ -1,4 +1,5 @@
 "use server";
+import { COLORING_CHARTER_KEY } from "@/lib/kits/coloring";
 import { revalidatePath } from "next/cache";
 import { getStudioSettings, saveAiSettings, saveStudioSettings } from "@/lib/settings";
 import { UNIVERSE_PRESETS } from "@/lib/universes/presets";
@@ -20,7 +21,7 @@ export async function saveStudioSettingsAction(input: unknown) {
 /** Univers : univers par défaut et chartes d'illustration par préréglage. */
 export async function saveUniverseSettingsAction(input: { defaultSiteSlug: string | null; illustrationCharters: Record<string, string> }) {
   const current = await getStudioSettings();
-  const charters = Object.fromEntries(Object.entries(input.illustrationCharters ?? {}).filter(([k, v]) => (UNIVERSE_PRESETS as readonly string[]).includes(k) && typeof v === "string" && v.trim()));
+  const charters = Object.fromEntries(Object.entries(input.illustrationCharters ?? {}).filter(([k, v]) => ([...UNIVERSE_PRESETS, COLORING_CHARTER_KEY] as readonly string[]).includes(k) && typeof v === "string" && v.trim()));
   await saveStudioSettings({ ...current, defaultSiteSlug: input.defaultSiteSlug || null, illustrationCharters: charters, illustrationCharter: charters["kit-enfants"] ?? current.illustrationCharter });
   revalidatePath("/", "layout");
 }

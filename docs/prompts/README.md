@@ -18,3 +18,8 @@ Chaque e-book se produit en trois temps :
 | Charte d'illustration commune | `style-illustrations.md` |
 | Prompts d'images ChatGPT (3 e-books) | `images-openai.md` |
 | Dinosaures : toutes les images en une demande | `dinosaures-images-tout-en-un.md` |
+| Cahier de coloriage (modèle : 120 dessins de dinosaures, 4–6 ans) — rédaction par lots, images par l'API ou « lot » ChatGPT | `cahier-coloriage-modele.md` |
+
+**Grands volumes** : il n'y a plus de plafond éditorial sur le nombre d'éléments ou d'images (limite technique : 500 par
+livre). Au-delà de 20 éléments, le studio rédige un sommaire puis des lots de 15, collables dans n'importe quel ordre en
+mode copier-coller.

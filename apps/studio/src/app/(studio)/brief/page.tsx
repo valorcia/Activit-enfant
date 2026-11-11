@@ -8,6 +8,12 @@ import { activeSites, loadSites } from "@/lib/universes";
 
 export const dynamic = "force-dynamic";
 
+/** Réglages d'image du cahier de coloriage transmis au plan (aucune clé). */
+function coloringAiOf(s: Awaited<ReturnType<typeof getAiSettings>>) {
+  return { ...s.coloring, manualImagesNow: s.mode === "manual" && s.manualFor !== "text", manualTextNow: s.mode === "manual" && s.manualFor !== "images" };
+}
+
+
 export default async function BriefPage() {
   const settings = await getAiSettings();
   const client = await shopClient();
@@ -17,7 +23,7 @@ export default async function BriefPage() {
     <div className="p-8 max-w-5xl">
       <PageHeader title="Créer depuis un brief" description="Collez votre demande : le studio en déduit l'univers de la boutique, le type d'e-book, le ton, le prix… puis produit tout le reste automatiquement." />
       <DemoModeBanner {...usesDemoProviders(settings)} keys={providerAvailability()} />
-      <BriefFlow mode={manualText(settings) ? "manual" : "api"} categories={categories} sites={sites} sitesNote={source === "fallback" ? sitesError ?? "Univers par défaut (boutique mono-univers)." : null} />
+      <BriefFlow coloringAi={coloringAiOf(settings)} mode={manualText(settings) ? "manual" : "api"} categories={categories} sites={sites} sitesNote={source === "fallback" ? sitesError ?? "Univers par défaut (boutique mono-univers)." : null} />
     </div>
   );
 }

@@ -15,6 +15,7 @@ import { KitPlanSchema, type KitPlan } from "@/lib/kits/schemas";
 import { cn } from "@/lib/utils";
 import { KitIcon } from "./kit-icon";
 import { KitPlanForm } from "./plan-form";
+import type { ColoringAiView } from "./coloring-options";
 
 const STEPS = ["Univers et type", "Personnalisation", "Style et format", "Récapitulatif"];
 
@@ -27,7 +28,7 @@ function planFor(key: string, prices: Record<string, number>, site?: Site): KitP
 }
 
 /** Assistant de création : type de kit, personnalisation, style et format, puis production. */
-export function KitWizard({ categories, prices = {}, sites = [], defaultSiteSlug }: { categories?: Array<{ slug: string; name: string }>; prices?: Record<string, number>; sites?: Site[]; defaultSiteSlug?: string }) {
+export function KitWizard({ categories, prices = {}, sites = [], defaultSiteSlug, coloringAi }: { categories?: Array<{ slug: string; name: string }>; prices?: Record<string, number>; sites?: Site[]; defaultSiteSlug?: string; coloringAi?: ColoringAiView }) {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const initialSite = siteBySlug(sites, defaultSiteSlug) ?? sites[0];
@@ -66,7 +67,7 @@ export function KitWizard({ categories, prices = {}, sites = [], defaultSiteSlug
             pageFormat,
             siteSlug: plan.siteSlug ?? null,
             brief: plan.notes || undefined,
-            customization: { universe: plan.universe, heroName: plan.heroName, heroDescription: plan.heroDescription, companion: plan.companion, place: plan.place, tone: plan.tone, count: plan.count, priceCents: plan.priceCents, shopCategorySlug: plan.shopCategorySlug, extraInstructions: plan.notes },
+            customization: { universe: plan.universe, heroName: plan.heroName, heroDescription: plan.heroDescription, companion: plan.companion, place: plan.place, tone: plan.tone, count: plan.count, priceCents: plan.priceCents, shopCategorySlug: plan.shopCategorySlug, extraInstructions: plan.notes, coloring: plan.coloring, ai: plan.ai },
           },
           { startProduction: startNow && def.family === "kit" },
         );
@@ -111,7 +112,7 @@ export function KitWizard({ categories, prices = {}, sites = [], defaultSiteSlug
             </details>}
           </div>
         )}
-        {step === 1 && <KitPlanForm plan={plan} onChange={setPlan} categories={categories} sites={sites} />}
+        {step === 1 && <KitPlanForm plan={plan} onChange={setPlan} categories={categories} sites={sites} coloringAi={coloringAi} />}
         {step === 2 && (
           <div className="space-y-5">
             <div className="grid gap-3 md:grid-cols-3">
