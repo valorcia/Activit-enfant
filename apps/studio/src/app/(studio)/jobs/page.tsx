@@ -23,7 +23,7 @@ export default async function JobsPage() {
               <tr key={j.id} className={j.parentId ? "text-slate-500" : ""}>
                 <td className="px-4 py-2">{j.parentId && <span className="text-slate-300 mr-1">↳</span>}{labelFor(j.type)}</td>
                 <td className="px-4 py-2">{j.activity ? <Link className="hover:underline" href={`/activities/${j.activity.id}`}>{j.activity.title}</Link> : j.book ? <Link className="hover:underline" href={`/books/${j.book.id}`}>{j.book.title}</Link> : "—"}</td>
-                <td className="px-4 py-2 max-w-xs truncate">{j.error ? <span className="text-red-700">{j.error.slice(0, 120)}</span> : j.step}</td>
+                <td className="px-4 py-2 max-w-md whitespace-normal break-words">{j.error ? <span className="text-red-700" title={j.error}>{j.error.slice(0, 160)}</span> : j.logs[0] ? <span title={j.logs[0].message}>{j.step}<span className="block text-xs text-red-700">⚠ {j.logs[0].message.slice(0, 200)}</span></span> : j.step}</td>
                 <td className="px-4 py-2"><StatusBadge kind="job" status={j.status} /> <span className="text-xs">{j.progress}%</span></td>
                 <td className="px-4 py-2">{formatUsd(Number(j.costUsd))}</td>
                 <td className="px-4 py-2 text-xs">{formatDate(j.createdAt)}</td>
