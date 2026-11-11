@@ -1,72 +1,66 @@
 import { NextResponse } from "next/server";
-import { nanoid } from "nanoid";
 import { getAdminUser } from "@/lib/auth/session";
 import { roleCan } from "@/lib/auth/permissions";
-import { getStorage, privateKey, publicKey, safeFileName } from "@/lib/storage";
+import { getStorage } from "@/lib/storage";
+import { checkUpload, chunkKey, cleanProductId, isUploadId, MAX_CHUNKS, storeUpload } from "@/lib/admin/upload";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
-const MAX_BYTES = 50 * 1024 * 1024;
-const ALLOWED: Record<string, string> = {
-  "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif", "image/svg+xml": "svg", "image/avif": "avif",
-  "application/pdf": "pdf", "application/zip": "zip", "application/x-zip-compressed": "zip", "video/mp4": "mp4",
-};
-
-/** Lit les dimensions d'un PNG/JPEG/WebP/GIF sans dépendance (entêtes). */
-function imageSize(buf: Buffer, mime: string): { width: number; height: number } | undefined {
-  try {
-    if (mime === "image/png" && buf.length > 24) return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
-    if (mime === "image/gif" && buf.length > 10) return { width: buf.readUInt16LE(6), height: buf.readUInt16LE(8) };
-    if (mime === "image/jpeg") {
-      let i = 2;
-      while (i < buf.length) {
-        if (buf[i] !== 0xff) { i++; continue; }
-        const marker = buf[i + 1];
-        if (marker === 0xd8 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) { i += 2; continue; }
-        const len = buf.readUInt16BE(i + 2);
-        if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
-          return { height: buf.readUInt16BE(i + 5), width: buf.readUInt16BE(i + 7) };
-        }
-        i += 2 + len;
-      }
-    }
-    if (mime === "image/webp" && buf.length > 30 && buf.toString("ascii", 12, 16) === "VP8 ") {
-      return { width: buf.readUInt16LE(26) & 0x3fff, height: buf.readUInt16LE(28) & 0x3fff };
-    }
-  } catch { /* ignoré */ }
-  return undefined;
-}
-
-export async function POST(req: Request) {
+async function authorize() {
   const user = await getAdminUser();
   if (!user) return NextResponse.json({ error: "Authentification requise" }, { status: 401 });
   if (!roleCan(user.role, "products:write") && !roleCan(user.role, "appearance:write") && !roleCan(user.role, "blog:write")) {
     return NextResponse.json({ error: "Permission insuffisante" }, { status: 403 });
   }
+  return null;
+}
+
+/**
+ * Deux modes :
+ *  - multipart/form-data « file » : petit fichier envoyé d'un coup ;
+ *  - JSON { uploadId, parts, name, mime, scope, productId } : assemble les morceaux
+ *    déjà déposés par /api/admin/upload/chunk (fichiers de plus de 4 Mo, au-delà
+ *    de la limite de taille des requêtes Vercel).
+ */
+export async function POST(req: Request) {
+  const denied = await authorize();
+  if (denied) return denied;
+
+  if ((req.headers.get("content-type") ?? "").includes("application/json")) {
+    const b = (await req.json().catch(() => null)) as { uploadId?: unknown; parts?: unknown; name?: unknown; mime?: unknown; scope?: unknown; productId?: unknown } | null;
+    if (!b || !isUploadId(b.uploadId) || typeof b.parts !== "number" || !Number.isInteger(b.parts) || b.parts < 1 || b.parts > MAX_CHUNKS) {
+      return NextResponse.json({ error: "Envoi incomplet" }, { status: 400 });
+    }
+    const name = String(b.name ?? "fichier").slice(0, 200);
+    const mime = String(b.mime || "application/octet-stream");
+    const scope = b.scope === "private" ? "private" : "public";
+    const storage = getStorage();
+    const keys = Array.from({ length: b.parts }, (_, i) => chunkKey(b.uploadId as string, i));
+    try {
+      const chunks: Buffer[] = [];
+      for (const k of keys) {
+        const part = await storage.get(k);
+        if (!part) return NextResponse.json({ error: "Un morceau du fichier est manquant : recommencez l'envoi" }, { status: 400 });
+        chunks.push(part.body);
+      }
+      const buf = Buffer.concat(chunks);
+      const check = checkUpload(name, mime, scope, buf.length);
+      if ("error" in check) return NextResponse.json({ error: check.error }, { status: check.status });
+      return NextResponse.json(await storeUpload(buf, { name, mime, ext: check.ext, scope, productId: cleanProductId(b.productId) }));
+    } finally {
+      await Promise.all(keys.map((k) => storage.delete(k).catch(() => undefined)));
+    }
+  }
+
   const form = await req.formData();
   const file = form.get("file");
   const scope = form.get("scope") === "private" ? "private" : "public";
-  const productId = String(form.get("productId") ?? "divers").replace(/[^a-zA-Z0-9_-]/g, "") || "divers";
   if (!(file instanceof File)) return NextResponse.json({ error: "Fichier manquant" }, { status: 400 });
-  if (file.size > MAX_BYTES) return NextResponse.json({ error: "Fichier trop volumineux (50 Mo max)" }, { status: 413 });
   const mime = file.type || "application/octet-stream";
-  const ext = ALLOWED[mime] ?? (file.name.split(".").pop()?.toLowerCase() === "pdf" ? "pdf" : null);
-  if (!ext) return NextResponse.json({ error: `Type de fichier non autorisé (${mime})` }, { status: 415 });
-  if (scope === "public" && !mime.startsWith("image/") && mime !== "video/mp4") {
-    return NextResponse.json({ error: "Seules les images et vidéos peuvent être publiques" }, { status: 415 });
-  }
-
+  const check = checkUpload(file.name, mime, scope, file.size);
+  if ("error" in check) return NextResponse.json({ error: check.error }, { status: check.status });
   const buf = Buffer.from(await file.arrayBuffer());
-  const base = safeFileName(file.name.replace(/\.[^.]+$/, "")).slice(0, 60);
-  const name = `${nanoid(10)}-${base}.${ext}`;
-  const key = scope === "public" ? publicKey(`products/${productId}`, name) : privateKey(`products/${productId}`, name);
-  const storage = getStorage();
-  await storage.put(key, buf, mime);
-
-  if (scope === "public") {
-    const dims = imageSize(buf, mime);
-    return NextResponse.json({ url: storage.publicUrl(key), key, ...dims });
-  }
-  return NextResponse.json({ key, size: buf.length, mime });
+  return NextResponse.json(await storeUpload(buf, { name: file.name, mime, ext: check.ext, scope, productId: cleanProductId(form.get("productId")) }));
 }
