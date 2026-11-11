@@ -35,6 +35,8 @@ export async function setJob(jobId: string, data: { status?: JobStatus; progress
 }
 
 export async function jobLog(jobId: string, message: string, level: "info" | "warn" | "error" = "info", data?: Prisma.InputJsonValue) {
+  // Erreurs et alertes aussi dans le journal du worker (docker logs), pas seulement en base
+  if (level !== "info") console[level === "error" ? "error" : "warn"](`[job ${jobId}] ${message}`);
   await prisma.jobLog.create({ data: { jobId, level, message, data } }).catch(() => undefined);
 }
 

@@ -174,25 +174,34 @@ export const handlers: Record<string, Handler> = {
     await setJob(jobId, { progress: 40, step: "Illustration de couverture" });
     const n = Math.max(1, Math.min(4, Number(variants ?? 2)));
     let waiting = 0;
+    let produced = 0;
+    let lastError = "";
     for (let v = 0; v < n; v++) {
       if (!(await gate(jobId))) return;
       // Mode copier-coller : variante déjà collée → on ne la redemande pas
       const pasted = await prisma.illustration.findFirst({ where: { bookId, kind: "COVER", isCurrent: true, status: { in: ["GENERATED", "ACCEPTED"] }, provider: "manual" }, skip: v });
-      if (pasted) continue;
+      if (pasted) { produced++; continue; }
       try {
         const ill = await generateIllustration({ bookId, kind: "COVER", jobId, coverVariant: v, sketch: typeof sketch === "boolean" ? sketch : undefined });
+        produced++;
         await setJob(jobId, { progress: 40 + Math.round(((v + 1) / n) * 55), costUsd: ill.costUsd });
       } catch (err) {
         if (isManualInputRequired(err)) {
           waiting++;
           continue;
         }
-        await jobLog(jobId, `Échec couverture variante ${v + 1} : ${err instanceof Error ? err.message : err}`, "error");
+        lastError = err instanceof Error ? err.message : String(err);
+        await jobLog(jobId, `Échec couverture variante ${v + 1} : ${lastError}`, "error");
       }
     }
     if (waiting > 0) {
       await markWaitingInput(jobId, waiting);
       throw new WaitingInputSignal(waiting);
+    }
+    // Aucune variante obtenue : l'échec doit remonter (avec sa cause) au lieu d'annoncer « Couverture générée »
+    if (produced === 0 && lastError) {
+      await setJob(jobId, { status: "FAILED", error: lastError, step: "Échec de la couverture" });
+      throw new Error(lastError);
     }
     await setJob(jobId, { status: "COMPLETED", progress: 100, step: "Couverture générée" });
   },
