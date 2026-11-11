@@ -202,15 +202,16 @@ export async function applyKitContent(bookId: string, content: KitContent, opts:
   const coverPrompt = content.illustrations.find((i) => i.page === "couverture")?.prompt;
   const boutique = (content.boutique ?? {}) as ShopListingImport;
   const title = opts.keepTitle && book.title && book.title !== "Nouveau livre" ? book.title : content.titre;
+  // Les textes écrits par l'IA sont raccourcis proprement aux limites de la couverture plutôt que de faire échouer l'étape
   const cover = CoverDataSchema.parse({
     ...((book.cover ?? {}) as object),
-    title,
-    subtitle: content.sous_titre || book.subtitle || "",
-    collection: book.collection ?? "La Malle à Jeux",
+    title: clip(title, 90),
+    subtitle: clip(content.sous_titre || book.subtitle || "", 140),
+    collection: clip(book.collection ?? "La Malle à Jeux", 60),
     ageLabel: isAdultAge(book.ageRange) ? "Guide pratique" : ageRangeLabel(book.ageRange),
-    tagline: boutique.tagline ?? content.sous_titre ?? "",
-    backText: boutique.shortDescription ?? "",
-    illustrationBrief: coverPrompt ?? `${title}${hero ? ` — ${hero}` : ""}`,
+    tagline: clip(boutique.tagline ?? content.sous_titre ?? "", 200),
+    backText: clip(boutique.shortDescription ?? "", 1200),
+    illustrationBrief: clip(coverPrompt ?? `${title}${hero ? ` — ${hero}` : ""}`, 2000),
   });
   const listing = mergeListing(book.shopListing, boutique, def, c, count);
   const customization: KitCustomization = {
@@ -231,6 +232,15 @@ export async function applyKitContent(bookId: string, content: KitContent, opts:
       targetCount: count,
     },
   });
+}
+
+/** Coupe un texte à `max` caractères, de préférence sur une fin de mot, avec « … ». */
+export function clip(text: string, max: number): string {
+  const t = (text ?? "").trim();
+  if (t.length <= max) return t;
+  const cut = t.slice(0, max - 1);
+  const space = cut.lastIndexOf(" ");
+  return `${(space > max * 0.6 ? cut.slice(0, space) : cut).replace(/[\s,;:.\-–—]+$/, "")}…`;
 }
 
 function mergeListing(existing: unknown, b: ShopListingImport, def: KitTypeDef, c: KitCustomization, count: number): ShopListing {

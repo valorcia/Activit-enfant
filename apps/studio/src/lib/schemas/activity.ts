@@ -156,7 +156,7 @@ export const CoverDataSchema = z.object({
   tagline: z.string().max(200).default(""),
   backText: z.string().max(1200).default(""),
   backBullets: z.array(z.string().max(120)).max(6).default([]),
-  illustrationBrief: z.string().max(600).default(""),
+  illustrationBrief: z.string().max(2000).default(""),
   variant: z.number().int().min(0).max(3).default(0),
   illustrationId: z.string().optional(),
 });
