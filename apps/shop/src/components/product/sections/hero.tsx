@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Stars } from "@/components/ui/misc";
 import { AddToCartButton } from "@/components/storefront/add-to-cart-button";
 import { BuyNowButton } from "@/components/storefront/buy-now-button";
+import { ComingSoon } from "@/components/product/coming-soon";
 import { TrustBadges } from "@/components/storefront/trust-badges";
 import { getSetting } from "@/lib/settings";
 import { PlaceholderArt } from "@/components/storefront/placeholder-art";
@@ -80,6 +81,9 @@ export async function ProductHero({ product }: { product: ProductPageData }) {
                 </span>
               )}
             </div>
+            {product.files.length === 0 ? (
+              <ComingSoon className="mt-4" />
+            ) : (
             <div id="hero-cta" className="mt-4 flex flex-col gap-2">
               <BuyNowButton kind="product" id={product.id} name={product.name} priceCents={price.priceCents} currency={product.currency} label={conversion.buyNowLabel} size="xl" className="w-full" />
               <AddToCartButton
@@ -90,6 +94,7 @@ export async function ProductHero({ product }: { product: ProductPageData }) {
                 item={{ kind: "product", id: product.id, slug: product.slug, name: product.name, imageUrl: img?.url ?? null, unitPriceCents: price.priceCents, compareAtCents: price.compareAtCents, currency: product.currency }}
               />
             </div>
+            )}
             <p className="mt-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs font-semibold text-ink-soft">
               <span className="inline-flex items-center gap-1"><Mail className="size-3.5" aria-hidden /> Livraison immédiate par email</span>
               <span aria-hidden>·</span>

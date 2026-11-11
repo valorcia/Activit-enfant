@@ -1,4 +1,5 @@
 "use server";
+import { notifyBuyersIfFirstFile } from "@/lib/orders/files-ready";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { MediaRole, FileKind, ProductStatus } from "@prisma/client";
@@ -164,6 +165,7 @@ export async function addFileAction(productId: string, raw: unknown): Promise<Ac
     const count = await prisma.productFile.count({ where: { productId } });
     const f = await prisma.productFile.create({ data: { productId, storageKey: input.key, name: input.name, description: input.description ?? undefined, kind: input.kind as FileKind, mime: input.mime, sizeBytes: input.size, position: count } });
     await audit({ userId: user.id, action: "product.file.add", entity: "product", entityId: productId, data: { kind: input.kind, name: input.name } });
+    await notifyBuyersIfFirstFile(productId, count);
     const product = await prisma.product.findUniqueOrThrow({ where: { id: productId }, select: { slug: true } });
     revalidateCatalog([product.slug]);
     revalidateAdmin(productId);

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { apiError, apiOk, authenticateApiKey } from "@/lib/api/auth";
 import { removeFilesByKind } from "@/lib/api/media";
+import { notifyBuyersIfFirstFile } from "@/lib/orders/files-ready";
 import { registerPrivateFile } from "@/lib/api/file-presign";
 import { fileKindSchema } from "@/lib/schemas/product";
 
@@ -21,12 +22,14 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (!parsed.success) return apiError(400, "Corps invalide : { key, name, mime, kind, replace }");
   try {
     const b = parsed.data;
+    const filesBefore = await prisma.productFile.count({ where: { productId: id } });
     if (b.replace) {
       // On ne supprime pas le fichier qu'on vient de déposer
       const old = await prisma.productFile.findMany({ where: { productId: id, kind: b.kind, storageKey: { not: b.key } }, select: { id: true } });
       if (old.length) await removeFilesByKind(id, b.kind);
     }
     const created = await registerPrivateFile(id, b.key, { name: b.name, mime: b.mime, kind: b.kind, description: b.description ?? null });
+    await notifyBuyersIfFirstFile(id, filesBefore);
     return apiOk({ id: created.id, name: created.name, kind: created.kind, sizeBytes: created.sizeBytes, mime: created.mime }, 201);
   } catch (e) {
     return apiError(400, e instanceof Error ? e.message : "Erreur");

@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { Check } from "lucide-react";
 import { BuyNowButton } from "@/components/storefront/buy-now-button";
+import { ComingSoon } from "@/components/product/coming-soon";
 import { AddToCartButton } from "@/components/storefront/add-to-cart-button";
 import { PlaceholderArt } from "@/components/storefront/placeholder-art";
 import { Price } from "@/components/storefront/price";
@@ -44,10 +45,12 @@ export async function OfferRecap({ product }: { product: ProductPageData }) {
               {price.isOnSale && <span className="rounded-full bg-coral px-3 py-1 text-xs font-bold text-white">-{price.discountPercent} %{product.saleEndsAt ? ` jusqu'au ${formatDate(product.saleEndsAt)}` : ""}</span>}
             </div>
             <p className="text-xs text-ink-muted">TVA incluse · livraison immédiate par email</p>
+            {product.files.length === 0 ? <ComingSoon className="mt-5" /> : (
             <div className="mt-5 flex flex-col gap-2 sm:flex-row">
               <BuyNowButton kind="product" id={product.id} name={product.name} priceCents={price.priceCents} currency={product.currency} label={conversion.buyNowLabel} size="lg" className="w-full sm:w-auto" />
               <AddToCartButton size="lg" variant="outline" label="Ajouter au panier" className="w-full sm:w-auto" item={{ kind: "product", id: product.id, slug: product.slug, name: product.name, imageUrl: img?.url ?? null, unitPriceCents: price.priceCents, compareAtCents: price.compareAtCents, currency: product.currency }} />
             </div>
+            )}
             <TrustBadges badges={conversion.trustBadges} compact className="mt-4" />
             <GuaranteeBlock siteId={product.siteId} compact className="mt-4" />
           </div>

@@ -87,7 +87,7 @@ export function OrderSummary({ order, invoiceHref, showDownloads = true }: { ord
                       </p>
                     )}
                     {ent.product.files.length === 0 ? (
-                      <p className="mt-2 text-sm text-ink-soft">Les fichiers de ce kit seront ajoutés très prochainement. Vous serez prévenu·e par email.</p>
+                      <p className="mt-2 text-sm text-ink-soft">Les fichiers de ce kit sont en cours de finalisation. Vous recevrez automatiquement un email avec votre lien de téléchargement dès qu'ils seront prêts : rien à repayer.</p>
                     ) : (
                       <ul className="mt-3 grid gap-2 sm:grid-cols-2">
                         {ent.product.files.map((f) => (

@@ -37,6 +37,7 @@ export function TemplateGallery({ product }: { product: ProductPageData }) {
 }
 
 export function TemplateStickyBar({ product }: { product: ProductPageData }) {
+  if (product.files.length === 0) return null;
   const price = effectivePrice(product);
   const img = heroImage(product);
   return (

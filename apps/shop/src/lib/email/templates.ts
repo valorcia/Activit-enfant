@@ -59,6 +59,20 @@ export function orderConfirmationEmail(brand: Brand, opts: {
   return { subject: `Votre commande ${opts.orderNumber} est prête à télécharger`, html: layout(brand, "Commande confirmée", body), text };
 }
 
+export function filesReadyEmail(brand: Brand, opts: { orderNumber: string; productName: string; accessUrl: string }) {
+  const body = `
+    <h1 style="font-size:24px;margin:0 0 12px;">Vos fichiers sont prêts 🎉</h1>
+    <p>Les fichiers de <strong>${escapeHtml(opts.productName)}</strong> (commande <strong>${escapeHtml(opts.orderNumber)}</strong>) sont maintenant disponibles.</p>
+    ${button(opts.accessUrl, "Télécharger mes fichiers")}
+    <p style="font-size:14px;color:#6b7280;">Vous pourrez aussi les retrouver à tout moment depuis la page « Retrouver mes achats » en indiquant votre adresse email.</p>
+    <p>Bonne aventure en famille !</p>`;
+  return {
+    subject: `Vos fichiers « ${opts.productName} » sont prêts`,
+    html: layout(brand, "Fichiers disponibles", body),
+    text: `Les fichiers de ${opts.productName} (commande ${opts.orderNumber}) sont disponibles : ${opts.accessUrl}`,
+  };
+}
+
 export function accessLinkEmail(brand: Brand, opts: { accessUrl: string; expiresHours: number }) {
   const body = `
     <h1 style="font-size:24px;margin:0 0 12px;">Retrouvez vos achats</h1>

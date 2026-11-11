@@ -36,8 +36,8 @@ export async function priceCart(lines: CartLineInput[], now = new Date(), siteId
   const bundleIds = lines.filter((l) => l.kind === "bundle").map((l) => l.id);
 
   const [products, bundles] = await Promise.all([
-    productIds.length ? prisma.product.findMany({ where: { id: { in: productIds }, status: "PUBLISHED", ...(siteId ? { siteId } : {}) } }) : [],
-    bundleIds.length ? prisma.bundle.findMany({ where: { id: { in: bundleIds }, status: "PUBLISHED", ...(siteId ? { siteId } : {}) }, include: { items: true } }) : [],
+    productIds.length ? prisma.product.findMany({ where: { id: { in: productIds }, status: "PUBLISHED", ...(siteId ? { siteId } : {}) }, include: { _count: { select: { files: true } } } }) : [],
+    bundleIds.length ? prisma.bundle.findMany({ where: { id: { in: bundleIds }, status: "PUBLISHED", ...(siteId ? { siteId } : {}) }, include: { items: { include: { product: { select: { name: true, _count: { select: { files: true } } } } } } } }) : [],
   ]);
 
   const priced: PricedLine[] = [];
@@ -46,11 +46,15 @@ export async function priceCart(lines: CartLineInput[], now = new Date(), siteId
     if (line.kind === "product") {
       const p = products.find((x) => x.id === line.id);
       if (!p) throw new CheckoutError("Un produit du panier n'est plus disponible", "UNAVAILABLE");
+      // Jamais de vente d'un produit qui ne peut rien livrer
+      if (p._count.files === 0) throw new CheckoutError(`« ${p.name} » n'est pas encore disponible au téléchargement. Revenez très bientôt !`, "NOT_DOWNLOADABLE");
       const ep = effectivePrice(p, now);
       priced.push({ kind: "product", id: p.id, name: p.name, quantity: qty, unitPriceCents: ep.priceCents, compareAtCents: ep.compareAtCents, totalCents: ep.priceCents * qty, taxRateBp: p.taxRateBp });
     } else {
       const b = bundles.find((x) => x.id === line.id);
       if (!b || b.items.length === 0) throw new CheckoutError("Un pack du panier n'est plus disponible", "UNAVAILABLE");
+      const missing = b.items.find((it) => it.product._count.files === 0);
+      if (missing) throw new CheckoutError(`Le pack « ${b.name} » n'est pas encore disponible : « ${missing.product.name} » n'a pas encore de fichier.`, "NOT_DOWNLOADABLE");
       priced.push({ kind: "bundle", id: b.id, name: b.name, quantity: qty, unitPriceCents: b.priceCents, compareAtCents: null, totalCents: b.priceCents * qty, taxRateBp: b.taxRateBp });
     }
   }

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { apiError, apiOk, authenticateApiKey } from "@/lib/api/auth";
+import { notifyBuyersIfFirstFile } from "@/lib/orders/files-ready";
 import { attachPrivateFile, removeFilesByKind } from "@/lib/api/media";
 import { fileKindSchema } from "@/lib/schemas/product";
 
@@ -20,10 +21,12 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     const file = fd.get("file");
     if (!(file instanceof File)) return apiError(400, "Champ « file » manquant");
     const kind = fileKindSchema.catch("MAIN_PDF").parse(fd.get("kind") ?? "MAIN_PDF");
+    const filesBefore = await prisma.productFile.count({ where: { productId: id } });
     const replace = fd.get("replace");
     if (replace === "1" || replace === "true") await removeFilesByKind(id, kind);
     const name = ((fd.get("name") as string) || file.name || "fichier.pdf").slice(0, 160);
     const created = await attachPrivateFile(id, Buffer.from(await file.arrayBuffer()), file.type || "application/pdf", { name, kind, description: (fd.get("description") as string) || null });
+    await notifyBuyersIfFirstFile(id, filesBefore);
     return apiOk({ id: created.id, name: created.name, kind: created.kind, sizeBytes: created.sizeBytes, mime: created.mime }, 201);
   } catch (e) {
     return apiError(400, e instanceof Error ? e.message : "Erreur");
