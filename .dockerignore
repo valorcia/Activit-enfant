@@ -1,6 +1,8 @@
 **/node_modules
 **/.next
-**/storage
+apps/*/storage
 **/.env
 **/.env.*
+!**/.env.example
+!**/.env.production.example
 .git

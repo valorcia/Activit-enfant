@@ -70,6 +70,8 @@ Sans stockage S3, les PDF et images envoyés par le studio ou l'admin **disparai
 - [ ] **[Vercel]** Node.js 22.x, région London (lhr1). Deploy, puis se connecter avec `STUDIO_PASSWORD`.
 
 ### 2.4 Le worker sur votre ordinateur
+> **Vous avez un serveur (Hetzner ou autre) ?** Préférez-le : le worker y tourne en permanence, sans PC allumé. Procédure : `docs/WORKER-HETZNER.md`.
+
 - [ ] **[Vous]** Installer Node.js 22 (nodejs.org) et pnpm (`npm install -g pnpm`), puis Git.
 - [ ] Dans un terminal :
   ```bash

@@ -1,21 +1,25 @@
-# Worker Inventor Studio (générations IA, mise en page, export PDF via Chromium).
+# Worker Inventor Studio (générations IA, mise en page, export PDF via Chromium, vidéos Remotion).
 # Contexte de build : la RACINE du monorepo (pnpm workspace).
 #   docker build -f apps/studio/Dockerfile.worker -t studio-worker .
-FROM mcr.microsoft.com/playwright:v1.64.1-noble AS base
+# La version de l'image Playwright doit correspondre à celle de playwright-core dans pnpm-lock.yaml.
+FROM mcr.microsoft.com/playwright:v1.65.0-noble
 ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH CI=true
-RUN corepack enable && corepack prepare pnpm@10.28.0 --activate
+RUN npm install -g pnpm@10.28.0 && pnpm --version
 
 WORKDIR /app
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml .npmrc ./
 COPY apps/studio/package.json apps/studio/package.json
 COPY apps/shop/package.json apps/shop/package.json
-RUN pnpm install --frozen-lockfile --filter inventor-studio... --ignore-scripts
+COPY packages/video/package.json packages/video/package.json
+# Le schéma Prisma doit être présent avant l'installation (prisma generate en postinstall)
+COPY apps/studio/prisma apps/studio/prisma
+RUN pnpm install --frozen-lockfile --filter inventor-studio...
 
+COPY packages/video packages/video
 COPY apps/studio apps/studio
 WORKDIR /app/apps/studio
 RUN pnpm exec prisma generate
 
 ENV NODE_ENV=production
-# Chromium fourni par l'image Playwright
-ENV CHROMIUM_PATH=/ms-playwright/chromium-*/chrome-linux/chrome
-CMD ["sh", "-c", "export CHROMIUM_PATH=$(ls -d /ms-playwright/chromium-*/chrome-linux*/chrome 2>/dev/null | head -1 || echo /usr/bin/chromium); pnpm exec tsx src/worker/index.ts"]
+# Chromium fourni par l'image Playwright (utilisé pour les PDF et le rendu vidéo)
+CMD ["sh", "-c", "export CHROMIUM_PATH=${CHROMIUM_PATH:-$(ls -d /ms-playwright/chromium-*/chrome-linux*/chrome 2>/dev/null | head -1)}; exec pnpm exec tsx src/worker/index.ts"]

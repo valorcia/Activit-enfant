@@ -1,0 +1,19 @@
+# Worker du studio sur un serveur (Hetzner ou autre), lancé depuis la racine du dépôt :
+#   docker compose -f apps/studio/deploy/hetzner/docker-compose.yml up -d --build
+services:
+  studio-worker:
+    build:
+      context: ../../../..
+      dockerfile: apps/studio/Dockerfile.worker
+    image: studio-worker:latest
+    container_name: studio-worker
+    restart: unless-stopped
+    env_file:
+      - ../../.env.production
+    # Chromium et le rendu vidéo aiment la mémoire partagée
+    shm_size: "1gb"
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
