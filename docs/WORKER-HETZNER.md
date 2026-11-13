@@ -8,6 +8,8 @@ Le worker exécute les tâches longues du studio : génération des images, PDF,
 - Environ 10 Go d'espace disque libre.
 - Un accès SSH (`ssh root@IP_DU_SERVEUR` ou votre utilisateur).
 
+L'image du worker pèse environ 3,5 Go (Ubuntu 24.04, Node.js 22 et Chromium seul).
+
 Le worker n'a besoin d'**aucun port ouvert** : il se connecte lui-même à la base Neon, au stockage R2, aux API (OpenAI, Anthropic, Runway) et au studio en ligne. Ne changez rien au pare-feu.
 
 ## 1. Installer Docker (une seule fois)

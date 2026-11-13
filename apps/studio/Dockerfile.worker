@@ -1,10 +1,24 @@
 # Worker Inventor Studio (générations IA, mise en page, export PDF via Chromium, vidéos Remotion).
 # Contexte de build : la RACINE du monorepo (pnpm workspace).
 #   docker build -f apps/studio/Dockerfile.worker -t studio-worker .
-# La version de l'image Playwright doit correspondre à celle de playwright-core dans pnpm-lock.yaml.
-FROM mcr.microsoft.com/playwright:v1.65.0-noble
-ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH CI=true
-RUN npm install -g pnpm@10.28.0 && pnpm --version
+# Image allégée pour les petits serveurs (disque de 20 Go) : Ubuntu 24.04 + Node 22 + Chromium seul
+# (sans Firefox ni WebKit). La version de playwright-core doit suivre celle de pnpm-lock.yaml.
+FROM node:22-bookworm-slim AS node
+
+FROM ubuntu:24.04
+# Node.js 22 repris de l'image officielle (binaire seul, sans les outils Debian)
+COPY --from=node /usr/local/bin/node /usr/local/bin/node
+COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
+RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+  && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
+  && node --version
+ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH CI=true PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
+# Chromium et ses dépendances système (polices comprises), dans une couche stable :
+# elle n'est pas reconstruite quand le code change.
+RUN npx -y playwright-core@1.65.0 install --with-deps --no-shell chromium \
+  && rm -rf /var/lib/apt/lists/* /root/.npm /tmp/*
+RUN npm install -g pnpm@10.28.0 && pnpm --version && rm -rf /root/.npm
 
 WORKDIR /app
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml .npmrc ./
@@ -13,7 +27,10 @@ COPY apps/shop/package.json apps/shop/package.json
 COPY packages/video/package.json packages/video/package.json
 # Le schéma Prisma doit être présent avant l'installation (prisma generate en postinstall)
 COPY apps/studio/prisma apps/studio/prisma
-RUN pnpm install --frozen-lockfile --filter inventor-studio...
+# Uniquement les binaires glibc (pas les variantes musl inutiles ici), puis nettoyage du cache pnpm
+RUN printf '\nsupportedArchitectures:\n  os: [current]\n  cpu: [current]\n  libc: [glibc]\n' >> pnpm-workspace.yaml \
+  && pnpm install --frozen-lockfile --filter inventor-studio... \
+  && pnpm store prune && rm -rf /root/.cache /root/.local/share/pnpm/store
 
 COPY packages/video packages/video
 COPY apps/studio apps/studio
@@ -21,5 +38,5 @@ WORKDIR /app/apps/studio
 RUN pnpm exec prisma generate
 
 ENV NODE_ENV=production
-# Chromium fourni par l'image Playwright (utilisé pour les PDF et le rendu vidéo)
+# Chromium installé ci-dessus (utilisé pour les PDF et le rendu vidéo)
 CMD ["sh", "-c", "export CHROMIUM_PATH=${CHROMIUM_PATH:-$(ls -d /ms-playwright/chromium-*/chrome-linux*/chrome 2>/dev/null | head -1)}; exec pnpm exec tsx src/worker/index.ts"]
