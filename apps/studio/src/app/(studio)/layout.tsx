@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "../globals.css";
 import { Sidebar } from "@/components/sidebar";
+import { StorageBanner } from "@/components/storage-banner";
 import { getAiSettings, getStudioSettings } from "@/lib/settings";
 import { pendingCount } from "@/lib/manual/requests";
 import { prisma } from "@/lib/db";
@@ -24,7 +25,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body className="min-h-screen font-sans">
         <div className="flex min-h-screen">
           <Sidebar mode={settings?.mode ?? "api"} pendingManual={pendingManual} activeRuns={activeRuns} studioName={studio?.studioName} />
-          <main className="flex-1 min-w-0">{children}</main>
+          <main className="flex-1 min-w-0"><StorageBanner />{children}</main>
         </div>
       </body>
     </html>
