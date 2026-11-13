@@ -82,6 +82,8 @@ Dans le studio, lancez un e-book : la tâche doit passer de « en attente » à 
 
 Ce script récupère la dernière version du code, reconstruit l'image et redémarre le worker. Les tâches en cours reprennent après le redémarrage.
 
+Sur un petit disque (20 Go), s'il reste moins de 10 Go libres, le script arrête d'abord le worker et supprime l'ancienne image : la construction a besoin d'environ 6 Go de plus. Le worker est alors indisponible environ 6 minutes, puis les tâches reprennent. Un serveur CX22 (40 Go, 4 Go de mémoire) évite cet arrêt.
+
 ## Commandes utiles
 
 | Action | Commande |
