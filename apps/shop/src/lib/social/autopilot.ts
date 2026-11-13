@@ -146,7 +146,14 @@ export async function runAutopilot(productIdOrSlug: string, rawInput: unknown, c
   } else {
     const available = await (ctx.claudeAvailable ?? isClaudeConfigured)();
     if (!available) return { ok: false, status: 409, error: "copywriter_unavailable", details: { prompt, schema: COPY_SCHEMA_HELP } };
-    variants = await (ctx.generate ?? generateWithClaude)(prompt);
+    try {
+      variants = await (ctx.generate ?? generateWithClaude)(prompt);
+    } catch (e) {
+      // Clé Claude de la boutique refusée (invalide, révoquée) : le studio rédige les textes à la place
+      if (!isClaudeAuthError(e)) throw e;
+      console.warn("[autopilot] clé Claude de la boutique refusée : textes délégués au studio —", e instanceof Error ? e.message.slice(0, 160) : e);
+      return { ok: false, status: 409, error: "copywriter_unavailable", details: { prompt, schema: COPY_SCHEMA_HELP, reason: "Clé Claude de la boutique refusée (Admin → Paramètres → Claude)" } };
+    }
     generatedBy = "api";
   }
   const selected = selectVariants(variants, input.channels, input.variantsPerChannel);
@@ -264,4 +271,11 @@ export async function approveCampaignPosts(campaignId: string, opts: { startAt?:
   }
   if (slot > 0 && campaign.status === "DRAFT") await db.campaign.update({ where: { id: campaignId }, data: { status: "ACTIVE", startsAt: campaign.startsAt ?? firstAt } });
   return { scheduled: slot, skipped, reason: skipped ? "Certains posts n'ont pas de compte connecté : ils restent en brouillon (publication manuelle)" : null };
+}
+
+/** Erreur d'authentification Claude (401/403, « invalid x-api-key »), à distinguer d'une panne passagère. */
+export function isClaudeAuthError(e: unknown): boolean {
+  const err = e as { status?: number; message?: string } | null;
+  if (err?.status === 401 || err?.status === 403) return true;
+  return /authentication_error|invalid x-api-key|permission_error/i.test(err?.message ?? "");
 }

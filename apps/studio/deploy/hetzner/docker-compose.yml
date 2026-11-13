@@ -8,6 +8,8 @@ services:
     image: studio-worker:latest
     container_name: studio-worker
     restart: unless-stopped
+    # Petit processus init : récupère les processus Chromium terminés (sinon ils restent « zombies »)
+    init: true
     env_file:
       - ../../.env.production
     # Chromium et le rendu vidéo aiment la mémoire partagée

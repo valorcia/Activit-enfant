@@ -6,5 +6,7 @@ cd "$(dirname "$0")/../../../.."
 git pull --ff-only
 docker compose -f apps/studio/deploy/hetzner/docker-compose.yml up -d --build
 docker image prune -f >/dev/null
+# Cache de construction : chaque mise à jour en laisse plusieurs Go sur un petit disque
+docker builder prune -af --filter until=24h >/dev/null || true
 docker compose -f apps/studio/deploy/hetzner/docker-compose.yml ps
 echo "Journal : docker logs -f studio-worker"

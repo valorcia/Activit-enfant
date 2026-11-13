@@ -66,7 +66,7 @@ export async function callMarketingAutopilot(
   if (res.status === 422) return { kind: "invalid", error, details: json.details };
   // 404 sans réponse JSON de l'API (page Next.js) : la route n'existe pas encore dans cette version de la boutique
   if ((res.status === 404 || res.status === 405) && !isJson) return { kind: "missing_endpoint", error: "La boutique ne propose pas encore le pilote marketing : mettez-la à jour." };
-  throw new MarketingApiError(error, res.status);
+  throw new MarketingApiError(`Boutique (${res.status}) : ${error}`, res.status);
 }
 
 /** Construit la demande à partir des réglages du pilote automatique. */
