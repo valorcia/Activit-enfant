@@ -36,7 +36,12 @@ export async function generateStructured<T>(opts: {
       usage.costUsd += res.usage.costUsd;
       await log({ ...opts, provider: res.provider, model: res.model, usage: res.usage, durationMs: Date.now() - started, success: true });
       const json = extractJson(text);
-      const parsed = opts.schema.safeParse(json);
+      let parsed = opts.schema.safeParse(json);
+      // Textes ou listes un peu trop longs : on raccourcit au lieu de faire échouer toute l'étape
+      if (!parsed.success && json !== null) {
+        const fixed = clipOversized(json, parsed.error.issues);
+        if (fixed) parsed = opts.schema.safeParse(fixed);
+      }
       if (parsed.success) return { data: parsed.data, usage, provider: res.provider, model: res.model, raw: text };
       // Réponse coupée (la réflexion du modèle compte dans la limite) : même demande avec une limite doublée, deux fois au plus
       if (res.truncated && truncations < 2) {
@@ -115,4 +120,38 @@ async function log(o: {
 /** Contexte structuré inséré dans le prompt (lu aussi par le fournisseur de démonstration). */
 export function contextBlock(purpose: GenerationPurpose, ctx: Record<string, unknown>) {
   return `<<purpose:${purpose}>>\n<<context>>${JSON.stringify(ctx)}<</context>>`;
+}
+
+type Issue = { code: string; path: (string | number)[]; maximum?: number | bigint; type?: string; origin?: string };
+
+/**
+ * Si les seules erreurs sont des chaînes ou des listes trop longues, renvoie une copie
+ * raccourcie (fin de mot, « … » ; listes tronquées) ; sinon null.
+ */
+export function clipOversized(value: unknown, issues: readonly Issue[]): unknown | null {
+  if (!issues.length) return null;
+  const kind = (i: Issue) => i.type ?? i.origin;
+  if (!issues.every((i) => i.code === "too_big" && (kind(i) === "string" || kind(i) === "array") && i.maximum !== undefined)) return null;
+  const copy = JSON.parse(JSON.stringify(value)) as unknown;
+  for (const i of issues) {
+    const max = Number(i.maximum);
+    if (!i.path.length) return null;
+    let parent = copy as Record<string | number, unknown>;
+    for (const k of i.path.slice(0, -1)) parent = (parent?.[k] ?? null) as Record<string | number, unknown>;
+    const key = i.path[i.path.length - 1];
+    const v = parent?.[key];
+    if (typeof v === "string") parent[key] = clipText(v, max);
+    else if (Array.isArray(v)) parent[key] = v.slice(0, max);
+    else return null;
+  }
+  return copy;
+}
+
+function clipText(text: string, max: number): string {
+  const t = text.trim();
+  if (t.length <= max) return t;
+  if (max < 2) return t.slice(0, max);
+  const cut = t.slice(0, max - 1);
+  const space = cut.lastIndexOf(" ");
+  return `${(space > max * 0.6 ? cut.slice(0, space) : cut).replace(/[\s,;:.\-–—]+$/, "")}…`;
 }
