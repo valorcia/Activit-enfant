@@ -13,6 +13,8 @@ export interface TextResult {
   usage: TextUsage;
   provider: string;
   model: string;
+  /** Réponse coupée faute de jetons (réflexion comprise) : à relancer avec une limite plus haute. */
+  truncated?: boolean;
 }
 
 export interface TextProvider {

@@ -22,6 +22,6 @@ export class OpenAITextProvider implements TextProvider {
     const text = res.choices[0]?.message?.content ?? "";
     const inputTokens = res.usage?.prompt_tokens ?? 0;
     const outputTokens = res.usage?.completion_tokens ?? 0;
-    return { text, provider: this.name, model: res.model ?? opts.model, usage: { inputTokens, outputTokens, costUsd: textCost(opts.model, inputTokens, outputTokens) } };
+    return { text, provider: this.name, model: res.model ?? opts.model, usage: { inputTokens, outputTokens, costUsd: textCost(opts.model, inputTokens, outputTokens) }, truncated: res.choices[0]?.finish_reason === "length" };
   }
 }

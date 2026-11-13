@@ -51,6 +51,7 @@ export class AnthropicTextProvider implements TextProvider {
       provider: this.name,
       model: message.model ?? opts.model,
       usage: { inputTokens, outputTokens, costUsd: textCost(opts.model, inputTokens, outputTokens) },
+      truncated: message.stop_reason === "max_tokens",
     };
   }
 }

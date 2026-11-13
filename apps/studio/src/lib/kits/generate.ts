@@ -57,7 +57,7 @@ export async function generateKitPlan(brief: string, opts: { jobId?: string; sit
     briefToPlanPrompt(brief, forced ? [forced] : sites) +
     "\n\n" +
     contextBlock("kit_plan", { title: brief.split("\n")[0].slice(0, 60), brief: brief.slice(0, 2000), sites: (forced ? [forced] : sites).map((s) => `${s.slug}:${s.preset}`).join(",") });
-  const res = await generateStructured({ provider, model: effectiveTextModel(settings), schema: KitPlanSchema, system: systemPromptFor(null), prompt, purpose: "kit_plan", jobId: opts.jobId, maxTokens: 4000 });
+  const res = await generateStructured({ provider, model: effectiveTextModel(settings), schema: KitPlanSchema, system: systemPromptFor(null), prompt, purpose: "kit_plan", jobId: opts.jobId, maxTokens: 16000 });
   const plan = res.data;
   if (forced) plan.siteSlug = forced.slug;
   if (!plan.siteSlug || !sites.some((s) => s.slug === plan.siteSlug)) plan.siteSlug = await defaultSiteSlug();

@@ -22,20 +22,32 @@ export async function generateStructured<T>(opts: {
 }): Promise<StructuredResult<T>> {
   let lastError = "";
   let prompt = opts.prompt;
+  let maxTokens = opts.maxTokens;
+  let truncations = 0;
   const usage = { inputTokens: 0, outputTokens: 0, costUsd: 0 };
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < 2 + truncations; attempt++) {
     const started = Date.now();
     let text = "";
     try {
-      const res = await opts.provider.complete({ system: opts.system, prompt, model: opts.model, json: true, maxTokens: opts.maxTokens });
+      const res = await opts.provider.complete({ system: opts.system, prompt, model: opts.model, json: true, maxTokens });
       text = res.text;
       usage.inputTokens += res.usage.inputTokens;
       usage.outputTokens += res.usage.outputTokens;
       usage.costUsd += res.usage.costUsd;
       await log({ ...opts, provider: res.provider, model: res.model, usage: res.usage, durationMs: Date.now() - started, success: true });
-      const parsed = opts.schema.safeParse(extractJson(text));
+      const json = extractJson(text);
+      const parsed = opts.schema.safeParse(json);
       if (parsed.success) return { data: parsed.data, usage, provider: res.provider, model: res.model, raw: text };
-      lastError = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
+      // Réponse coupée (la réflexion du modèle compte dans la limite) : même demande avec une limite doublée, deux fois au plus
+      if (res.truncated && truncations < 2) {
+        truncations++;
+        maxTokens = Math.min(64000, (maxTokens ?? 16000) * 2);
+        lastError = `réponse coupée faute de place (limite portée à ${maxTokens} jetons)`;
+        continue;
+      }
+      lastError = json === null
+        ? `la réponse n'est pas un objet JSON lisible${res.truncated ? " (coupée faute de place)" : text.trim() ? "" : " (réponse vide)"}`
+        : parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
       prompt = `${opts.prompt}\n\nTa réponse précédente ne respectait pas le schéma. Erreurs : ${lastError}\nRéponse précédente :\n${text.slice(0, 6000)}\n\nCorrige et renvoie l'objet JSON complet et valide.`;
     } catch (err) {
       if (isManualInputRequired(err)) throw err; // mode copier-coller : pas un échec, une réponse à coller
