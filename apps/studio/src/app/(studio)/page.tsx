@@ -43,9 +43,9 @@ export default async function Dashboard() {
   const runs = await prisma.autopilotRun.findMany({ orderBy: { createdAt: "desc" }, take: 4, include: { book: { select: { title: true } } } });
 
   return (
-    <div className="p-8 max-w-7xl">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl">
       <PageHeader title="Tableau de bord" description="Vue d'ensemble de la production éditoriale." />
-      <div className="mb-8 flex flex-wrap items-center gap-4 rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-white p-6">
+      <div className="mb-8 flex flex-col gap-4 rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-white p-4 sm:flex-row sm:items-center sm:p-6">
         <div className="min-w-0 flex-1">
           <h2 className="text-xl font-black text-emerald-950">Lancer un nouvel e-book</h2>
           <p className="mt-1 text-sm text-emerald-900">Collez votre brief (ou le JSON obtenu avec les prompts) : le pilote automatique rédige, illustre, met en page, exporte, publie dans la boutique, crée les vidéos et la campagne publicitaire.</p>
@@ -57,7 +57,7 @@ export default async function Dashboard() {
             </ul>
           )}
         </div>
-        <Button asChild size="lg" className="bg-emerald-600 hover:bg-emerald-700"><Link href="/brief"><Rocket className="h-4 w-4" /> Lancer un nouvel e-book</Link></Button>
+        <Button asChild size="lg" className="w-full bg-emerald-600 hover:bg-emerald-700 sm:w-auto"><Link href="/brief"><Rocket className="h-4 w-4" /> Lancer un nouvel e-book</Link></Button>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
         {[
@@ -68,7 +68,7 @@ export default async function Dashboard() {
           { href: "/library", label: "Bibliothèque", icon: Library },
           { href: "/settings", label: "Paramètres", icon: Settings },
         ].map((b) => (
-          <Button key={b.href} asChild variant={b.primary ? "default" : "secondary"} size="lg" className="justify-start">
+          <Button key={b.href} asChild variant={b.primary ? "default" : "secondary"} size="lg" className="h-auto min-h-11 justify-start whitespace-normal py-2 text-left">
             <Link href={b.href}>
               <b.icon className="h-4 w-4" /> {b.label}
             </Link>

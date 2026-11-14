@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 
 export const Tabs = TabsPrimitive.Root;
 export const TabsList = React.forwardRef<React.ElementRef<typeof TabsPrimitive.List>, React.ComponentPropsWithoutRef<typeof TabsPrimitive.List>>(({ className, ...props }, ref) => (
-  <TabsPrimitive.List ref={ref} className={cn("inline-flex h-10 items-center gap-1 rounded-lg bg-slate-100 p-1 text-slate-600", className)} {...props} />
+  <TabsPrimitive.List ref={ref} className={cn("inline-flex h-10 max-w-full items-center justify-start gap-1 overflow-x-auto rounded-lg bg-slate-100 p-1 text-slate-600 [scrollbar-width:none]", className)} {...props} />
 ));
 TabsList.displayName = "TabsList";
 export const TabsTrigger = React.forwardRef<React.ElementRef<typeof TabsPrimitive.Trigger>, React.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger>>(({ className, ...props }, ref) => (

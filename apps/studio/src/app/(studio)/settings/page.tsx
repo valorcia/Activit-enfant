@@ -22,7 +22,7 @@ export default async function SettingsPage() {
   const sites = await loadSites();
   const spent = await prisma.generationLog.groupBy({ by: ["provider", "kind"], _sum: { costUsd: true }, _count: { _all: true } });
   return (
-    <div className="p-8 max-w-4xl">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-4xl">
       <PageHeader title="Paramètres" description="Fournisseurs, modèles, qualité et budgets. Les clés API sont lues uniquement depuis les variables d'environnement du serveur et ne sont jamais envoyées au navigateur." />
       <div className="mb-8"><AutopilotSettingsForm initial={autopilot} allowMock={process.env.NODE_ENV !== "production"} /></div>
       <div className="mb-8"><StudioSettingsForm initial={studio} /></div>

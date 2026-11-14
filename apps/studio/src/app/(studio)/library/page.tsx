@@ -24,7 +24,7 @@ export default async function LibraryPage({ searchParams }: { searchParams: Prom
     prisma.book.findMany({ where: { status: { notIn: ["ARCHIVED"] } }, select: { id: true, title: true }, orderBy: { updatedAt: "desc" } }),
   ]);
   return (
-    <div className="p-8 max-w-7xl">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl">
       <PageHeader title="Bibliothèque" description="Toutes les activités, réutilisables dans plusieurs livres sans régénération." actions={<Button asChild><Link href="/activities/new">Nouvelle activité</Link></Button>} />
       <form className="grid md:grid-cols-6 gap-2 mb-4">
         <Input name="q" placeholder="Rechercher…" defaultValue={sp.q} className="md:col-span-2" />
@@ -48,8 +48,8 @@ export default async function LibraryPage({ searchParams }: { searchParams: Prom
           <Button type="submit" variant="secondary">Filtrer</Button>
         </div>
       </form>
-      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="rounded-xl border border-slate-200 bg-white overflow-x-auto">
+        <table className="w-full min-w-[640px] text-sm">
           <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
             <tr><th className="px-4 py-2">Activité</th><th className="px-4 py-2">Catégorie</th><th className="px-4 py-2">Âge</th><th className="px-4 py-2">Difficulté</th><th className="px-4 py-2">Illustrations</th><th className="px-4 py-2">Livres</th><th className="px-4 py-2">Statut</th><th className="px-4 py-2"></th></tr>
           </thead>

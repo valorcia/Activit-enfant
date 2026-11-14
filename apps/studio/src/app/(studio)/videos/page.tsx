@@ -11,7 +11,7 @@ export default async function VideosPage() {
   const ready = videos.filter((v) => v.status === "READY").length;
   const spent = videos.reduce((s, v) => s + v.costUsd, 0);
   return (
-    <div className="p-8 max-w-6xl">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-6xl">
       <PageHeader
         title="Vidéos publicitaires"
         description="Montages Remotion aux couleurs de La Malle à Jeux, avec clip d'accroche animé (Runway ou copier-coller). Pour créer une vidéo, ouvrez un livre puis l'onglet « Vidéos pub »."

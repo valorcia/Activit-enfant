@@ -13,7 +13,7 @@ export function DataTable<T>({ columns, rows, rowKey, empty = "Aucun élément."
     return <p className="rounded-2xl border border-dashed border-line bg-white px-5 py-10 text-center text-sm text-ink-soft">{empty}</p>;
   }
   return (
-    <div className={cn("overflow-hidden rounded-2xl border border-line bg-white", className)}>
+    <div className={cn("overflow-x-auto rounded-2xl border border-line bg-white", className)}>
       <table className="w-full text-sm">
         <thead className="hidden bg-[#F6F3EE] text-left text-xs font-bold uppercase tracking-wide text-ink-muted md:table-header-group">
           <tr>

@@ -12,10 +12,10 @@ export default async function ExportsPage() {
   const activities = await prisma.activity.findMany({ where: { id: { in: exports.map((e) => e.activityId).filter(Boolean) as string[] } }, select: { id: true, title: true } });
   const titleOf = (id: string | null) => activities.find((a) => a.id === id)?.title;
   return (
-    <div className="p-8 max-w-6xl">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-6xl">
       <PageHeader title="Exports" description="Historique des PDF produits. Chaque export de livre est lié à une version figée (snapshot) et reste reproductible." />
-      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="rounded-xl border border-slate-200 bg-white overflow-x-auto">
+        <table className="w-full min-w-[640px] text-sm">
           <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
             <tr><th className="px-4 py-2">Type</th><th className="px-4 py-2">Cible</th><th className="px-4 py-2">Version</th><th className="px-4 py-2">Pages</th><th className="px-4 py-2">Contrôles</th><th className="px-4 py-2">Statut</th><th className="px-4 py-2">Date</th><th className="px-4 py-2"></th></tr>
           </thead>

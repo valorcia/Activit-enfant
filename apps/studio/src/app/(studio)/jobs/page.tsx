@@ -11,10 +11,10 @@ export const dynamic = "force-dynamic";
 export default async function JobsPage() {
   const jobs = await prisma.job.findMany({ orderBy: { createdAt: "desc" }, take: 200, include: { book: { select: { title: true, id: true } }, activity: { select: { title: true, id: true } }, logs: { where: { level: "error" }, take: 1, orderBy: { createdAt: "desc" } } } });
   return (
-    <div className="p-8 max-w-6xl">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-6xl">
       <PageHeader title="Tâches" description="Historique de toutes les tâches asynchrones (le worker doit tourner : pnpm worker)." />
-      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="rounded-xl border border-slate-200 bg-white overflow-x-auto">
+        <table className="w-full min-w-[640px] text-sm">
           <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
             <tr><th className="px-4 py-2">Tâche</th><th className="px-4 py-2">Cible</th><th className="px-4 py-2">Étape</th><th className="px-4 py-2">Statut</th><th className="px-4 py-2">Coût</th><th className="px-4 py-2">Créée</th><th className="px-4 py-2"></th></tr>
           </thead>

@@ -41,7 +41,7 @@ export default async function ApiAdminPage() {
       <AdminCard title="Documentation de l'API" description="Toutes les requêtes portent l'en-tête Authorization: Bearer <clé>. Limite : 60 requêtes par minute et par clé.">
         <div className="space-y-4 text-sm">
           <p>Base : <code className="rounded bg-ink/5 px-1.5 py-0.5">{base}</code></p>
-          <table className="w-full text-left text-xs">
+          <div className="overflow-x-auto"><table className="w-full text-left text-xs">
             <thead><tr className="text-ink-muted"><th className="py-1 pr-3">Méthode</th><th className="py-1 pr-3">Route</th><th className="py-1 pr-3">Scope</th><th className="py-1">Description</th></tr></thead>
             <tbody className="divide-y divide-line">
               {[
@@ -56,7 +56,7 @@ export default async function ApiAdminPage() {
                 ["GET", "/collections", "products:read", "Collections (id, slug, nom)."],
               ].map(([m, r, s, d]) => <tr key={r + m}><td className="py-1.5 pr-3 font-mono font-bold">{m}</td><td className="py-1.5 pr-3 font-mono">{r}</td><td className="py-1.5 pr-3 font-mono text-ink-muted">{s}</td><td className="py-1.5">{d}</td></tr>)}
             </tbody>
-          </table>
+          </table></div>
           <details className="rounded-xl bg-[#FBFAF7] p-3">
             <summary className="cursor-pointer font-bold">Exemple : créer un produit</summary>
             <pre className="mt-2 overflow-x-auto text-xs">{`curl -X POST ${base}/products \\

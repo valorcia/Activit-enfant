@@ -33,7 +33,7 @@ export default async function ActivityPage({ params }: { params: Promise<{ id: s
   const activeJob = a.jobs.find((j) => ["QUEUED", "RUNNING", "PAUSED"].includes(j.status));
 
   return (
-    <div className="p-8 max-w-7xl">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl">
       <PageHeader
         title={<span className="flex items-center gap-3">{a.title} <StatusBadge kind="activity" status={a.status} /></span>}
         description={<span>{a.category} · {ageRangeLabel(a.ageRange)} · {a.books.map((b) => <Link key={b.book.id} href={`/books/${b.book.id}`} className="hover:underline mr-2">{b.book.title}</Link>)}{a.currentVersion ? `· version ${a.currentVersion.number}` : "· fiche non rédigée"}</span>}

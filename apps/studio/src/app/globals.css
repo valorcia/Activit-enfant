@@ -21,6 +21,15 @@
 
 body {
   @apply bg-slate-50 text-slate-900 antialiased;
+  overflow-wrap: break-word;
+}
+
+/* Petits écrans : une colonne de grille peut rétrécir sous la largeur de son contenu
+   (sinon un long texte élargit toute la page), et un mot très long passe à la ligne. */
+@layer base {
+  .grid > * { min-width: 0; }
+  main :where(p, li, td, dd, h1, h2, h3, code) { overflow-wrap: anywhere; }
+  main table { max-width: 100%; }
 }
 
 /* Pages du livre (aperçu et impression) */

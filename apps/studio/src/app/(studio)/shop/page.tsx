@@ -28,7 +28,7 @@ export default async function ShopCatalogPage({ searchParams }: { searchParams: 
   const entries = current ? all.filter((e) => siteOf(e) === current) : all;
   const published = entries.filter((e) => e.status === "PUBLISHED").length;
   return (
-    <div className="p-8 max-w-7xl">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl">
       <PageHeader
         title="Boutique"
         description={configured ? `${entries.length} produit(s) dans la boutique · ${published} publié(s) · ${entries.filter((e) => e.linkedBook).length} lié(s) à un livre du studio` : "Catalogue de la boutique La Malle à Jeux"}

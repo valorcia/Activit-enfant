@@ -43,7 +43,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
         <div className="space-y-6">
           <AdminCard title="Articles">
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto"><table className="w-full text-sm">
               <tbody className="divide-y divide-line">
                 {order.items.map((it) => (
                   <tr key={it.id}>
@@ -64,7 +64,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
                 <tr><td colSpan={2} className="text-right font-bold">Total TTC</td><td className="text-right font-heading text-lg font-bold">{formatPrice(order.totalCents, order.currency)}</td></tr>
                 {order.refundedCents > 0 && <tr><td colSpan={2} className="text-right text-lavender-dark">Remboursé</td><td className="text-right text-lavender-dark">− {formatPrice(order.refundedCents, order.currency)}</td></tr>}
               </tfoot>
-            </table>
+            </table></div>
           </AdminCard>
 
           <AdminCard title="Droits de téléchargement" description={isPaid ? "Un droit par produit livré. Les fichiers restent accessibles via le lien envoyé au client." : "Aucun droit tant que le paiement n'est pas confirmé par Stripe."}>

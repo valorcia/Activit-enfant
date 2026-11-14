@@ -32,8 +32,8 @@ export function ExportsTab({ book, exports, snapshots }: { book: BookView; expor
         </div>
       </div>
       {jobs.map((j) => <JobProgress key={j} jobId={j} title="Export PDF" compact onDone={() => router.refresh()} />)}
-      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="rounded-xl border border-slate-200 bg-white overflow-x-auto">
+        <table className="w-full min-w-[640px] text-sm">
           <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500"><tr><th className="px-4 py-2">Type</th><th className="px-4 py-2">Version</th><th className="px-4 py-2">Pages</th><th className="px-4 py-2">Contrôles</th><th className="px-4 py-2">Statut</th><th className="px-4 py-2">Date</th><th className="px-4 py-2"></th></tr></thead>
           <tbody className="divide-y divide-slate-100">
             {exports.map((e) => {

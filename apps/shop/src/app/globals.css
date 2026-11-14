@@ -86,6 +86,10 @@
   ::selection { background: color-mix(in oklab, var(--brand-honey) 60%, white); }
   :focus-visible { outline: 3px solid color-mix(in oklab, var(--brand-sky) 80%, var(--brand-ink)); outline-offset: 2px; border-radius: 4px; }
   img { max-width: 100%; height: auto; }
+  /* Petits écrans : une colonne de grille peut rétrécir sous la largeur de son contenu,
+     et un mot très long (URL, clé, identifiant) passe à la ligne au lieu d'élargir la page. */
+  .grid > * { min-width: 0; }
+  main :where(p, li, td, dd, h1, h2, h3, code) { overflow-wrap: anywhere; }
   button { cursor: pointer; }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }

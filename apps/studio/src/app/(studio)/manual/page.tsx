@@ -58,7 +58,7 @@ export default async function ManualPage() {
   }
 
   return (
-    <div className="p-8 max-w-5xl">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-5xl">
       <PageHeader
         title={<span className="flex items-center gap-3">À coller {pending.length > 0 && <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-sm font-bold text-amber-800">{pending.length}</span>}</span>}
         description={

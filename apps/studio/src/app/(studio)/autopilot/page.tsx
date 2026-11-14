@@ -18,7 +18,7 @@ export default async function AutopilotPage() {
   const { sites } = await loadSites();
   const siteName = (slug: string | null | undefined) => (slug ? sites.find((x) => x.slug === slug)?.name ?? slug : null);
   return (
-    <div className="p-8 max-w-6xl">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-6xl">
       <PageHeader
         title="Pilote automatique"
         description="Un brief → rédaction, illustrations, mise en page, PDF, boutique, vidéos et publicités, sans intervention."
@@ -31,8 +31,8 @@ export default async function AutopilotPage() {
           <p className="mt-1 text-sm">Collez un brief (ou le JSON produit avec les prompts de docs/prompts) et cliquez sur « Tout lancer en automatique ».</p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+          <table className="w-full min-w-[640px] text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500"><tr><th className="p-3">E-book</th><th className="p-3">Univers</th><th className="p-3">Statut</th><th className="p-3">Étape</th><th className="p-3">Coût</th><th className="p-3">Lancé le</th></tr></thead>
             <tbody>
               {runs.map((r) => {

@@ -23,7 +23,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="fr">
       <body className="min-h-screen font-sans">
-        <div className="flex min-h-screen">
+        <div className="flex min-h-screen flex-col lg:flex-row">
           <Sidebar mode={settings?.mode ?? "api"} pendingManual={pendingManual} activeRuns={activeRuns} studioName={studio?.studioName} />
           <main className="flex-1 min-w-0"><StorageBanner />{children}</main>
         </div>

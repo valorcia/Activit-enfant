@@ -89,7 +89,7 @@ export default async function BookPage({ params, searchParams }: { params: Promi
   const eur = (c: number, cur = "EUR") => new Intl.NumberFormat("fr-FR", { style: "currency", currency: cur }).format(c / 100);
 
   return (
-    <div className="p-8 max-w-7xl">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl">
       <PageHeader
         title={<span className="flex items-center gap-3">{book.title} <StatusBadge kind="book" status={book.status} /></span>}
         description={`${site ? `${site.name} · ` : book.siteSlug ? `${book.siteSlug} · ` : ""}${BOOK_TYPES.find((t) => t.key === book.bookType)?.label ?? kitLabel(book.kitType)} · ${ageRangeLabel(book.ageRange)} · ${ART_STYLES.find((s) => s.key === book.artStyle)?.label} · ${PAGE_FORMATS[book.pageFormat as keyof typeof PAGE_FORMATS]?.label ?? book.pageFormat} · ${kit ? `${book.targetCount} ${kitType(book.kitType).countLabel}` : `${book.activities.length} activités`} · ${book.pages.length} pages · dépensé ${formatUsd(Number(spent._sum.costUsd ?? 0))}`}

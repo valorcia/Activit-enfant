@@ -15,7 +15,7 @@ export default async function BooksPage() {
   const books = await prisma.book.findMany({ orderBy: { updatedAt: "desc" }, include: { _count: { select: { activities: true, pages: true, exports: true } } } });
   const thumbs = await firstPagesFor(books.map((b) => b.id));
   return (
-    <div className="p-8 max-w-6xl">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-6xl">
       <PageHeader title="Livres" description="Tous les projets de livres, en cours et terminés." actions={<Button asChild><Link href="/books/new">Nouveau livre</Link></Button>} />
       <div className="rounded-xl border border-slate-200 bg-white overflow-x-auto">
         <table className="w-full text-sm">

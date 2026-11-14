@@ -5,7 +5,7 @@ import { ThemePreview } from "@/components/theme-preview";
 
 export default function TemplatesPage() {
   return (
-    <div className="p-8 max-w-6xl">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-6xl">
       <PageHeader title="Modèles graphiques" description="Thèmes de mise en page (couleurs, typographies) et bibliothèque de modèles de pages. Le thème se choisit par livre, dans l'onglet Mise en page." />
       <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
         {BUILTIN_TEMPLATES.map((t) => (

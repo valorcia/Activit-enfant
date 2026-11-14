@@ -54,7 +54,8 @@ export function ProductionTab({ book, activities, jobs, activeJobId, estimate, s
         {jobId && <JobProgress jobId={jobId} onDone={() => { setJobId(null); router.refresh(); }} />}
         <div className="rounded-xl border border-slate-200 bg-white p-5">
           <h3 className="font-bold mb-3">Progression par activité</h3>
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[560px] text-sm">
             <thead className="text-left text-xs uppercase text-slate-500"><tr><th className="py-1">Activité</th><th>Fiche</th><th>Illustrations</th><th>Contrôles</th><th>Statut</th></tr></thead>
             <tbody className="divide-y divide-slate-100">
               {activities.map((a) => {
@@ -74,6 +75,7 @@ export function ProductionTab({ book, activities, jobs, activeJobId, estimate, s
               })}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
       <div className="rounded-xl border border-slate-200 bg-white p-5">

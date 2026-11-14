@@ -28,7 +28,7 @@ export function CampaignSpend({ campaignId, canSync, rows }: { campaignId: strin
         {canSync && <Button size="sm" variant="outline" disabled={pending} onClick={() => start(async () => { const r = await syncSpendAction(campaignId); if (!r.ok) { toast.error(r.error); return; } toast.success(`${r.data.days} jour(s) synchronisé(s)`); router.refresh(); })}><RefreshCw className="size-4" /> Synchroniser (30 j)</Button>}
       </div>
       {rows.length === 0 ? <p className="text-sm text-ink-soft">Aucune dépense enregistrée. Sans compte publicitaire connecté, saisissez chaque jour le montant indiqué par le Gestionnaire de publicités.</p> : (
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto"><table className="w-full text-sm">
           <thead><tr className="text-left text-xs uppercase tracking-wide text-ink-muted border-b border-line"><th className="py-2">Date</th><th className="py-2 text-right">Dépense</th><th className="py-2 text-right">Impr.</th><th className="py-2 text-right">Clics</th><th className="py-2">Source</th><th /></tr></thead>
           <tbody>
             {rows.map((r) => (
@@ -39,7 +39,7 @@ export function CampaignSpend({ campaignId, canSync, rows }: { campaignId: strin
             ))}
             <tr><td className="py-2 font-bold">Total</td><td className="py-2 text-right font-bold">{formatPrice(total)}</td><td colSpan={4} /></tr>
           </tbody>
-        </table>
+        </table></div>
       )}
     </div>
   );

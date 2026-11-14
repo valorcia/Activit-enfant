@@ -44,7 +44,7 @@ export default async function AutopilotRunPage({ params }: { params: Promise<{ i
     pendingManual,
   };
   return (
-    <div className="p-8 max-w-5xl">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-5xl">
       <PageHeader
         title={run.book?.title ?? run.title ?? "Pilote automatique"}
         description={`Pilote automatique lancé le ${formatDate(run.createdAt)} : du brief à la campagne publicitaire.`}

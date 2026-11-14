@@ -74,9 +74,9 @@ export function LandingHeader({ brand, products }: { brand: BrandSettings; produ
       <a href="#contenu" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-full focus:bg-white focus:px-4 focus:py-2">Aller au contenu</a>
       <div className="border-b border-line/60 bg-cream/85 backdrop-blur-md">
         <div className="container-shell flex h-14 items-center justify-between gap-3 sm:h-16">
-          <Link href="/" className="flex shrink-0 items-center gap-2" aria-label={`${brand.name} — accueil`}>
+          <Link href="/" className="flex min-w-0 shrink items-center gap-2" aria-label={`${brand.name} — accueil`}>
             {brand.logoUrl ? (
-              <Image src={brand.logoUrl} alt={brand.name} width={140} height={40} className="h-8 w-auto sm:h-9" priority />
+              <Image src={brand.logoUrl} alt={brand.name} width={140} height={40} className="h-7 w-auto max-w-[130px] object-contain object-left sm:h-9 sm:max-w-none" priority />
             ) : (
               <>
                 <span className="grid size-8 place-items-center rounded-xl bg-[var(--landing-accent,var(--brand-coral))] text-white shadow-sm rotate-[-6deg]">
@@ -87,11 +87,11 @@ export function LandingHeader({ brand, products }: { brand: BrandSettings; produ
             )}
           </Link>
 
-          <div className="relative flex items-center gap-1 sm:gap-2">
+          <div className="relative flex shrink-0 items-center gap-1 sm:gap-2">
             <button
               ref={triggerRef}
               type="button"
-              className={cn("inline-flex h-10 items-center gap-2 rounded-full border border-ink/15 bg-white/80 px-3 font-heading text-sm font-semibold text-ink transition-colors hover:border-ink/40 hover:bg-white sm:px-4", open && "border-ink/40 bg-white")}
+              className={cn("inline-flex h-10 items-center gap-1.5 whitespace-nowrap rounded-full border border-ink/15 bg-white/80 px-3 font-heading text-sm font-semibold text-ink transition-colors hover:border-ink/40 hover:bg-white sm:px-4", open && "border-ink/40 bg-white")}
               aria-expanded={open}
               aria-controls="landing-others"
               aria-haspopup="dialog"
@@ -99,7 +99,7 @@ export function LandingHeader({ brand, products }: { brand: BrandSettings; produ
             >
               <Sparkles className="size-4 text-[var(--landing-accent,var(--brand-coral))]" aria-hidden />
               <span className="hidden sm:inline">Découvrir les autres aventures</span>
-              <span className="sm:hidden">Autres aventures</span>
+              <span className="sm:hidden">Aventures</span>
               <ChevronDown className={cn("size-4 transition-transform", open && "rotate-180")} aria-hidden />
             </button>
 
