@@ -3,6 +3,7 @@ import * as React from "react";
 import type { Block, BookTheme, PageLayout } from "@/lib/schemas/layout";
 import { cn } from "@/lib/utils";
 import { framingStyle } from "@/lib/images/framing";
+import { autoFitAll } from "@/lib/layout/autofit";
 import { withVariant } from "@/lib/images/variant-url";
 
 export interface PageRendererProps {
@@ -37,9 +38,19 @@ export function PageRenderer({ layout, theme, pageNumber, pageIndex, mode = "pre
     transform: scale !== 1 ? `scale(${scale})` : undefined,
     transformOrigin: "top left",
   };
+  const pageRef = React.useRef<HTMLDivElement>(null);
+  // Textes trop longs pour leur cadre : réduits automatiquement (aussi après chargement des polices)
+  React.useLayoutEffect(() => {
+    const el = pageRef.current;
+    if (!el) return;
+    autoFitAll(el);
+    let alive = true;
+    document.fonts?.ready.then(() => { if (alive && pageRef.current) autoFitAll(pageRef.current); });
+    return () => { alive = false; };
+  }, [layout]);
   return (
     <VariantContext.Provider value={imageVariant}>
-    <div className={cn("book-page", className)} style={style} data-page-index={pageIndex} onPointerDown={mode === "edit" ? () => onSelect?.(null) : undefined}>
+    <div ref={pageRef} className={cn("book-page", className)} style={style} data-page-index={pageIndex} onPointerDown={mode === "edit" ? () => onSelect?.(null) : undefined}>
       {layout.blocks.map((b) => (
         <BlockView key={b.id} block={b} theme={theme} mode={mode} selected={selectedId === b.id} onSelect={onSelect} onBlockPointerDown={onBlockPointerDown} onTextCommit={onTextCommit} />
       ))}
@@ -106,6 +117,8 @@ function BlockView({ block, theme, mode, selected, onSelect, onBlockPointerDown,
       return wrap(
         <div
           data-measure
+          data-autofit={editable ? undefined : ""}
+          data-font={style.fontSize as string}
           style={style}
           contentEditable={editable && block.editable}
           suppressContentEditableWarning
@@ -121,7 +134,7 @@ function BlockView({ block, theme, mode, selected, onSelect, onBlockPointerDown,
       const fontSize = `${(s.fontSizePt as number) ?? theme.baseFontPt}pt`;
       const titleColor = block.role === "warnings" ? "#c2410c" : theme.colorPrimary;
       return wrap(
-        <div data-measure style={{ fontSize, background: s.background as string, padding: s.padding ? `${s.padding}mm` : undefined, borderRadius: s.radius ? `${s.radius}mm` : undefined, border: s.borderColor ? `0.4mm solid ${s.borderColor}` : undefined, height: "100%", overflow: "hidden" }}>
+        <div data-measure data-autofit="" data-font={fontSize} style={{ fontSize, background: s.background as string, padding: s.padding ? `${s.padding}mm` : undefined, borderRadius: s.radius ? `${s.radius}mm` : undefined, border: s.borderColor ? `0.4mm solid ${s.borderColor}` : undefined, height: "100%", overflow: "hidden" }}>
           {block.title && (
             <div style={{ fontFamily: `"${theme.fontHeading}", sans-serif`, fontWeight: 700, color: titleColor, fontSize: "1.15em", marginBottom: "1.5mm" }}>
               {block.role === "warnings" ? "⚠ " : ""}

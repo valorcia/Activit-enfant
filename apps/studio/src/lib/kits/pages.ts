@@ -9,6 +9,7 @@
  */
 import type { Block, PageLayout } from "../schemas/layout";
 import type { BuildContext, BuiltPage } from "../layout/engine";
+import { listHeight } from "../layout/engine";
 import { newId } from "../utils";
 import type { PranksKit, QuickStart, TreasureHunt } from "./schemas";
 
@@ -193,7 +194,7 @@ export function buildLetterPage(ctx: BuildContext, o: { title: string; body: str
   }
   const bottom = ctx.heightMm - m - 10;
   p.layout.blocks.push(shape({ x: m, y, w, h: bottom - y, color: c.softer, radius: 7 }));
-  p.layout.blocks.push(text({ text: "“", x: m + 6, y: y + 1, w: 16, h: 16, pt: 44, weight: "bold", color: tint(ctx.theme.colorSecondary, 0.55) }));
+  p.layout.blocks.push(text({ text: "“", x: m + 6, y: y + 1, w: 16, h: 22, pt: 44, lineHeight: 1, weight: "bold", color: tint(ctx.theme.colorSecondary, 0.55) }));
   p.layout.blocks.push(text({ text: o.body, x: m + 10, y: y + 14, w: w - 20, h: bottom - y - (o.signature ? 34 : 20), pt: 13.5, lineHeight: 1.6, color: INK }));
   if (o.signature) p.layout.blocks.push(text({ text: `— ${o.signature}`, x: m + 10, y: bottom - 18, w: w - 20, h: 10, pt: 15, align: "right", weight: "bold", color: c.primary }));
   return p;
@@ -340,8 +341,8 @@ export function buildGuidePages(ctx: BuildContext, title: string, sections: Arra
   let colY = [y, y];
   const limit = ctx.heightMm - m - 8;
   for (const s of sections.filter((x) => x.items.length)) {
-    const lineH = 5.6;
-    const h = 12 + s.items.reduce((acc, it) => acc + Math.max(1, Math.ceil(it.length / 40)) * lineH, 0);
+    // Hauteur estimée par le même calcul que les autres listes (police 11 pt, marge intérieure 4,5 mm)
+    const h = listHeight(s.items, colW, 11, 4.5) + 3;
     let col = colY[0] <= colY[1] ? 0 : 1;
     // La colonne la plus courte déborde : on essaie l'autre avant d'ouvrir une page
     if (colY[col] + h > limit && colY[1 - col] + h <= limit) col = 1 - col;
