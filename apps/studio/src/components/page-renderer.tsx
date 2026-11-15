@@ -138,12 +138,16 @@ function BlockView({ block, theme, mode, selected, onSelect, onBlockPointerDown,
             </div>
           ) : (
             <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-              {block.items.map((it, i) => (
-                <li key={i} style={{ display: "flex", gap: "2mm", lineHeight: 1.35, marginBottom: "1mm" }}>
-                  <span style={{ flex: "0 0 auto", color: block.role === "materials" ? theme.colorSecondary : block.role === "warnings" ? "#c2410c" : theme.colorPrimary }}>{block.role === "materials" ? "☐" : "•"}</span>
-                  <span>{it}</span>
-                </li>
-              ))}
+              {block.items.map((it, i) => {
+                // Étape déjà numérotée (« 1. … ») : le numéro devient la puce, en gras et en couleur
+                const num = block.role !== "materials" ? /^(\d{1,2})[.)]\s+/.exec(it) : null;
+                return (
+                  <li key={i} style={{ display: "flex", gap: "2mm", lineHeight: 1.35, marginBottom: "1mm" }}>
+                    <span style={{ flex: "0 0 auto", minWidth: num ? "4mm" : undefined, fontWeight: num ? 800 : undefined, color: block.role === "materials" ? theme.colorSecondary : block.role === "warnings" ? "#c2410c" : num ? theme.colorSecondary : theme.colorPrimary }}>{block.role === "materials" ? "☐" : num ? `${num[1]}.` : "•"}</span>
+                    <span>{num ? it.slice(num[0].length) : it}</span>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>,
