@@ -433,9 +433,9 @@ async function stagePdf(run: RunRow, cfg: AutopilotSettings): Promise<StageOutco
   if (failed) return { type: "failed", error: failed.error ?? "Échec du rendu PDF" };
   if (exports.some((e) => e.status !== "COMPLETED")) return { type: "poll", detail: "Rendu PDF en cours" };
   const problems: string[] = [];
-  const overflowing: Array<{ pageIndex: number; blockId: string }> = [];
+  const overflowing: Array<{ pageIndex: number; blockId: string; extraMm?: number }> = [];
   for (const e of exports) {
-    const checks = (e.checks ?? {}) as { overflows?: Array<{ pageIndex: number; blockId: string }>; missingImages?: number };
+    const checks = (e.checks ?? {}) as { overflows?: Array<{ pageIndex: number; blockId: string; extraMm?: number }>; missingImages?: number };
     const overflows = checks.overflows ?? [];
     const missing = checks.missingImages ?? 0;
     if (overflows.length) problems.push(`${overflows.length} débordement(s) de texte`);
@@ -445,34 +445,63 @@ async function stagePdf(run: RunRow, cfg: AutopilotSettings): Promise<StageOutco
   const missingImages = exports.some((e) => ((e.checks ?? {}) as { missingImages?: number }).missingImages);
   // Correction automatique des débordements (police réduite sur les blocs concernés), 2 tentatives
   const attempts = state.pdfAutofixAttempts ?? 0;
-  if (overflowing.length && !missingImages && attempts < 2) {
+  if (overflowing.length && !missingImages && attempts < 3) {
     const fixed = await shrinkOverflowingBlocks(bookId, overflowing);
     if (fixed > 0) {
-      await patchState(run.id, { pdfExportIds: [], pdfJobIds: [], pdfAutofixAttempts: attempts + 1, pdfAutofixNotes: [...(state.pdfAutofixNotes ?? []), `${fixed} bloc(s) de texte réduit(s)`] });
+      await patchState(run.id, { pdfExportIds: [], pdfJobIds: [], pdfAutofixAttempts: attempts + 1, pdfAutofixNotes: [...(state.pdfAutofixNotes ?? []), `${fixed} bloc(s) de texte ajusté(s)`] });
       return { type: "poll", detail: `Correction automatique de ${fixed} débordement(s), nouvel export…`, delaySeconds: 1 };
     }
   }
-  if (problems.length) return { type: "failed", error: `Le PDF contient ${[...new Set(problems)].join(" et ")}${attempts ? ` malgré ${attempts} correction(s) automatique(s)` : ""}. Corrigez dans l'éditeur de pages, puis « Relancer l'étape ».` };
+  if (problems.length) {
+    const pagesList = [...new Set(overflowing.map((o) => o.pageIndex + 1))].sort((a, b) => a - b);
+    const where = pagesList.length ? ` (page${pagesList.length > 1 ? "s" : ""} ${pagesList.join(", ")})` : "";
+    const how = pagesList.length ? " Ouvrez l'aperçu du livre : l'alerte de la page propose « Agrandir le cadre » ou « Valider tel quel ». Puis « Relancer l'étape »." : " Corrigez dans l'éditeur de pages, puis « Relancer l'étape ».";
+    return { type: "failed", error: `Le PDF contient ${[...new Set(problems)].join(" et ")}${where}${attempts ? ` malgré ${attempts} correction(s) automatique(s)` : ""}.${how}` };
+  }
   const digital = exports.find((e) => e.kind === "BOOK_DIGITAL") ?? exports[0];
   const notes = state.pdfAutofixNotes?.length ? ` (corrigé automatiquement : ${state.pdfAutofixNotes.join(", ")})` : "";
   return { type: "done", detail: `PDF de ${digital?.pageCount ?? "?"} pages, sans débordement ni image manquante${exports.length > 1 ? " (+ version imprimable)" : ""}${notes}` };
 }
 
-/** Réduit la taille de police des blocs de texte qui débordent (−20 %, minimum 8 pt). */
-async function shrinkOverflowingBlocks(bookId: string, overflows: Array<{ pageIndex: number; blockId: string }>): Promise<number> {
+/**
+ * Corrige les blocs de texte ou de liste qui débordent encore après l'ajustement automatique :
+ * 1. agrandit le cadre vers le bas si la page le permet (sans chevaucher le bloc suivant ni la marge) ;
+ * 2. sinon réduit la police déclarée de 15 % (7,5 pt minimum).
+ */
+export async function shrinkOverflowingBlocks(bookId: string, overflows: Array<{ pageIndex: number; blockId: string; extraMm?: number }>): Promise<number> {
   const pages = await prisma.bookPage.findMany({ where: { bookId }, orderBy: { position: "asc" } });
+  const book = await prisma.book.findUnique({ where: { id: bookId }, select: { theme: true } });
+  const margin = Number(((book?.theme ?? {}) as { marginMm?: number }).marginMm ?? 15);
   let fixed = 0;
-  const byPage = new Map<number, Set<string>>();
-  for (const o of overflows) byPage.set(o.pageIndex, (byPage.get(o.pageIndex) ?? new Set()).add(o.blockId));
-  for (const [index, ids] of byPage) {
+  const byPage = new Map<number, Map<string, number>>();
+  for (const o of overflows) {
+    const m = byPage.get(o.pageIndex) ?? new Map<string, number>();
+    m.set(o.blockId, Math.max(m.get(o.blockId) ?? 0, o.extraMm ?? 0));
+    byPage.set(o.pageIndex, m);
+  }
+  for (const [index, extras] of byPage) {
     const page = pages[index];
     if (!page) continue;
-    const layout = page.layout as { blocks?: Array<{ id: string; type: string; style?: { fontSizePt?: number } }> };
+    const layout = page.layout as { heightMm?: number; blocks?: Array<{ id: string; type: string; x: number; y: number; w: number; h: number; style?: { fontSizePt?: number } }> };
+    const blocks = layout.blocks ?? [];
+    const pageH = layout.heightMm ?? 297;
     let changed = false;
-    for (const b of layout.blocks ?? []) {
-      if (!ids.has(b.id) || b.type !== "text") continue;
+    for (const b of blocks) {
+      const extra = extras.get(b.id);
+      if (extra === undefined || (b.type !== "text" && b.type !== "list")) continue;
+      // Place libre sous le bloc : jusqu'au prochain bloc qui chevauche horizontalement, ou jusqu'à la marge basse
+      const bottom = b.y + b.h;
+      const below = blocks.filter((o) => o.id !== b.id && o.y >= bottom - 0.5 && o.x < b.x + b.w && o.x + o.w > b.x && o.type !== "shape");
+      const limit = Math.min(pageH - margin - 8, ...below.map((o) => o.y - 2));
+      const grow = Math.ceil(extra + 1);
+      if (extra > 0 && bottom + grow <= limit) {
+        b.h += grow;
+        changed = true;
+        fixed++;
+        continue;
+      }
       const current = b.style?.fontSizePt ?? 11;
-      const next = Math.max(8, Math.round(current * 0.8 * 10) / 10);
+      const next = Math.max(7.5, Math.round(current * 0.85 * 10) / 10);
       if (next >= current) continue;
       b.style = { ...(b.style ?? {}), fontSizePt: next };
       changed = true;

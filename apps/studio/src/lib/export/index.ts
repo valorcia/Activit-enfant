@@ -12,7 +12,7 @@ import { PDF_CHUNK_PAGES, PDF_CHUNK_THRESHOLD, pdfTimeoutMs } from "../kits/limi
 export async function renderBookPdf(o: { baseUrl: string; pages: number; widthMm: number; heightMm: number; mode: "print" | "digital"; log?: (m: string) => unknown }) {
   if (o.pages <= PDF_CHUNK_THRESHOLD) return renderPdf({ url: o.baseUrl, widthMm: o.widthMm, heightMm: o.heightMm, mode: o.mode, timeoutMs: pdfTimeoutMs(o.pages) });
   const parts: Buffer[] = [];
-  const overflows: { pageIndex: number; blockId: string; kind: string }[] = [];
+  const overflows: { pageIndex: number; blockId: string; kind: string; extraMm?: number }[] = [];
   const fonts = new Set<string>();
   let missingImages = 0;
   for (let from = 0; from < o.pages; from += PDF_CHUNK_PAGES) {

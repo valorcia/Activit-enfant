@@ -13,7 +13,7 @@ export interface RenderOptions {
 export interface RenderResult {
   pdf: Buffer;
   pageCount: number;
-  overflows: { pageIndex: number; blockId: string; kind: string }[];
+  overflows: { pageIndex: number; blockId: string; kind: string; extraMm?: number }[];
   missingImages: number;
   fonts: string[];
 }
@@ -42,12 +42,17 @@ export async function renderPdf(opts: RenderOptions): Promise<RenderResult> {
 
     // Contrôles : débordements de blocs, images manquantes, polices utilisées
     const checks = await page.evaluate(() => {
-      const overflows: { pageIndex: number; blockId: string; kind: string }[] = [];
+      const overflows: { pageIndex: number; blockId: string; kind: string; extraMm: number }[] = [];
+      const pxPerMm = 96 / 25.4;
       document.querySelectorAll<HTMLElement>("[data-page-index]").forEach((pg) => {
         const pageIndex = Number(pg.dataset.pageIndex);
         pg.querySelectorAll<HTMLElement>("[data-block-id]").forEach((el) => {
+          // Images et formes ne « débordent » pas ; un débordement validé dans l'aperçu est accepté
+          const kind = el.dataset.blockType ?? "text";
+          if (kind === "image" || kind === "shape" || el.hasAttribute("data-overflow-ok")) return;
           const inner = el.querySelector<HTMLElement>("[data-measure]") ?? el;
-          if (inner.scrollHeight > el.clientHeight + 3) overflows.push({ pageIndex, blockId: el.dataset.blockId!, kind: el.dataset.blockType ?? "text" });
+          const extra = inner.scrollHeight - el.clientHeight;
+          if (extra > 3) overflows.push({ pageIndex, blockId: el.dataset.blockId!, kind, extraMm: Math.round((extra / pxPerMm) * 10) / 10 });
         });
       });
       let missingImages = 0;
