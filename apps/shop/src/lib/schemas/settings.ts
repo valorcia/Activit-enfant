@@ -229,6 +229,23 @@ export const etsySettingsSchema = z.object({
 });
 export type EtsySettings = z.infer<typeof etsySettingsSchema>;
 
+/** Espace créatrices : taux de redevance, délai de confirmation, seuil de paiement (réglages communs à tous les univers). */
+export const creatorsSettingsSchema = z.object({
+  ideaRateBp: z.number().int().min(0).max(9000).default(2500), // idée seule : 25 %
+  fullTutorialRateBp: z.number().int().min(0).max(9000).default(4000), // tutoriel complet : 40 %
+  exclusivityBonusBp: z.number().int().min(0).max(3000).default(500), // exclusivité : + 5 points
+  confirmationDelayDays: z.number().int().min(0).max(120).default(14),
+  payoutThresholdCents: z.number().int().min(0).max(100_000).default(2000),
+  suggestedPriceCents: z.number().int().min(0).max(100_000).default(390),
+  /** Frais Stripe estimés par commande (répartis au prorata des lignes) : 1,5 % + 0,25 € */
+  stripeFeePercentBp: z.number().int().min(0).max(1000).default(150),
+  stripeFeeFixedCents: z.number().int().min(0).max(500).default(25),
+  /** Durée de validité des liens de connexion envoyés par e-mail */
+  loginLinkValidityMinutes: z.number().int().min(5).max(60 * 24).default(60),
+  inviteLinkValidityDays: z.number().int().min(1).max(30).default(7),
+});
+export type CreatorsSettings = z.infer<typeof creatorsSettingsSchema>;
+
 export const settingsSchemas = {
   conversion: conversionSettingsSchema,
   etsy: etsySettingsSchema,
@@ -239,6 +256,7 @@ export const settingsSchemas = {
   analytics: analyticsSettingsSchema,
   commerce: commerceSettingsSchema,
   seo: seoSettingsSchema,
+  creators: creatorsSettingsSchema,
 } as const;
 
 export type SettingsKey = keyof typeof settingsSchemas;

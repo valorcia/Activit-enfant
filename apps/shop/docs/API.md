@@ -17,6 +17,8 @@ Scopes :
 | `products:read` | lire le catalogue, les catégories et collections, les statistiques de ventes (implicite pour une clé `products:write` ou `products:publish`) |
 | `products:write` | créer / modifier des produits **en brouillon**, ajouter images et fichiers, programmer une publication |
 | `products:publish` | publier immédiatement sans validation humaine (à réserver à des intégrations de confiance) |
+| `creators:read` | lire les idées des créatrices **acceptées** (avec URLs signées temporaires des photos) — implicite avec `creators:write` |
+| `creators:write` | suivre la fabrication d'une idée : en fabrication, aperçu prêt, lien avec le produit publié (studio) |
 
 Limite : 60 requêtes par minute et par clé (`429` au-delà). Clé révoquée ou inconnue → `401`. Scope manquant → `403`.
 
@@ -177,6 +179,45 @@ Toute clé valide (lecture seule). Univers non archivés, univers par défaut en
 
 Déplace le produit dans un autre univers. Sans `categorySlug`, la catégorie et les collections sont retirées (elles appartiennent à l'ancien univers).
 
+## Espace créatrices (studio)
+
+Scopes `creators:read` / `creators:write`, distincts de `products:*` : la clé du studio doit les cocher (créez une nouvelle clé dans **Administration → API & automatisation** avec `products:read`, `products:write`, `creators:read`, `creators:write`, puis collez-la dans Studio → Paramètres → Boutique). Les données personnelles des créatrices (nom complet, e-mail, IBAN) ne sont jamais renvoyées : seulement le pseudo public (sinon le prénom).
+
+Cycle de vie d'une proposition : `DRAFT` → `SUBMITTED` → (`CHANGES_REQUESTED` ↺) → `ACCEPTED` | `REJECTED` → `IN_PRODUCTION` → `PREVIEW_READY` → `APPROVED` (la créatrice clique « Je valide ») → `PUBLISHED` (automatique quand le produit lié est publié). **Un produit lié à une proposition non encore validée ne peut pas être publié** : `POST /products/:id/publish` répond `409`.
+
+### `GET /creators/submissions?status=ACCEPTED`
+
+`status` : `ACCEPTED` (défaut), `IN_PRODUCTION`, `PREVIEW_READY`, `APPROVED`, `PUBLISHED`, plusieurs séparés par des virgules, ou `all`. 100 propositions au plus.
+
+```json
+{ "data": [{
+  "id": "…", "title": "Le hérisson dans sa bulle", "status": "ACCEPTED",
+  "ageMin": 4, "ageMax": 8, "durationMinutes": 45,
+  "materials": ["un bocal en verre", "de la mousse"], "steps": ["…", "…"], "tips": "…", "safetyNotes": "Verre : avec un adulte",
+  "contribution": "IDEA", "exclusive": false, "rateBp": 2500,
+  "studioBookId": null, "productId": null, "previewUrl": null, "submittedAt": "…", "moderatedAt": "…",
+  "creator": { "id": "…", "publicName": "Marie", "slug": "marie", "bio": "…" },
+  "credit": "Une idée de Marie",
+  "photos": [{ "url": "https://…signée, valable 1 h…", "width": 2400, "height": 1800 }]
+}], "total": 1 }
+```
+
+### `GET /creators/submissions/:id`
+
+Même format (404 pour une proposition non acceptée).
+
+### `POST /creators/submissions/:id/production` — `{ "bookId": "…" }`
+
+`ACCEPTED` → `IN_PRODUCTION` (idempotent), mémorise l'identifiant du livre du studio. `409` si la proposition n'est pas acceptée.
+
+### `POST /creators/submissions/:id/preview` — `{ "previewUrl": "https://…" }`
+
+→ `PREVIEW_READY` et e-mail à la créatrice avec le lien d'aperçu (renvoyé seulement si le lien change). Depuis `ACCEPTED`, `IN_PRODUCTION` ou `PREVIEW_READY`.
+
+### `POST /creators/submissions/:id/link` — `{ "productId": "…" }`
+
+Crédite la créatrice sur le produit (`Product.creatorId`, mention « Une idée de … » sur la fiche, page `/createurs/<slug>`) et fixe le taux de redevance du produit (taux retenu à l'acceptation). `409` si le produit est déjà crédité à une autre créatrice.
+
 ## Flux recommandé pour un agent IA
 
 0. `GET /sites` pour choisir l'univers (`siteSlug`) et ses catégories.
@@ -189,7 +230,7 @@ Déplace le produit dans un autre univers. Sans `categorySlug`, la catégorie et
 
 | Route | Fréquence (vercel.json) | Rôle |
 |---|---|---|
-| `GET /api/cron/publish` | toutes les 15 min | publie les produits et articles programmés |
+| `GET /api/cron/publish` | une fois par jour (Vercel Hobby) | publie les produits et articles programmés ; espace créatrices : rattrape les commissions manquantes, rejoue les remboursements, confirme les commissions dont le délai est écoulé |
 | `GET /api/cron/marketing` | toutes les heures (une fois par jour sur Vercel Hobby) | relances de paniers abandonnés (avec consentement), annonces de nouveautés aux abonnés, posts programmés ; Etsy : rafraîchissement des jetons, synchronisation des fiches, import des ventes |
 
 Les routes cron acceptent le header `x-vercel-cron` (Vercel) ou `Authorization: Bearer <CRON_SECRET>`.

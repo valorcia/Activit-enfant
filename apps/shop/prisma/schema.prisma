@@ -137,6 +137,8 @@ model User {
   refunds         Refund[]
   socialAccounts  SocialAccount[]
   socialPosts     SocialPost[]
+  moderatedSubmissions CreatorSubmission[]
+  creatorPayouts  CreatorPayout[]
 }
 
 // Clés d'API pour l'importation / automatisation (hash uniquement)
@@ -328,12 +330,20 @@ model Product {
   etsyListings     EtsyListing[]
   externalSales    ExternalSale[]
 
+  // Espace créatrices : idée d'une créatrice (redevance sur chaque vente)
+  creatorId          String?
+  creator            Creator?            @relation(fields: [creatorId], references: [id], onDelete: SetNull)
+  creatorRateBp      Int?                // taux de redevance propre au produit (points de base)
+  creatorSubmissions CreatorSubmission[]
+  commissions        CommissionEntry[]
+
   @@index([status, publishedAt])
   @@index([categoryId, status])
   @@index([salesCount])
   @@index([ageMin, ageMax])
   @@index([priceCents])
   @@index([siteId, status, publishedAt])
+  @@index([creatorId])
 }
 
 model ProductImage {
@@ -482,6 +492,7 @@ model Order {
   refunds      Refund[]
   reviews      Review[]
   conversions  ConversionEvent[]
+  commissions  CommissionEntry[]
 
   @@index([status, createdAt])
   @@index([email])
@@ -503,6 +514,7 @@ model OrderItem {
   totalCents     Int
   taxRateBp      Int      @default(2000)
   snapshot       Json?    // copie du produit au moment de l'achat (historique conservé)
+  commissions    CommissionEntry[]
 
   @@index([orderId])
   @@index([productId])
@@ -1098,4 +1110,163 @@ model ExternalSale {
   @@index([channel, soldAt])
   @@index([productId, soldAt])
   @@index([siteId, soldAt])
+}
+
+// ---------------------------------------------------------------------------
+// Espace créatrices (V2, phase 1 : sur invitation, virement manuel)
+// ---------------------------------------------------------------------------
+
+enum CreatorStatus {
+  INVITED // invitée, contrat pas encore accepté
+  ACTIVE
+  SUSPENDED // connexion bloquée
+}
+
+enum CreatorContribution {
+  IDEA // idée + quelques photos, le studio fait le reste
+  FULL_TUTORIAL // tutoriel complet avec ses propres photos des étapes
+}
+
+enum CreatorSubmissionStatus {
+  DRAFT
+  SUBMITTED
+  CHANGES_REQUESTED
+  ACCEPTED
+  REJECTED
+  IN_PRODUCTION
+  PREVIEW_READY
+  APPROVED // aperçu validé par la créatrice
+  PUBLISHED
+}
+
+enum CommissionStatus {
+  PENDING // en attente du délai de remboursement
+  CONFIRMED
+  CANCELLED
+  PAID
+}
+
+enum CreatorPayoutStatus {
+  PENDING
+  PAID
+}
+
+model Creator {
+  id                 String        @id @default(cuid())
+  name               String // nom complet (privé)
+  email              String        @unique
+  publicName         String? // pseudo affiché sur la boutique
+  slug               String?       @unique
+  bio                String?
+  photoUrl           String? // photo de profil (espace public du stockage)
+  photoKey           String?
+  status             CreatorStatus @default(INVITED)
+  contractVersion    String?
+  contractAcceptedAt DateTime?
+  contractAcceptedIp String?
+  ibanEnc            String? // IBAN chiffré (AES-256-GCM), jamais en clair
+  ibanLast4          String?
+  ibanHolder         String?
+  defaultRateBp      Int? // surcharge du taux par défaut (sinon : réglages du programme selon l'apport)
+  sessionVersion     Int           @default(1) // incrémenté pour fermer toutes les sessions
+  lastLoginAt        DateTime?
+  invitedAt          DateTime      @default(now())
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  submissions CreatorSubmission[]
+  products    Product[]
+  commissions CommissionEntry[]
+  payouts     CreatorPayout[]
+
+  @@index([status])
+}
+
+model CreatorSubmission {
+  id                String                  @id @default(cuid())
+  creatorId         String
+  creator           Creator                 @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  title             String
+  ageMin            Int?
+  ageMax            Int?
+  durationMinutes   Int?
+  materials         String[]                @default([])
+  steps             String[]                @default([])
+  tips              String?
+  safetyNotes       String?
+  photos            Json                    @default("[]") // [{ key, width, height, size }] — stockage privé
+  contribution      CreatorContribution     @default(IDEA)
+  exclusive         Boolean                 @default(false)
+  status            CreatorSubmissionStatus @default(DRAFT)
+  moderationComment String?
+  moderatedAt       DateTime?
+  moderatedById     String?
+  moderatedBy       User?                   @relation(fields: [moderatedById], references: [id], onDelete: SetNull)
+  rateBp            Int? // taux retenu à l'acceptation
+  submittedAt       DateTime?
+  studioBookId      String?
+  productId         String?
+  product           Product?                @relation(fields: [productId], references: [id], onDelete: SetNull)
+  previewUrl        String?
+  previewReadyAt    DateTime?
+  approvedAt        DateTime?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+
+  @@index([creatorId, status])
+  @@index([status, submittedAt])
+  @@index([productId])
+}
+
+model CommissionEntry {
+  id                  String           @id @default(cuid())
+  kind                String           @default("ROYALTY") // ROYALTY | ADJUSTMENT (régularisation après paiement)
+  orderId             String
+  order               Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderItemId         String
+  orderItem           OrderItem        @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  productId           String?
+  product             Product?         @relation(fields: [productId], references: [id], onDelete: SetNull)
+  creatorId           String
+  creator             Creator          @relation(fields: [creatorId], references: [id], onDelete: Restrict)
+  baseCents           Int // base HT encaissée (après remise, frais Stripe estimés et remboursements)
+  originalBaseCents   Int
+  rateBp              Int
+  amountCents         Int
+  originalAmountCents Int
+  currency            String           @default("EUR")
+  status              CommissionStatus @default(PENDING)
+  payoutId            String?
+  payout              CreatorPayout?   @relation(fields: [payoutId], references: [id], onDelete: SetNull)
+  confirmedAt         DateTime?
+  cancelledAt         DateTime?
+  paidAt              DateTime?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  @@unique([orderItemId, productId, kind])
+  @@index([creatorId, status])
+  @@index([status, createdAt])
+  @@index([orderId])
+}
+
+model CreatorPayout {
+  id         String              @id @default(cuid())
+  creatorId  String
+  creator    Creator             @relation(fields: [creatorId], references: [id], onDelete: Restrict)
+  period     String // « 2026-11 »
+  totalCents Int
+  currency   String              @default("EUR")
+  status     CreatorPayoutStatus @default(PENDING)
+  reference  String? // référence du virement
+  paidAt     DateTime?
+  paidById   String?
+  paidBy     User?               @relation(fields: [paidById], references: [id], onDelete: SetNull)
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+
+  entries CommissionEntry[]
+
+  @@index([creatorId, status])
+  @@index([period])
 }

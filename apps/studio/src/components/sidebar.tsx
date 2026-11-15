@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { LayoutDashboard, BookOpen, PlusCircle, Library, Palette, FileDown, Settings, ListChecks, Sparkles, ClipboardPaste, Store, Wand2, Clapperboard, Rocket, Menu, X, ExternalLink } from "lucide-react";
+import { LayoutDashboard, BookOpen, PlusCircle, Library, Palette, FileDown, Settings, ListChecks, Sparkles, ClipboardPaste, Store, Wand2, Clapperboard, Rocket, Menu, X, ExternalLink, Lightbulb } from "lucide-react";
 import { ModeToggle } from "@/components/mode-toggle";
 import { cn } from "@/lib/utils";
 import { logoutAction } from "@/app/actions/auth";
@@ -14,6 +14,7 @@ const NAV = [
   { href: "/brief", label: "Créer depuis un brief", icon: Wand2 },
   { href: "/books", label: "Livres et kits", icon: BookOpen },
   { href: "/shop", label: "Boutique", icon: Store },
+  { href: "/createurs", label: "Idées des créatrices", icon: Lightbulb },
   { href: "/activities/new", label: "Nouvelle activité", icon: Sparkles },
   { href: "/library", label: "Bibliothèque", icon: Library },
   { href: "/templates", label: "Modèles graphiques", icon: Palette },

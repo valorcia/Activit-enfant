@@ -389,6 +389,13 @@ export const KitCustomizationSchema = z.object({
   coloring: ColoringOptionsSchema.optional(),
   /** Réglages IA du livre (mode mixte, modèle d'image…) */
   ai: BookAiOverridesSchema.optional(),
+  /** Idée d'une créatrice (Espace créatrices de la boutique) : crédit et suivi de la proposition */
+  creator: z.object({
+    submissionId: z.string().min(1).max(64),
+    name: z.string().max(80),
+    credit: z.string().max(120),
+    previewSentAt: z.string().optional(),
+  }).optional(),
 });
 export type KitCustomization = z.infer<typeof KitCustomizationSchema>;
 

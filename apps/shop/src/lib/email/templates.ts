@@ -116,3 +116,61 @@ export function newProductEmail(brand: Brand, opts: { productName: string; produ
   const footer = `<a href="${opts.unsubscribeUrl}" style="color:#6b7280;">Se désinscrire</a>`;
   return { subject: `Nouveau : ${opts.productName}`, html: layout(brand, "Nouveauté", body, footer), text: `Nouvelle aventure : ${opts.productName} — ${opts.productUrl}` };
 }
+
+// ---------------------------------------------------------------------------
+// Espace créatrices
+// ---------------------------------------------------------------------------
+
+export function creatorInviteEmail(brand: Brand, opts: { name: string; loginUrl: string; validityDays: number }) {
+  const body = `
+    <h1 style="font-size:24px;margin:0 0 12px;">Bienvenue dans l'Espace créatrices ✨</h1>
+    <p>Bonjour ${escapeHtml(opts.name)},</p>
+    <p>Vous êtes invitée à proposer vos idées d'activités pour enfants à ${escapeHtml(brand.name)}. Si une idée est retenue, notre studio la transforme en tutoriel illustré, et vous touchez une part de chaque vente.</p>
+    ${button(opts.loginUrl, "Accéder à mon espace")}
+    <p style="font-size:14px;color:#6b7280;">Ce lien personnel est valable ${opts.validityDays} jours et ne fonctionne qu'une fois. Ensuite, vous pourrez demander un nouveau lien à tout moment depuis la page de connexion.</p>`;
+  return { subject: `Invitation à l'Espace créatrices de ${brand.name}`, html: layout(brand, "Invitation", body), text: `Bonjour ${opts.name}, vous êtes invitée à l'Espace créatrices de ${brand.name} : ${opts.loginUrl} (valable ${opts.validityDays} jours).` };
+}
+
+export function creatorLoginEmail(brand: Brand, opts: { loginUrl: string; validityMinutes: number }) {
+  const body = `
+    <h1 style="font-size:24px;margin:0 0 12px;">Votre lien de connexion</h1>
+    <p>Cliquez sur le bouton pour vous connecter à votre Espace créatrice. Le lien est valable ${opts.validityMinutes} minutes et ne fonctionne qu'une fois.</p>
+    ${button(opts.loginUrl, "Me connecter")}
+    <p style="font-size:14px;color:#6b7280;">Si vous n'êtes pas à l'origine de cette demande, ignorez simplement cet e-mail.</p>`;
+  return { subject: `Connexion à votre Espace créatrice`, html: layout(brand, "Connexion", body), text: `Connectez-vous à votre Espace créatrice : ${opts.loginUrl} (valable ${opts.validityMinutes} minutes).` };
+}
+
+export function submissionDecisionEmail(brand: Brand, opts: { title: string; decision: "ACCEPTED" | "REJECTED" | "CHANGES_REQUESTED"; comment?: string | null; rateLabel?: string | null; url: string }) {
+  const head = { ACCEPTED: "Votre idée est acceptée 🎉", REJECTED: "Votre idée n'a pas été retenue", CHANGES_REQUESTED: "Une petite modification est demandée" }[opts.decision];
+  const intro = {
+    ACCEPTED: `Bonne nouvelle : « ${escapeHtml(opts.title)} » est retenue. Notre studio va la transformer en tutoriel illustré ; vous recevrez l'aperçu à valider avant la mise en vente.${opts.rateLabel ? ` Taux de redevance retenu : <strong>${escapeHtml(opts.rateLabel)}</strong>.` : ""}`,
+    REJECTED: `Merci pour « ${escapeHtml(opts.title)} ». Après examen, nous ne pouvons pas la retenir pour le moment.`,
+    CHANGES_REQUESTED: `Merci pour « ${escapeHtml(opts.title)} ». Avant de la valider, nous vous demandons quelques ajustements.`,
+  }[opts.decision];
+  const comment = opts.comment ? `<p style="background:#FFF4E6;border-radius:16px;padding:14px 16px;white-space:pre-line;">${escapeHtml(opts.comment)}</p>` : "";
+  const body = `<h1 style="font-size:24px;margin:0 0 12px;">${head}</h1><p>${intro}</p>${comment}${button(opts.url, opts.decision === "CHANGES_REQUESTED" ? "Modifier ma proposition" : "Voir ma proposition")}`;
+  return { subject: `${head} — ${opts.title}`, html: layout(brand, head, body), text: `${head}\n${opts.title}\n${opts.comment ?? ""}\n${opts.url}` };
+}
+
+export function previewReadyEmail(brand: Brand, opts: { title: string; previewUrl: string; url: string }) {
+  const body = `
+    <h1 style="font-size:24px;margin:0 0 12px;">L'aperçu de votre tutoriel est prêt 👀</h1>
+    <p>« ${escapeHtml(opts.title)} » est fabriqué. Feuilletez l'aperçu, puis confirmez depuis votre espace pour que nous puissions le mettre en vente.</p>
+    ${button(opts.previewUrl, "Voir l'aperçu")}
+    <p><a href="${opts.url}" style="color:#293241;font-weight:700;">Valider depuis mon espace</a></p>
+    <p style="font-size:14px;color:#6b7280;">Une remarque ? Répondez simplement à cet e-mail.</p>`;
+  return { subject: `Aperçu à valider : ${opts.title}`, html: layout(brand, "Aperçu à valider", body), text: `L'aperçu de « ${opts.title} » est prêt : ${opts.previewUrl}\nValidez-le depuis votre espace : ${opts.url}` };
+}
+
+export function creatorAdminNoticeEmail(brand: Brand, opts: { subject: string; message: string; url: string }) {
+  const body = `<h1 style="font-size:22px;margin:0 0 12px;">${escapeHtml(opts.subject)}</h1><p style="white-space:pre-line;">${escapeHtml(opts.message)}</p>${button(opts.url, "Ouvrir l'administration", "#293241")}`;
+  return { subject: `[Créatrices] ${opts.subject}`, html: layout(brand, opts.subject, body), text: `${opts.message}\n${opts.url}` };
+}
+
+export function payoutPaidEmail(brand: Brand, opts: { amountCents: number; period: string; url: string }) {
+  const body = `
+    <h1 style="font-size:24px;margin:0 0 12px;">Votre paiement est parti 💸</h1>
+    <p>Nous venons d'effectuer un virement de <strong>${formatPrice(opts.amountCents)}</strong> pour vos commissions (${escapeHtml(opts.period)}). Il apparaîtra sur votre compte sous quelques jours ouvrés.</p>
+    ${button(opts.url, "Voir mon tableau de bord")}`;
+  return { subject: `Virement de vos commissions (${opts.period})`, html: layout(brand, "Paiement", body), text: `Virement de ${formatPrice(opts.amountCents)} pour vos commissions (${opts.period}).` };
+}

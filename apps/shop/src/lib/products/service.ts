@@ -7,6 +7,7 @@ import { emitMarketingEvent } from "@/lib/marketing/events";
 import { productInputSchema, type ProductInput } from "@/lib/schemas/product";
 import { slugify } from "@/lib/utils";
 import { DEFAULT_SITE_ID } from "@/lib/sites/constants";
+import { AWAITING_APPROVAL_MESSAGE, AWAITING_CREATOR_STATUSES, markSubmissionsPublished, pendingCreatorApproval } from "@/lib/creators/submissions";
 
 export interface Actor { userId?: string | null; actor?: string | null; source?: string }
 
@@ -119,6 +120,7 @@ export async function updateProduct(id: string, raw: unknown, actor: Actor = {})
   const input = productInputSchema.parse(raw);
   const before = await prisma.product.findUniqueOrThrow({ where: { id } });
   await assertSameSite(input, input.siteId || before.siteId);
+  if ((input.status === "PUBLISHED" || input.status === "SCHEDULED") && input.status !== before.status && (await pendingCreatorApproval(id))) throw new Error(AWAITING_APPROVAL_MESSAGE);
   const slug = input.slug && input.slug !== before.slug ? await uniqueSlug(input.slug, id) : before.slug;
   const data = toData(input);
   // Conserve la date de première publication
@@ -136,6 +138,8 @@ export async function updateProduct(id: string, raw: unknown, actor: Actor = {})
 
 export async function setProductStatus(id: string, status: Product["status"], actor: Actor = {}, scheduledAt?: Date | null): Promise<Product> {
   const before = await prisma.product.findUniqueOrThrow({ where: { id } });
+  // Tutoriel d'une créatrice : mise en vente seulement après validation de l'aperçu par la créatrice
+  if ((status === "PUBLISHED" || status === "SCHEDULED") && (await pendingCreatorApproval(id))) throw new Error(AWAITING_APPROVAL_MESSAGE);
   const product = await prisma.product.update({
     where: { id },
     data: {
@@ -192,7 +196,7 @@ export async function deleteProduct(id: string, actor: Actor = {}): Promise<void
 
 /** Publie les produits programmés dont la date est passée (appelé par le cron). */
 export async function publishScheduledProducts(now = new Date()): Promise<string[]> {
-  const due = await prisma.product.findMany({ where: { status: "SCHEDULED", scheduledAt: { lte: now } } });
+  const due = await prisma.product.findMany({ where: { status: "SCHEDULED", scheduledAt: { lte: now }, creatorSubmissions: { none: { status: { in: AWAITING_CREATOR_STATUSES } } } } });
   const slugs: string[] = [];
   for (const p of due) {
     const updated = await prisma.product.update({ where: { id: p.id }, data: { status: "PUBLISHED", publishedAt: p.publishedAt ?? now, scheduledAt: null } });
@@ -208,6 +212,7 @@ export async function publishScheduledProducts(now = new Date()): Promise<string
 }
 
 async function onPublished(product: Product) {
+  await markSubmissionsPublished(product.id);
   await emitMarketingEvent("product.published", null, { productId: product.id, slug: product.slug, name: product.name });
 }
 

@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 import { Mail, Printer, Flame } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Stars } from "@/components/ui/misc";
@@ -52,6 +53,15 @@ export async function ProductHero({ product }: { product: ProductPageData }) {
             <span className="bg-[linear-gradient(transparent_62%,color-mix(in_oklab,var(--landing-accent,var(--brand-honey))_55%,white)_62%)] bg-no-repeat box-decoration-clone">{product.name}</span>
           </h1>
           {product.tagline && <p className="mt-4 text-lg text-ink-soft text-pretty sm:text-xl">{product.tagline}</p>}
+          {product.creator?.publicName && product.creator.slug && product.creator.status !== "SUSPENDED" && (
+            <p className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-ink-soft">
+              {product.creator.photoUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={product.creator.photoUrl} alt="" className="size-7 rounded-full object-cover" />
+              )}
+              <span>Une idée de <Link href={`/createurs/${product.creator.slug}`} className="font-bold text-ink underline decoration-[var(--landing-accent,var(--brand-coral))] decoration-2 underline-offset-4 hover:text-coral-dark">{product.creator.publicName}</Link></span>
+            </p>
+          )}
 
           <ul className="mt-5 flex flex-wrap gap-2" aria-label="Points clés">
             {badges.map((b, i) => <li key={b}><Badge variant={BADGE_VARIANTS[i % BADGE_VARIANTS.length]} size="lg">{b}</Badge></li>)}

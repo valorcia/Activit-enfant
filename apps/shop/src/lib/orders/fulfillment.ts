@@ -3,6 +3,7 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { prisma as defaultPrisma } from "@/lib/db";
 import { randomToken } from "@/lib/tokens";
 import { nextInvoiceNumber } from "./numbers";
+import { applyCommissionRefund, createCommissionsForOrder } from "@/lib/creators/commissions";
 
 /**
  * Traitement des événements Stripe. Toutes les opérations sont idempotentes :
@@ -141,6 +142,14 @@ export async function fulfillOrderFromSession(
     return entitlementIds;
   });
 
+  // Commissions des créatrices (hors transaction : une erreur ne doit jamais bloquer la livraison ;
+  // le cron quotidien rattrape les commandes sans commission). Idempotent.
+  try {
+    await createCommissionsForOrder(order.id, db);
+  } catch (e) {
+    console.error(`[creators] commissions non créées pour la commande ${order.id}`, e instanceof Error ? e.message : e);
+  }
+
   return { orderId: order.id, status: "fulfilled", entitlementIds: result, email: email || order.email };
 }
 
@@ -182,5 +191,11 @@ export async function applyRefund(
       await tx.payment.updateMany({ where: { orderId: order.id }, data: { status: "REFUNDED" } });
     }
   });
+  // Commissions des créatrices : annulées (total) ou réduites au prorata (partiel). Rejoué par le cron quotidien en cas d'échec.
+  try {
+    await applyCommissionRefund(order.id, { refundedCents, full }, db);
+  } catch (e) {
+    console.error(`[creators] remboursement non répercuté sur les commissions de la commande ${order.id}`, e instanceof Error ? e.message : e);
+  }
   return order.id;
 }

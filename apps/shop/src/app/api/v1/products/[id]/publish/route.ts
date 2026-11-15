@@ -4,6 +4,7 @@ import { env } from "@/lib/env";
 import { apiError, apiOk, authenticateApiKey } from "@/lib/api/auth";
 import { apiProductSelect, serializeProduct } from "@/lib/api/products";
 import { setProductStatus } from "@/lib/products/service";
+import { AWAITING_APPROVAL_MESSAGE, pendingCreatorApproval } from "@/lib/creators/submissions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,6 +26,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const parsed = schema.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) return apiError(422, "Données invalides", parsed.error.issues);
   if (product.files.length === 0) return apiError(409, "Aucun fichier numérique attaché : ajoutez le PDF avant de publier");
+  if (await pendingCreatorApproval(id)) return apiError(409, AWAITING_APPROVAL_MESSAGE);
   const actor = { actor: `api:${auth.key.prefix}`, source: "api" };
   if (parsed.data.scheduledAt) {
     if (parsed.data.scheduledAt.getTime() < Date.now() - 60_000) return apiError(422, "La date de publication doit être dans le futur");

@@ -196,6 +196,8 @@ export const productPageInclude = {
   collections: { include: { collection: true } },
   recommendations: { orderBy: { position: "asc" }, include: { recommended: { select: productCardSelect } } },
   reviews: { where: { status: "APPROVED" }, orderBy: { createdAt: "desc" }, take: 12, select: { id: true, authorName: true, rating: true, title: true, body: true, createdAt: true, isVerifiedPurchase: true } },
+  // Crédit « Une idée de … » (pseudo public uniquement, jamais le nom ni l'e-mail)
+  creator: { select: { publicName: true, slug: true, photoUrl: true, status: true } },
 } satisfies Prisma.ProductInclude;
 
 export type ProductPageData = Prisma.ProductGetPayload<{ include: typeof productPageInclude }>;

@@ -15,7 +15,7 @@ import { formatDateTime } from "@/lib/utils";
 
 interface KeyView { id: string; name: string; prefix: string; scopes: string[]; createdAt: string; lastUsedAt: string | null; revokedAt: string | null; createdBy: string | null }
 
-const SCOPE_LABELS: Record<string, string> = { "products:read": "Lecture du catalogue", "products:write": "Création / modification (brouillons)", "products:publish": "Publication directe (sans validation humaine)" };
+const SCOPE_LABELS: Record<string, string> = { "products:read": "Lecture du catalogue", "products:write": "Création / modification (brouillons)", "products:publish": "Publication directe (sans validation humaine)", "creators:read": "Lecture des idées des créatrices acceptées (studio)", "creators:write": "Suivi de fabrication des idées des créatrices (studio)" };
 
 export function ApiKeyManager({ keys }: { keys: KeyView[] }) {
   const [open, setOpen] = useState(false);

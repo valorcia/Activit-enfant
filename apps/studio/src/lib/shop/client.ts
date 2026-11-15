@@ -30,6 +30,31 @@ export interface ShopCategory { id: string; slug: string; name: string }
 export interface ShopPeriodStats { orders: number; units: number; revenueCents: number; revenueNetCents: number; refundedCents: number }
 export interface ShopProductStats { productId: string; currency: string; total: ShopPeriodStats; last30Days: ShopPeriodStats; lastOrderAt: string | null }
 
+/** Idée d'une créatrice acceptée par la boutique (API v1, scope creators:read). */
+export interface ShopCreatorSubmission {
+  id: string;
+  title: string;
+  status: "ACCEPTED" | "IN_PRODUCTION" | "PREVIEW_READY" | "APPROVED" | "PUBLISHED";
+  ageMin: number | null;
+  ageMax: number | null;
+  durationMinutes: number | null;
+  materials: string[];
+  steps: string[];
+  tips: string | null;
+  safetyNotes: string | null;
+  contribution: "IDEA" | "FULL_TUTORIAL";
+  exclusive: boolean;
+  rateBp: number | null;
+  studioBookId: string | null;
+  productId: string | null;
+  previewUrl: string | null;
+  submittedAt: string | null;
+  moderatedAt: string | null;
+  creator: { id: string; publicName: string; slug: string | null; bio: string | null };
+  credit: string;
+  photos: Array<{ url: string; width: number | null; height: number | null }>;
+}
+
 export class ShopClient {
   constructor(private cfg: ShopClientConfig) {
     if (!cfg.baseUrl || !cfg.apiKey) throw new ShopApiError("Boutique non configurée (URL ou clé API manquante)", 0);
@@ -131,6 +156,24 @@ export class ShopClient {
     if (opts.replace) fd.set("replace", "1");
     return (await this.request<{ id: string; name: string; kind: string; sizeBytes: number }>(`/products/${id}/files`, { method: "POST", body: fd })).data;
   }
+  // --- Espace créatrices (scopes creators:read / creators:write) ---
+  async creatorSubmissions(status = "ACCEPTED"): Promise<ShopCreatorSubmission[]> {
+    return (await this.request<ShopCreatorSubmission[]>(`/creators/submissions?status=${encodeURIComponent(status)}`)).data ?? [];
+  }
+  async creatorSubmission(id: string): Promise<ShopCreatorSubmission | null> {
+    try { return (await this.request<ShopCreatorSubmission>(`/creators/submissions/${encodeURIComponent(id)}`)).data; }
+    catch (e) { if (e instanceof ShopApiError && e.status === 404) return null; throw e; }
+  }
+  private creatorPost(id: string, action: "production" | "preview" | "link", payload: Record<string, unknown>) {
+    return this.request<ShopCreatorSubmission>(`/creators/submissions/${encodeURIComponent(id)}/${action}`, { method: "POST", body: JSON.stringify(payload), headers: { "Content-Type": "application/json" } }).then((r) => r.data);
+  }
+  /** ACCEPTED → IN_PRODUCTION (livre créé dans le studio) */
+  startCreatorProduction(id: string, bookId: string) { return this.creatorPost(id, "production", { bookId }); }
+  /** → PREVIEW_READY : la boutique envoie le lien d'aperçu à la créatrice */
+  sendCreatorPreview(id: string, previewUrl: string) { return this.creatorPost(id, "preview", { previewUrl }); }
+  /** Crédite la créatrice sur le produit de la boutique (« Une idée de … », taux de redevance) */
+  linkCreatorSubmission(id: string, productId: string) { return this.creatorPost(id, "link", { productId }); }
+
   async publish(id: string, scheduledAt?: Date) {
     return this.json(`/products/${id}/publish`, "POST", scheduledAt ? { scheduledAt: scheduledAt.toISOString() } : {});
   }

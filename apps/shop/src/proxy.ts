@@ -3,6 +3,7 @@ import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/db";
 import { DEFAULT_SITE_SLUG, PREVIEW_COOKIE, SITE_HEADER, SITE_ROUTE_PREFIX } from "@/lib/sites/constants";
 import { resolveSiteSlug, type SiteRouting } from "@/lib/sites/host";
+import { CREATOR_SESSION_COOKIE, isPublicCreatorPath, verifySessionToken } from "@/lib/creators/tokens";
 
 /**
  * Proxy (Next 16) :
@@ -11,6 +12,9 @@ import { resolveSiteSlug, type SiteRouting } from "@/lib/sites/host";
  *     pose l'en-tête x-site-slug et réécrit les routes publiques vers /s/<slug>/….
  *  2. Protection des routes d'administration : /admin/* (hors connexion) et /api/admin/*
  *     exigent une session valide ; les rôles sont vérifiés dans les pages et actions.
+ *  3. Espace créatrices : /espace-createur/* (hors connexion) et /api/createur/* exigent le
+ *     cookie de session créatrice signé (distinct de l'admin) ; la base est vérifiée dans les pages.
+ *     Ces routes sont communes à tous les univers : pas de réécriture.
  */
 
 let routingCache: { at: number; sites: SiteRouting[] } | null = null;
@@ -63,6 +67,15 @@ export async function proxy(req: NextRequest) {
         url.searchParams.set("callbackUrl", pathname);
         return NextResponse.redirect(url);
       }
+    }
+    return NextResponse.next({ request: { headers } });
+  }
+
+  // Espace créatrices : session signée requise (sauf page de connexion par lien magique)
+  if (pathname === "/espace-createur" || pathname.startsWith("/espace-createur/") || pathname.startsWith("/api/createur/")) {
+    if (!isPublicCreatorPath(pathname) && !verifySessionToken(req.cookies.get(CREATOR_SESSION_COOKIE)?.value)) {
+      if (pathname.startsWith("/api/")) return NextResponse.json({ error: "Session créatrice requise" }, { status: 401 });
+      return NextResponse.redirect(new URL("/espace-createur/connexion", req.url));
     }
     return NextResponse.next({ request: { headers } });
   }

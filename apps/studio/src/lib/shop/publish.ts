@@ -16,6 +16,7 @@ import { ShopApiError, ShopClient, type ShopProduct } from "./client";
 import { isStructuredKit, kitContentsFor, kitType, LEGACY_ACTIVITY_TYPE } from "../kits/types";
 import { KIT_CONTENT_SCHEMAS, KitCustomizationSchema } from "../kits/schemas";
 import { heroOf, introOf, mainCount, mainItems, materialsOf, type KitContent } from "../kits/content";
+import { createPreviewToken } from "../preview/token";
 
 export type BookForListing = Book & {
   activities: Array<{ activity: { title: string; concept: Prisma.JsonValue | null; currentVersion: { content: Prisma.JsonValue } | null; durationMinutes: number; difficulty: number; category: string } }>;
@@ -211,6 +212,17 @@ export async function publishBookToShop(bookId: string, opts: PublishOptions = {
       product = (await client.createProduct(listing)).data;
     }
     const productId = product.id;
+    const creator = creatorOf(book);
+
+    // 1 bis. Idée d'une créatrice : crédit « Une idée de … » et taux de redevance sur le produit
+    if (creator) {
+      try {
+        await client.linkCreatorSubmission(creator.submissionId, productId);
+        await log(`Produit crédité : ${creator.credit}`);
+      } catch (e) {
+        warnings.push(`Proposition de la créatrice non liée au produit : ${e instanceof Error ? e.message : e}`);
+      }
+    }
 
     // 2. Couverture → image MAIN
     const coverAsset = await currentCoverAsset(book);
@@ -234,6 +246,13 @@ export async function publishBookToShop(bookId: string, opts: PublishOptions = {
       }
     } else {
       warnings.push("Aucun export PDF terminé : le produit ne pourra pas être publié tant qu'un fichier n'est pas attaché.");
+    }
+
+    // 3 bis. Idée d'une créatrice : envoi (une fois) du lien d'aperçu partagé pour validation
+    if (creator && !creator.previewSentAt && exp?.status === "COMPLETED") {
+      const note = await sendCreatorPreview(client, book, creator);
+      if (note.warning) warnings.push(note.warning);
+      else await log("Aperçu envoyé à la créatrice pour validation");
     }
 
     // 4. Aperçus de pages (3 premières pages intérieures) → PDF_PREVIEW
@@ -288,6 +307,29 @@ export async function publishBookToShop(bookId: string, opts: PublishOptions = {
     const message = e instanceof ShopApiError ? `${e.message}${e.details ? ` — ${JSON.stringify(e.details).slice(0, 300)}` : ""}` : e instanceof Error ? e.message : String(e);
     await prisma.book.update({ where: { id: bookId }, data: { shopLastSyncAt: new Date(), shopSyncError: message } }).catch(() => undefined);
     throw e;
+  }
+}
+
+type CreatorRef = { submissionId: string; name: string; credit: string; previewSentAt?: string };
+
+/** Idée d'une créatrice à l'origine du livre (customization.creator), si présente. */
+export function creatorOf(book: Pick<Book, "customization">): CreatorRef | null {
+  const c = KitCustomizationSchema.safeParse(book.customization ?? {});
+  return c.success && c.data.creator ? c.data.creator : null;
+}
+
+/** Lien d'aperçu partagé (7 jours) envoyé à la créatrice par la boutique (statut PREVIEW_READY). */
+async function sendCreatorPreview(client: ShopClient, book: Book, creator: CreatorRef): Promise<{ warning?: string }> {
+  const base = (process.env.APP_URL ?? "").replace(/\/$/, "");
+  if (!/^https?:\/\//.test(base)) return { warning: "Aperçu non envoyé à la créatrice : APP_URL (adresse publique du studio) n'est pas définie." };
+  try {
+    const { token } = await createPreviewToken(book.id);
+    await client.sendCreatorPreview(creator.submissionId, `${base}/preview/${token}`);
+    const cust = (book.customization ?? {}) as Record<string, unknown>;
+    await prisma.book.update({ where: { id: book.id }, data: { customization: { ...cust, creator: { ...creator, previewSentAt: new Date().toISOString() } } as Prisma.InputJsonValue } });
+    return {};
+  } catch (e) {
+    return { warning: `Aperçu non envoyé à la créatrice : ${e instanceof Error ? e.message : e}` };
   }
 }
 

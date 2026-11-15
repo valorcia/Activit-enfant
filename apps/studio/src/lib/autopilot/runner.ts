@@ -32,6 +32,7 @@ import { MARKETING_SLOTS, pendingCount, generateKitContent, generateKitIllustrat
 import { rebuildBookPages } from "../layout/book";
 import { createExport } from "../export";
 import { publishBookToShop } from "../shop/publish";
+import { ShopClient } from "../shop/client";
 import { adFormDefaults, animationPromptFor, createAdVideos, sendAdVideoToShop } from "../video/service";
 import { checkKitContent, summarizeQuality } from "./quality";
 import { estimateRun } from "./estimate";
@@ -66,6 +67,9 @@ export interface RunState {
   contentSource?: string;
   /** Univers de la boutique choisi au lancement (sinon proposé par le plan) */
   siteSlug?: string | null;
+  /** Idée d'une créatrice (Espace créatrices de la boutique) à l'origine du run */
+  creator?: { submissionId: string; name: string; credit: string };
+  creatorNote?: string;
 }
 
 type RunRow = NonNullable<Awaited<ReturnType<typeof loadRun>>>;
@@ -101,8 +105,8 @@ export async function scheduleRun(runId: string, jobId: string, delaySeconds = 0
 }
 
 /** Crée un run et lance son traitement. */
-export async function startRun(input: { brief: string; config: AutopilotSettings; title?: string | null; stages: Stage[]; siteSlug?: string | null; imagesViaApi?: boolean }) {
-  const initial: Partial<RunState> = { ...(input.siteSlug ? { siteSlug: input.siteSlug } : {}), ...(input.imagesViaApi ? { imagesViaApi: true } : {}) };
+export async function startRun(input: { brief: string; config: AutopilotSettings; title?: string | null; stages: Stage[]; siteSlug?: string | null; imagesViaApi?: boolean; creator?: RunState["creator"] }) {
+  const initial: Partial<RunState> = { ...(input.siteSlug ? { siteSlug: input.siteSlug } : {}), ...(input.imagesViaApi ? { imagesViaApi: true } : {}), ...(input.creator ? { creator: input.creator } : {}) };
   const run = await prisma.autopilotRun.create({
     data: { brief: input.brief, title: input.title ?? null, config: input.config as unknown as Prisma.InputJsonValue, stages: input.stages as unknown as Prisma.InputJsonValue, maxCostUsd: input.config.maxCostUsd, status: "RUNNING", ...(Object.keys(initial).length ? { state: initial as Prisma.InputJsonValue } : {}) },
   });
@@ -263,10 +267,31 @@ async function stagePlan(run: RunRow, jobId: string): Promise<StageOutcome> {
   }
   await prisma.autopilotRun.update({ where: { id: run.id }, data: { bookId, title: resolved.plan.title } });
   await patchState(run.id, { contentSource: resolved.source });
+  const creatorNote = await attachCreatorSubmission(run, bookId);
   const source = resolved.source === "contenu" ? "contenu complet importé tel quel" : resolved.source === "json" ? "plan JSON importé" : "plan proposé par l'IA";
   const site = siteBySlug(await activeSites(), resolved.plan.siteSlug);
   const audience = isAdultAge(resolved.plan.ageRange) ? "adultes" : `${resolved.plan.ageRange.replace("-", " à ")} ans`;
-  return { type: "done", detail: `${def.label} « ${resolved.plan.title} » · ${resolved.plan.count} ${def.countLabel} · ${audience}${site ? ` · univers ${site.name}` : ""} (${source}${contentImported ? "" : ""})` };
+  return { type: "done", detail: `${def.label} « ${resolved.plan.title} » · ${resolved.plan.count} ${def.countLabel} · ${audience}${site ? ` · univers ${site.name}` : ""} (${source}${contentImported ? "" : ""})${creatorNote ? ` · ${creatorNote}` : ""}` };
+}
+
+/**
+ * Idée d'une créatrice : mémorise la proposition sur le livre (crédit, suivi) et prévient la
+ * boutique que la fabrication a commencé. Sans effet bloquant : une erreur de la boutique est
+ * seulement signalée dans le détail de l'étape.
+ */
+async function attachCreatorSubmission(run: RunRow, bookId: string): Promise<string | null> {
+  const creator = stateOf(run).creator;
+  if (!creator) return null;
+  const b = await prisma.book.findUniqueOrThrow({ where: { id: bookId }, select: { customization: true } });
+  const cust = (b.customization ?? {}) as Record<string, unknown>;
+  await prisma.book.update({ where: { id: bookId }, data: { customization: { ...cust, creator } as Prisma.InputJsonValue } });
+  try {
+    const shop = await getShopSettings();
+    await new ShopClient({ baseUrl: shop.shopApiUrl, apiKey: shop.shopApiKey }).startCreatorProduction(creator.submissionId, bookId);
+    return `${creator.credit} (fabrication signalée à la boutique)`;
+  } catch (e) {
+    return `${creator.credit} — la boutique n'a pas pu être prévenue : ${e instanceof Error ? e.message : e}`;
+  }
 }
 
 async function stageContent(run: RunRow, jobId: string): Promise<StageOutcome> {

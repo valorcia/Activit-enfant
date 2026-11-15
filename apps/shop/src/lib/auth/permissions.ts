@@ -21,6 +21,9 @@ export const PERMISSIONS = {
   "users:write": ["ADMIN"],
   "apikeys:write": ["ADMIN"],
   "pages:write": ["ADMIN", "EDITOR"],
+  "creators:read": ["ADMIN", "EDITOR"], // espace créatrices : liste, propositions, commissions
+  "creators:write": ["ADMIN", "EDITOR"], // invitation, modération, taux
+  "creators:payouts": ["ADMIN"], // paiements, export avec IBAN, réglages du programme
 } as const satisfies Record<string, readonly Role[]>;
 
 export type Permission = keyof typeof PERMISSIONS;

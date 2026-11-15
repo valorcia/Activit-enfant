@@ -2,7 +2,7 @@ import type { ApiKey, PrismaClient } from "@prisma/client";
 import { prisma as defaultPrisma } from "@/lib/db";
 import { sha256 } from "@/lib/tokens";
 
-export const API_SCOPES = ["products:read", "products:write", "products:publish"] as const;
+export const API_SCOPES = ["products:read", "products:write", "products:publish", "creators:read", "creators:write"] as const;
 export type ApiScope = (typeof API_SCOPES)[number];
 
 export type ApiAuthResult =
@@ -48,6 +48,8 @@ export async function authenticateApiKey(req: Request, requiredScope?: ApiScope,
   // products:write (et products:publish) impliquent la lecture : une intégration qui écrit doit pouvoir relire le catalogue
   const effective = new Set(key.scopes);
   if (effective.has("products:write") || effective.has("products:publish")) effective.add("products:read");
+  // creators:write (studio : fabrication, aperçu, lien produit) implique la lecture des propositions
+  if (effective.has("creators:write")) effective.add("creators:read");
   if (requiredScope && !effective.has(requiredScope)) {
     return { ok: false, status: 403, error: `Permission manquante : ${requiredScope}` };
   }

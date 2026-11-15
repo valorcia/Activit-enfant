@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Megaphone, BarChart3, BookOpen, Boxes, FileText, Gift, Home, Import, KeyRound, LayoutGrid, LogOut, Mail, Menu, MessageSquareQuote, Package, Palette, Settings, ShoppingCart, Tags, TicketPercent, Users, X, ExternalLink, Globe2 } from "lucide-react";
+import { Megaphone, BarChart3, BookOpen, Boxes, FileText, Gift, Home, Import, KeyRound, LayoutGrid, LogOut, Mail, Menu, MessageSquareQuote, Package, Palette, Settings, ShoppingCart, Tags, TicketPercent, Users, X, ExternalLink, Globe2, Lightbulb } from "lucide-react";
 import { setAdminSiteAction } from "@/app/actions/admin/sites";
 import { signOutAction } from "@/app/actions/auth";
 import { roleCan, type Permission, ROLE_LABELS } from "@/lib/auth/permissions";
@@ -24,6 +24,7 @@ const NAV: Array<{ title: string; items: NavItem[] }> = [
     { href: "/admin/collections", label: "Collections", icon: Tags, permission: "products:read" },
     { href: "/admin/packs", label: "Packs", icon: Boxes, permission: "products:read" },
     { href: "/admin/import", label: "Importation", icon: Import, permission: "products:import" },
+    { href: "/admin/createurs", label: "Créatrices", icon: Lightbulb, permission: "creators:read" },
   ] },
   { title: "Marketing", items: [
     { href: "/admin/marketing", label: "Marketing social", icon: Megaphone, permission: "marketing:write" },
