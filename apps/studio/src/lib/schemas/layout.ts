@@ -45,6 +45,8 @@ export const TextStyleSchema = z.object({
   borderColor: z.string().optional(),
   /** Bordure en pointillés : lignes de découpe des cartes. */
   borderStyle: z.enum(["solid", "dashed"]).optional(),
+  /** Débordement de texte vérifié et accepté (« Valider tel quel ») : plus d'alerte. */
+  overflowOk: z.boolean().optional(),
 });
 export type TextStyle = z.infer<typeof TextStyleSchema>;
 

@@ -85,7 +85,7 @@ function BlockView({ block, theme, mode, selected, onSelect, onBlockPointerDown,
     : {};
   const cls = cn(editable && "editor-hover", selected && "editor-selected");
   const wrap = (children: React.ReactNode, extra?: React.CSSProperties) => (
-    <div data-block-id={block.id} data-block-type={block.type} className={cls} style={{ ...base, ...extra }} {...handlers}>
+    <div data-block-id={block.id} data-overflow-ok={(s as { overflowOk?: boolean }).overflowOk ? "" : undefined} data-block-type={block.type} className={cls} style={{ ...base, ...extra }} {...handlers}>
       {children}
       {selected && editable && <div className="resize-handle" onPointerDown={(e) => { e.stopPropagation(); onBlockPointerDown?.(e, block, "resize"); }} />}
     </div>
@@ -117,7 +117,7 @@ function BlockView({ block, theme, mode, selected, onSelect, onBlockPointerDown,
       return wrap(
         <div
           data-measure
-          data-autofit={editable ? undefined : ""}
+          data-autofit=""
           data-font={style.fontSize as string}
           style={style}
           contentEditable={editable && block.editable}

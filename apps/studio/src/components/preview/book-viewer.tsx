@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { BookOpen, ChevronLeft, ChevronRight, Copy, Download, FileDown, FileText, LayoutGrid, Maximize2, Minimize2, Pencil, RefreshCw, ScanEye, Share2, Sparkles, Store, Crop, Upload, TriangleAlert } from "lucide-react";
+import { BookOpen, ChevronLeft, ChevronRight, Copy, Download, FileDown, FileText, LayoutGrid, Maximize2, Minimize2, Pencil, RefreshCw, ScanEye, Share2, Sparkles, Store, Crop, Upload, TriangleAlert, Check } from "lucide-react";
 import { PageRenderer } from "@/components/page-renderer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,7 @@ import { ImageToolsDialog, type ImageToolTab } from "./image-tools";
 import { requestExport } from "@/app/actions/books";
 import { publishToShopAction } from "@/app/actions/shop";
 import { createPreviewLinkAction, finalizeSketchesAction } from "@/app/actions/images";
+import { fixTextOverflowAction } from "@/app/actions/pages";
 import { formatUsd } from "@/lib/utils";
 import type { BookPreviewData } from "@/lib/preview/data";
 import type { ImageIssue } from "@/lib/quality/images";
@@ -26,7 +27,8 @@ interface PageBadge {
   label: string;
   blockId?: string;
   illustrationId?: string;
-  actions: Array<ImageToolTab | "texte">;
+  actions: Array<ImageToolTab | "texte" | "agrandir" | "valider">;
+  growMm?: number;
 }
 
 const SEVERITY_CLASS: Record<PageBadge["severity"], string> = {
@@ -65,7 +67,8 @@ export function BookViewer({ data, readOnly = false }: { data: BookPreviewData; 
   const [thumbs, setThumbs] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
   const [stage, setStage] = useState({ w: 1000, h: 700 });
-  const [overflows, setOverflows] = useState<Map<number, string[]>>(new Map());
+  const [overflows, setOverflows] = useState<Map<number, { id: string; growMm: number }[]>>(new Map());
+  const [shrunk, setShrunk] = useState<Map<number, { id: string; pct: number }[]>>(new Map());
   const [tool, setTool] = useState<{ illustrationId: string; frame?: { w: number; h: number }; tab: ImageToolTab } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -137,21 +140,25 @@ export function BookViewer({ data, readOnly = false }: { data: BookPreviewData; 
     const measure = () => {
       const root = thumbsRef.current;
       if (!root || cancelled) return;
-      setOverflows((prev) => {
-        const map = new Map(prev);
-        root.querySelectorAll<HTMLElement>("[data-page-index]").forEach((pg) => {
-          const idx = Number(pg.dataset.pageIndex);
-          const ids: string[] = [];
-          pg.querySelectorAll<HTMLElement>("[data-block-id]").forEach((el) => {
-            if (el.dataset.blockType === "image" || el.dataset.blockType === "shape") return;
-            const inner = el.querySelector<HTMLElement>("[data-measure]") ?? el;
-            if (inner.scrollHeight > el.clientHeight + 3) ids.push(el.dataset.blockId!);
-          });
-          if (ids.length) map.set(idx, ids);
-          else map.delete(idx);
+      const over = new Map<number, { id: string; growMm: number }[]>();
+      const small = new Map<number, { id: string; pct: number }[]>();
+      root.querySelectorAll<HTMLElement>("[data-page-index]").forEach((pg) => {
+        const idx = Number(pg.dataset.pageIndex);
+        // 1 mm à l'échelle de la miniature (la page fait widthMm de large)
+        const pxPerMm = pg.offsetWidth / Math.max(1, data.widthMm);
+        pg.querySelectorAll<HTMLElement>("[data-block-id]").forEach((el) => {
+          if (el.dataset.blockType === "image" || el.dataset.blockType === "shape" || el.hasAttribute("data-overflow-ok")) return;
+          const inner = el.querySelector<HTMLElement>("[data-measure]") ?? el;
+          const extra = inner.scrollHeight - el.clientHeight;
+          if (extra > 3) over.set(idx, [...(over.get(idx) ?? []), { id: el.dataset.blockId!, growMm: extra / Math.max(0.01, pxPerMm) }]);
+          else {
+            const scale = Number(inner.dataset.autofitScale ?? "1");
+            if (scale < 0.9) small.set(idx, [...(small.get(idx) ?? []), { id: el.dataset.blockId!, pct: Math.round(scale * 100) }]);
+          }
         });
-        return map;
       });
+      setOverflows(over);
+      setShrunk(small);
     };
     const t = setTimeout(() => document.fonts.ready.then(() => setTimeout(measure, 150)), 120);
     return () => { cancelled = true; clearTimeout(t); };
@@ -164,9 +171,10 @@ export function BookViewer({ data, readOnly = false }: { data: BookPreviewData; 
       if (i.code === "auto_contain" || i.code === "demo") continue;
       m.set(i.pageIndex, [...(m.get(i.pageIndex) ?? []), issueBadge(i)]);
     }
-    for (const [idx, ids] of overflows) m.set(idx, [...(m.get(idx) ?? []), ...ids.map((id) => ({ key: `of-${id}`, severity: "blocking" as const, label: "Texte qui déborde", blockId: id, actions: ["texte" as const] }))]);
+    for (const [idx, list] of overflows) m.set(idx, [...(m.get(idx) ?? []), ...list.map((o) => ({ key: `of-${o.id}`, severity: "blocking" as const, label: "Texte coupé : il ne tient pas dans son cadre", blockId: o.id, growMm: o.growMm, actions: ["agrandir" as const, "valider" as const, "texte" as const] }))]);
+    for (const [idx, list] of shrunk) m.set(idx, [...(m.get(idx) ?? []), ...list.map((o) => ({ key: `fit-${o.id}`, severity: "info" as const, label: `Texte réduit automatiquement à ${o.pct} % pour tenir`, blockId: o.id, actions: ["valider" as const, "texte" as const] }))]);
     return m;
-  }, [data.issues, overflows]);
+  }, [data.issues, overflows, shrunk]);
 
   const totalAlerts = [...badgesByPage.values()].flat().filter((b) => b.severity !== "info").length;
 
@@ -264,6 +272,16 @@ export function BookViewer({ data, readOnly = false }: { data: BookPreviewData; 
           dark={fullscreen}
           onAction={(pi, b, a) => {
             if (a === "texte") return;
+            if (a === "agrandir" || a === "valider") {
+              const pageId = pages[pi]?.id;
+              if (!pageId || !b.blockId) return;
+              void fixTextOverflowAction(data.book.id, pageId, b.blockId, a === "agrandir" ? "grow" : "accept", b.growMm ?? 0).then((r) => {
+                if (!r.ok) window.alert(r.error);
+                router.refresh();
+                setShownTick((t) => t + 1);
+              });
+              return;
+            }
             openTool(b.illustrationId, b.blockId, pi, a);
           }}
         />
@@ -360,9 +378,11 @@ function ControlsOverlay({ page, pageIndex, widthMm, heightMm, marginMm, scale, 
   );
 }
 
-function SpreadAlerts({ spread, badgesByPage, readOnly, bookId, dark, onAction }: { spread: number[]; badgesByPage: Map<number, PageBadge[]>; readOnly: boolean; bookId: string; dark: boolean; onAction: (pageIndex: number, b: PageBadge, a: ImageToolTab | "texte") => void }) {
+function SpreadAlerts({ spread, badgesByPage, readOnly, bookId, dark, onAction }: { spread: number[]; badgesByPage: Map<number, PageBadge[]>; readOnly: boolean; bookId: string; dark: boolean; onAction: (pageIndex: number, b: PageBadge, a: PageBadge["actions"][number]) => void }) {
   const items = spread.flatMap((pi) => (badgesByPage.get(pi) ?? []).map((b) => ({ pi, b })));
-  const ACTION_LABEL: Record<ImageToolTab | "texte", { label: string; Icon: typeof Crop }> = {
+  const ACTION_LABEL: Record<PageBadge["actions"][number], { label: string; Icon: typeof Crop }> = {
+    agrandir: { label: "Agrandir le cadre", Icon: Maximize2 },
+    valider: { label: "Valider tel quel", Icon: Check },
     recadrer: { label: "Recadrer", Icon: Crop },
     remplacer: { label: "Remplacer par un fichier", Icon: Upload },
     regenerer: { label: "Regénérer cette image", Icon: RefreshCw },
@@ -380,6 +400,7 @@ function SpreadAlerts({ spread, badgesByPage, readOnly, bookId, dark, onAction }
               <span>Page {pi + 1} · {b.label}</span>
               {!readOnly && b.actions.map((a) => {
                 const { label, Icon } = ACTION_LABEL[a];
+                if (a === "agrandir" || a === "valider") return <button key={a} onClick={() => onAction(pi, b, a)} className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-semibold hover:border-blue-400 ${a === "agrandir" ? "border-blue-300 bg-blue-50 text-blue-800" : "border-slate-300 bg-white text-slate-800"}`}><Icon className="h-3 w-3" /> {label}</button>;
                 if (a === "texte") return <Link key={a} href={`/books/${bookId}/editor?page=${pi}`} className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-0.5 text-xs font-semibold text-slate-800 hover:border-blue-400"><Icon className="h-3 w-3" /> {label}</Link>;
                 if (!b.illustrationId) return null;
                 return <button key={a} onClick={() => onAction(pi, b, a)} className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-0.5 text-xs font-semibold text-slate-800 hover:border-blue-400"><Icon className="h-3 w-3" /> {label}</button>;

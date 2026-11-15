@@ -10,6 +10,7 @@
 import type { Block, PageLayout } from "../schemas/layout";
 import type { BuildContext, BuiltPage } from "../layout/engine";
 import { listHeight } from "../layout/engine";
+import { estimateTextHeightMm } from "../layout/formats";
 import { newId } from "../utils";
 import type { PranksKit, QuickStart, TreasureHunt } from "./schemas";
 
@@ -77,15 +78,17 @@ function header(ctx: BuildContext, p: BuiltPage, o: { eyebrow: string; title?: s
   p.layout.blocks.push(text({ text: o.eyebrow.toUpperCase(), x: m, y, w, h: 6, pt: 8.5, weight: "bold", color: c.accent, align, role: "label" }));
   y += 6.5;
   if (o.title) {
-    const long = o.title.length > 34;
-    p.layout.blocks.push(text({ text: o.title, x: m, y, w, h: long ? 20 : 12, pt: long ? 19 : 24, weight: "bold", color: INK, align, role: "title", lineHeight: 1.1 }));
-    y += long ? 21 : 13;
+    const pt = o.title.length > 34 ? 19 : 24;
+    const th = estimateTextHeightMm(o.title, w, pt, 1.1) + 2;
+    p.layout.blocks.push(text({ text: o.title, x: m, y, w, h: th, pt, weight: "bold", color: INK, align, role: "title", lineHeight: 1.1 }));
+    y += th + 1;
   }
   p.layout.blocks.push(shape({ x: align === "center" ? m + w / 2 - 9 : m, y: y + 0.5, w: 18, h: 1.6, color: c.accent, radius: 1 }));
   y += 5;
   if (o.note) {
-    p.layout.blocks.push(text({ text: o.note, x: m, y, w, h: 6, pt: 9.5, color: MUTED, align }));
-    y += 8;
+    const nh = estimateTextHeightMm(o.note, w, 10, 1.4) + 2;
+    p.layout.blocks.push(text({ text: o.note, x: m, y, w, h: nh, pt: 10, color: MUTED, align, lineHeight: 1.4 }));
+    y += nh + 2;
   }
   return y + 2;
 }
@@ -374,23 +377,33 @@ export function buildIdeaPage(ctx: BuildContext, idea: PranksKit["idees"][number
     x += pw + 3;
   }
   y += 12;
-  const imgH = ctx.heightMm * 0.28;
+  const colW = (w - 6) / 2;
+  const mat = idea.materiel.length ? idea.materiel : ["Rien de spécial"];
+  const notes = (idea.message_du_lutin ? 4 + estimateTextHeightMm(`Mot à laisser : « ${idea.message_du_lutin} »`, w - 12, 11.5, 1.35) + 8 : 0) + (idea.variante_sans_materiel ? estimateTextHeightMm(`Sans matériel : ${idea.variante_sans_materiel}`, w, 9.5, 1.4) + 4 : 0);
+  const listsH = Math.max(listHeight(mat, colW, 11.5, 4.5), listHeight(idea.preparation, colW, 11.5, 4.5)) + 2;
+  // Tout doit tenir au-dessus du numéro de page : l'image (28 % de la page au plus, 30 mm au moins)
+  // cède la place aux listes ; si c'est encore trop, les listes se partagent le reste (texte ajusté).
+  const avail = ctx.heightMm - m - 10 - y;
+  const imgH = Math.max(30, Math.min(ctx.heightMm * 0.28, avail - listsH - notes - 12));
   const imgW = Math.min(w, imgH * 1.6);
   p.layout.blocks.push(image({ x: m + (w - imgW) / 2, y, w: imgW, h: imgH, img, alt: idea.illustration_description || idea.titre, radius: 7 }));
   y += imgH + 6;
-  const colW = (w - 6) / 2;
-  const notes = (idea.message_du_lutin ? 22 : 0) + (idea.variante_sans_materiel ? 12 : 0);
-  const bottomH = ctx.heightMm - y - m - 12 - notes;
+  const bottomH = Math.max(30, Math.min(listsH, ctx.heightMm - m - 10 - y - notes - 4));
   p.layout.blocks.push(list({ title: "Matériel", items: idea.materiel.length ? idea.materiel : ["Rien de spécial"], x: m, y, w: colW, h: bottomH, pt: 11.5, background: c.softer, padding: 4.5, radius: 6 }));
   p.layout.blocks.push(list({ title: "Préparation", items: idea.preparation, x: m + colW + 6, y, w: colW, h: bottomH, pt: 11.5, background: c.softer, padding: 4.5, radius: 6 }));
   let ny = y + bottomH + 4;
   if (idea.message_du_lutin) {
-    p.layout.blocks.push(shape({ x: m, y: ny, w, h: 18, color: c.accentSoft, radius: 6 }));
-    p.layout.blocks.push(shape({ x: m, y: ny, w: 2.2, h: 18, color: c.accent, radius: 1 }));
-    p.layout.blocks.push(text({ text: `Mot à laisser : « ${idea.message_du_lutin} »`, x: m + 7, y: ny + 3, w: w - 12, h: 12, pt: 11.5, weight: "bold", color: INK }));
-    ny += 22;
+    const label = `Mot à laisser : « ${idea.message_du_lutin} »`;
+    const th = estimateTextHeightMm(label, w - 12, 11.5, 1.35) + 2;
+    p.layout.blocks.push(shape({ x: m, y: ny, w, h: th + 6, color: c.accentSoft, radius: 6 }));
+    p.layout.blocks.push(shape({ x: m, y: ny, w: 2.2, h: th + 6, color: c.accent, radius: 1 }));
+    p.layout.blocks.push(text({ text: label, x: m + 7, y: ny + 3, w: w - 12, h: th, pt: 11.5, weight: "bold", color: INK, lineHeight: 1.35 }));
+    ny += th + 10;
   }
-  if (idea.variante_sans_materiel) p.layout.blocks.push(text({ text: `Sans matériel : ${idea.variante_sans_materiel}`, x: m, y: ny, w, h: 9, pt: 9.5, color: MUTED }));
+  if (idea.variante_sans_materiel) {
+    const v = `Sans matériel : ${idea.variante_sans_materiel}`;
+    p.layout.blocks.push(text({ text: v, x: m, y: ny, w, h: estimateTextHeightMm(v, w, 9.5, 1.4) + 2, pt: 9.5, color: MUTED, lineHeight: 1.4 }));
+  }
   return p;
 }
 
