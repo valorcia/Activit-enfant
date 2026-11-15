@@ -12,7 +12,7 @@ import { estimateBookCost } from "@/lib/queue/estimate";
 import { BookTabs } from "@/components/book/book-tabs";
 import { RunBadge } from "@/components/autopilot/run-badge";
 import { currentStage, parseStages } from "@/lib/autopilot/stages";
-import { BookOpen, Rocket } from "lucide-react";
+import { BookOpen, Rocket, Store } from "lucide-react";
 import { buildContextForBook } from "@/lib/layout/book";
 import { getCover } from "@/lib/generation/cover";
 import { assetUrl } from "@/lib/storage";
@@ -98,6 +98,14 @@ export default async function BookPage({ params, searchParams }: { params: Promi
             <Button asChild className="bg-amber-500 text-amber-950 hover:bg-amber-400"><Link href={`/books/${id}/apercu`}><BookOpen className="h-4 w-4" /> Aperçu</Link></Button>
             <Button asChild variant="secondary"><Link href={`/print/books/${id}`} target="_blank">Aperçu impression</Link></Button>
             <Button asChild><Link href={`/books/${id}/editor`}>Ouvrir l'éditeur</Link></Button>
+            {book.shopProductId && shopSettings.shopApiUrl && (
+              <>
+                {book.shopPublishedAt && (book.shopPublicUrl || book.shopProductSlug) && (
+                  <Button asChild variant="secondary"><a href={book.shopPublicUrl ?? `${shopSettings.shopApiUrl}/aventures/${book.shopProductSlug}`} target="_blank" rel="noopener"><Store className="h-4 w-4" /> Voir dans la boutique</a></Button>
+                )}
+                <Button asChild variant="secondary"><a href={`${shopSettings.shopApiUrl}/admin/produits/${book.shopProductId}`} target="_blank" rel="noopener">Fiche produit (admin)</a></Button>
+              </>
+            )}
           </>
         }
       />

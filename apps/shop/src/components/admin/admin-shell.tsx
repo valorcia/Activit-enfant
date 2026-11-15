@@ -64,7 +64,7 @@ function SiteSwitcher({ sites, current }: { sites: AdminSiteOption[]; current: s
   );
 }
 
-export function AdminShell({ user, brandName, sites = [], currentSite = "all", children }: { user: AdminUser; brandName: string; sites?: AdminSiteOption[]; currentSite?: string; children: React.ReactNode }) {
+export function AdminShell({ user, brandName, sites = [], currentSite = "all", studioUrl = "", children }: { user: AdminUser; brandName: string; sites?: AdminSiteOption[]; currentSite?: string; studioUrl?: string; children: React.ReactNode }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const viewUrl = sites.find((s) => s.slug === currentSite)?.url ?? "/";
@@ -103,8 +103,9 @@ export function AdminShell({ user, brandName, sites = [], currentSite = "all", c
       <div className="border-t border-line p-4">
         <p className="truncate text-sm font-bold">{user.name ?? user.email}</p>
         <p className="text-xs text-ink-muted">{ROLE_LABELS[user.role]}</p>
-        <div className="mt-3 flex gap-2">
+        <div className="mt-3 flex flex-wrap gap-2">
           <Link href={viewUrl} target="_blank" className="inline-flex items-center gap-1 rounded-full bg-ink/5 px-3 py-1.5 text-xs font-bold hover:bg-ink/10"><ExternalLink className="size-3.5" /> Voir le site</Link>
+          {studioUrl && <a href={studioUrl} target="_blank" rel="noopener" className="inline-flex items-center gap-1 rounded-full bg-ink/5 px-3 py-1.5 text-xs font-bold hover:bg-ink/10"><Palette className="size-3.5" /> Studio</a>}
           <form action={signOutAction}><button className="inline-flex items-center gap-1 rounded-full bg-ink/5 px-3 py-1.5 text-xs font-bold hover:bg-red-50 hover:text-red-700"><LogOut className="size-3.5" /> Déconnexion</button></form>
         </div>
       </div>
@@ -124,7 +125,8 @@ export function AdminShell({ user, brandName, sites = [], currentSite = "all", c
         <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-line bg-white/90 px-4 backdrop-blur lg:hidden">
           <button className="rounded-full p-2 hover:bg-ink/5" onClick={() => setOpen(true)} aria-label="Ouvrir le menu"><Menu className="size-5" /></button>
           <span className="font-heading font-bold">Administration</span>
-          <Link href="/" className="ml-auto text-ink-muted" aria-label="Accueil du site"><Home className="size-5" /></Link>
+          {studioUrl && <a href={studioUrl} target="_blank" rel="noopener" className="ml-auto inline-flex items-center gap-1 rounded-full bg-ink/5 px-3 py-1.5 text-xs font-bold"><Palette className="size-3.5" /> Studio</a>}
+          <Link href="/" className={studioUrl ? "text-ink-muted" : "ml-auto text-ink-muted"} aria-label="Accueil du site"><Home className="size-5" /></Link>
         </header>
         <main className="flex-1 p-4 sm:p-6 lg:p-8">{children}</main>
       </div>

@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
-import { ArrowDown, ArrowUp, Copy, ExternalLink, FileText, Save, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Copy, ExternalLink, FileText, Palette, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input, NativeSelect, Textarea } from "@/components/ui/input";
@@ -83,7 +83,7 @@ interface Props {
   sites: Array<{ id: string; name: string; url: string }>;
 }
 
-export function ProductForm({ initial, images, files, categories: allCategories, collections: allCollections, products, sites }: Props) {
+export function ProductForm({ initial, images, files, categories: allCategories, collections: allCollections, products, sites, studioLink }: Props & { studioLink?: string }) {
   const router = useRouter();
   const [form, setForm] = useState<ProductFormData>(initial);
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -162,6 +162,11 @@ export function ProductForm({ initial, images, files, categories: allCategories,
         {!isNew && (
           <Button type="button" variant="outline" size="sm" asChild>
             <Link href={publicUrl} target="_blank"><ExternalLink className="size-4" /> Voir la fiche</Link>
+          </Button>
+        )}
+        {!isNew && studioLink && (
+          <Button type="button" variant="outline" size="sm" asChild>
+            <a href={studioLink} target="_blank" rel="noopener"><Palette className="size-4" /> Ouvrir dans le studio</a>
           </Button>
         )}
         {!isNew && (

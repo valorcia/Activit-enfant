@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { LayoutDashboard, BookOpen, PlusCircle, Library, Palette, FileDown, Settings, ListChecks, Sparkles, ClipboardPaste, Store, Wand2, Clapperboard, Rocket, Menu, X } from "lucide-react";
+import { LayoutDashboard, BookOpen, PlusCircle, Library, Palette, FileDown, Settings, ListChecks, Sparkles, ClipboardPaste, Store, Wand2, Clapperboard, Rocket, Menu, X, ExternalLink } from "lucide-react";
 import { ModeToggle } from "@/components/mode-toggle";
 import { cn } from "@/lib/utils";
 import { logoutAction } from "@/app/actions/auth";
@@ -24,7 +24,7 @@ const NAV = [
   { href: "/settings", label: "Paramètres", icon: Settings },
 ];
 
-export function Sidebar({ mode = "api", pendingManual = 0, activeRuns = 0, studioName = "La Malle à Jeux · Studio" }: { mode?: "api" | "manual"; pendingManual?: number; activeRuns?: number; studioName?: string }) {
+export function Sidebar({ mode = "api", pendingManual = 0, activeRuns = 0, studioName = "La Malle à Jeux · Studio", shopUrl = "" }: { mode?: "api" | "manual"; pendingManual?: number; activeRuns?: number; studioName?: string; shopUrl?: string }) {
   const [brand, sub] = studioName.includes("·") ? studioName.split("·").map((x) => x.trim()) : [studioName, "Studio"];
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -63,8 +63,15 @@ export function Sidebar({ mode = "api", pendingManual = 0, activeRuns = 0, studi
       })}
     </nav>
   );
+  const shopLinks = shopUrl ? (
+    <div className="mx-3 mb-2 grid grid-cols-2 gap-2">
+      <a href={shopUrl} target="_blank" rel="noopener" className="inline-flex items-center justify-center gap-1.5 rounded-md border border-slate-200 px-2 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100"><Store className="h-3.5 w-3.5" /> Voir la boutique</a>
+      <a href={`${shopUrl}/admin`} target="_blank" rel="noopener" className="inline-flex items-center justify-center gap-1.5 rounded-md border border-slate-200 px-2 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100"><ExternalLink className="h-3.5 w-3.5" /> Admin boutique</a>
+    </div>
+  ) : null;
   const footer = (
     <>
+      {shopLinks}
       <ModeToggle mode={mode} />
       <div className="flex items-center justify-between p-4 text-[11px] text-slate-400 border-t border-slate-100"><span>v0.1 · production éditoriale</span><form action={logoutAction}><button className="rounded px-2 py-1 font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-900">Déconnexion</button></form></div>
     </>

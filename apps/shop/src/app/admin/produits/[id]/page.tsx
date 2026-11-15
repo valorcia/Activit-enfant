@@ -3,6 +3,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { prisma } from "@/lib/db";
 import { AdminPageHeader } from "@/components/admin/page-header";
 import { ProductForm } from "@/components/admin/product-form";
+import { studioProductUrl } from "@/lib/studio-link";
 import { productToForm } from "@/lib/admin/product-form-data";
 import { getSites, siteUrl } from "@/lib/sites";
 import { EtsyProductPanel } from "@/components/admin/ops-etsy";
@@ -36,6 +37,7 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
         images={product.images.map((i) => ({ id: i.id, url: i.url, alt: i.alt, role: i.role, position: i.position }))}
         files={product.files.map((f) => ({ id: f.id, name: f.name, description: f.description, kind: f.kind, sizeBytes: f.sizeBytes, mime: f.mime }))}
         categories={categories} collections={collections} products={products} sites={sites.filter((s) => s.status !== "ARCHIVED" || s.id === product.siteId).map((s) => ({ id: s.id, name: s.name, url: siteUrl(s) }))}
+        studioLink={studioProductUrl(product.id)}
       />
       {etsy && (
         <EtsyProductPanel
