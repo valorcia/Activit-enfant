@@ -165,3 +165,7 @@ Sans stockage S3, les PDF et images envoyés par le studio ou l'admin **disparai
 | Registrar (OVH, Gandi…) | Noms de domaine | ≈ 10 €/an par domaine |
 
 Les tarifs indiqués sont des ordres de grandeur, à vérifier sur les pages de prix de chaque service.
+
+## Plus tard
+
+- **V2 — Espace créatrices et affiliation** (idée d'Angélique) : proposition complète, règles, paiements et plan de développement dans [V2-CREATRICES-AFFILIATION.md](V2-CREATRICES-AFFILIATION.md).
