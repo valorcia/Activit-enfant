@@ -13,6 +13,7 @@ import { getShopSettings } from "../settings";
 import { ShopListingSchema, type ShopListing, type ShopSettings } from "../schemas/settings";
 import { ageRangeLabel, BOOK_TYPES } from "../schemas/activity";
 import { ShopApiError, ShopClient, type ShopProduct } from "./client";
+import { sanitizeListing } from "./sanitize";
 import { isStructuredKit, kitContentsFor, kitType, LEGACY_ACTIVITY_TYPE } from "../kits/types";
 import { KIT_CONTENT_SCHEMAS, KitCustomizationSchema } from "../kits/schemas";
 import { heroOf, introOf, mainCount, mainItems, materialsOf, type KitContent } from "../kits/content";
@@ -196,7 +197,8 @@ export async function publishBookToShop(bookId: string, opts: PublishOptions = {
   const log = opts.log ?? (() => undefined);
   const warnings: string[] = [];
   const book = await loadBookForListing(bookId);
-  const listing = { ...buildListingFromBook(book, settings), ...(opts.creationCostCents != null ? { creationCostCents: Math.max(0, Math.round(opts.creationCostCents)) } : {}) };
+  // Fiche mise aux limites de l'API de la boutique (textes de l'IA parfois trop longs)
+  const listing = sanitizeListing({ ...buildListingFromBook(book, settings), ...(opts.creationCostCents != null ? { creationCostCents: Math.max(0, Math.round(opts.creationCostCents)) } : {}) });
   const shouldPublish = opts.publish ?? (ShopListingSchema.safeParse(book.shopListing ?? {}).data?.autoPublish ?? settings.autoPublish);
 
   try {

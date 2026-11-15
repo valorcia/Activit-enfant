@@ -2,6 +2,7 @@
  * Client de l'API v1 de la boutique (apps/shop). Serveur uniquement : la clé
  * n'est jamais envoyée au navigateur.
  */
+import { describeValidationDetails } from "./sanitize";
 export interface ShopClientConfig { baseUrl: string; apiKey: string }
 
 export class ShopApiError extends Error {
@@ -69,7 +70,9 @@ export class ShopClient {
     let body: Record<string, unknown> = {};
     try { body = text ? (JSON.parse(text) as Record<string, unknown>) : {}; } catch { body = { error: text.slice(0, 300) }; }
     if (!res.ok) {
-      const msg = typeof body.error === "string" ? body.error : `Erreur ${res.status}`;
+      const base = typeof body.error === "string" ? body.error : `Erreur ${res.status}`;
+      // Validation refusée : le message nomme les champs concernés (sinon « Données invalides » seul)
+      const msg = res.status === 422 ? `${base}${describeValidationDetails(body.details)}` : base;
       throw new ShopApiError(msg, res.status, body.details);
     }
     const { data, ...meta } = body;
