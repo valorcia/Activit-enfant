@@ -83,7 +83,7 @@ function BlockView({ block, theme, mode, selected, onSelect, onBlockPointerDown,
   switch (block.type) {
     case "shape": {
       const borderColor = s.borderColor as string | undefined;
-      return wrap(null, { background: block.color, borderRadius: block.shape === "circle" ? "50%" : `${(s.radius as number) ?? 0}mm`, border: borderColor ? `0.6mm solid ${borderColor}` : undefined });
+      return wrap(null, { background: block.color, borderRadius: block.shape === "circle" ? "50%" : `${(s.radius as number) ?? 0}mm`, border: borderColor ? `0.6mm ${(s.borderStyle as string) === "dashed" ? "dashed" : "solid"} ${borderColor}` : undefined });
     }
     case "text": {
       const heading = HEADING_ROLES.has(block.role);

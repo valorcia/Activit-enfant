@@ -32,14 +32,41 @@ export interface ContentPromptArgs {
 
 /** Prompt de rédaction du contenu complet selon le format du kit. */
 export function contentPromptFor(format: KitContentFormat, a: ContentPromptArgs): string {
-  switch (format) {
-    case "treasure_hunt": return treasureHuntPrompt(a);
-    case "pranks": return pranksPrompt(a);
-    case "guide": return guidePrompt(a);
-    case "recipes": return recipesPrompt(a);
-    case "science": return sciencePrompt(a);
-    case "coloring": return coloringPrompt(a);
-  }
+  const base = (() => {
+    switch (format) {
+      case "treasure_hunt": return treasureHuntPrompt(a);
+      case "pranks": return pranksPrompt(a);
+      case "guide": return guidePrompt(a);
+      case "recipes": return recipesPrompt(a);
+      case "science": return sciencePrompt(a);
+      case "coloring": return coloringPrompt(a);
+    }
+  })();
+  // Cahier de coloriage : déjà minimal (un dessin par page), pas de page « Comment ça marche ».
+  if (format === "coloring") return `${base}\n\n${readabilityRules(a.ageRange)}`;
+  return withQuickStart(`${base}\n\n${readabilityRules(a.ageRange)}`, a.ageRange);
+}
+
+/**
+ * Règles de lisibilité communes : l'e-book doit se comprendre sans effort, par l'enfant
+ * comme par le parent pressé. Plus court, plus clair, plus utilisable.
+ */
+export function readabilityRules(ageRange: string): string {
+  const adult = isAdultAge(ageRange);
+  return `SIMPLICITÉ ET LISIBILITÉ (prioritaire sur tout le reste) :
+- Phrases courtes : 15 mots au plus, une seule idée par phrase. Pas de jargon${adult ? " (ou alors expliqué en 5 mots)" : ", vocabulaire d'un enfant de cet âge"}.
+- Consignes à l'impératif, numérotées, une action par étape ; 5 étapes au plus par liste.
+- Préfère toujours une liste courte à un paragraphe. Aucun paragraphe de plus de 4 phrases.
+- Coupe tout ce qui n'aide pas directement à jouer, faire ou comprendre : pas de remplissage, pas de répétition.
+${adult ? "" : "- Textes lus par l'enfant (énigmes, défis, petits mots, consignes) : 40 mots au plus. Lettres du personnage : 70 à 110 mots.\n- Guide pour le parent : 5 éléments au plus par rubrique, 15 mots au plus par élément."}`;
+}
+
+/** Ajoute au schéma JSON demandé la page « Comment ça marche ? » (première page intérieure). */
+export function withQuickStart(prompt: string, ageRange: string): string {
+  const adult = isAdultAge(ageRange);
+  const field = `"demarrage_rapide": { "titre": "${adult ? "L'essentiel en une page" : "Comment ça marche ?"}", "accroche": "une phrase qui donne envie (15 mots max)", "age": "${adult ? "" : ageRangeLabel(ageRange)}", "duree": "ex. 45 min", "materiel": ["3 à 8 éléments courants, 4 mots max chacun"], "etapes": ["3 étapes, 12 mots max chacune, à l'impératif"], "astuce": "une astuce utile (20 mots max)" },`;
+  const out = prompt.replace(/("sous_titre": "…",)/, `$1\n  ${field}`);
+  return out === prompt ? prompt : `${out}\n"demarrage_rapide" est la première page de l'e-book : le parent doit pouvoir démarrer après l'avoir lue, en une minute.`;
 }
 
 const audienceLabel = (ageRange: string) => (isAdultAge(ageRange) ? "des adultes" : `enfants de ${ageRangeLabel(ageRange)}`);
@@ -51,11 +78,11 @@ export function guidePrompt(o: ContentPromptArgs) {
 Ton : ${o.tone || o.c.tone || "clair, rassurant et précis"}.
 ${o.c.universe ? `Domaine : ${o.c.universe}.` : ""}
 Structure attendue :
-1. Introduction (120 à 200 mots) : à qui s'adresse le guide, ce que le lecteur saura faire à la fin.
+1. Introduction (60 à 100 mots) : à qui s'adresse le guide, ce que le lecteur saura faire à la fin.
 2. Le problème : description concrète des symptômes (ce que le lecteur observe).
 3. Les causes principales (3 à 8), chacune expliquée simplement.
 4. Un diagnostic pas à pas sous forme de questions (si oui → …, si non → …).
-5. ${o.count} chapitres de méthode, chacun avec : numero, titre, resume (une phrase), contenu (150 à 350 mots, paragraphes courts), etapes (3 à 8 actions concrètes), conseil (astuce de pro), attention (mise en garde ou chaîne vide), tableau facultatif (ex. dosages indicatifs, fréquences : colonnes + lignes ; sinon null), illustration_description (schéma pédagogique à dessiner, sans texte).
+5. ${o.count} chapitres de méthode, chacun avec : numero, titre, resume (une phrase), contenu (80 à 180 mots, paragraphes de 3 phrases max), etapes (3 à 6 actions concrètes), conseil (astuce de pro), attention (mise en garde ou chaîne vide), tableau facultatif (ex. dosages indicatifs, fréquences : colonnes + lignes ; sinon null), illustration_description (schéma pédagogique à dessiner, sans texte).
 6. Erreurs fréquentes (5 à 10) avec la bonne pratique.
 7. Une checklist imprimable (8 à 15 cases), un calendrier d'entretien (par période), une FAQ (5 à 8 questions) et un glossaire (6 à 15 termes).
 8. Consignes de sécurité générales.
@@ -89,7 +116,7 @@ export function recipesPrompt(o: ContentPromptArgs) {
 Ton : ${o.tone || o.c.tone || "gourmand, simple et encourageant"}.
 ${o.c.universe ? `Thème : ${o.c.universe}.` : ""}
 Chaque recette : numero, titre, resume (une phrase gourmande), portions, temps_preparation_minutes, temps_cuisson_minutes, difficulte (1 à 3), ingredients (quantités précises), etapes (courtes et numérotables), astuce, allergenes (parmi les 14 allergènes réglementaires présents), illustration_description (le plat à dessiner, sans texte).
-Ajoute une introduction (100 à 180 mots) et des conseils généraux (organisation, conservation, hygiène).
+Ajoute une introduction (50 à 90 mots) et des conseils généraux (5 au plus) (organisation, conservation, hygiène).
 RÈGLES : temps et quantités réalistes ; cuisson à cœur des viandes et des œufs pour les publics fragiles ; aucune allégation santé non prouvée ; aucune marque commerciale.
 ${o.c.extraInstructions ? `Consignes supplémentaires : ${o.c.extraInstructions}` : ""}
 ${o.brief ? `Demande initiale : ${o.brief}` : ""}
@@ -111,8 +138,8 @@ export function sciencePrompt(o: ContentPromptArgs) {
 Ton : ${o.tone || o.c.tone || "curieux, enthousiaste et clair"}.
 ${o.c.universe ? `Thème : ${o.c.universe}.` : ""}
 ${o.c.heroName ? `Personnage guide : ${o.c.heroName}${o.c.heroDescription ? ` (${o.c.heroDescription})` : ""}.` : "Invente un personnage guide scientifique attachant (nom, apparence courte)."}
-Chaque expérience : numero, titre, question (ce que l'on cherche à découvrir), materiel, etapes (3 à 8), explication (juste et simple), pour_aller_plus_loin, securite (consignes adaptées), duree_minutes, difficulte (1 à 3), age_conseille, illustration_description (scène à dessiner, sans texte).
-Ajoute une introduction (80 à 150 mots), des règles de sécurité générales et un diplôme de petit scientifique.
+Chaque expérience : numero, titre, question (ce que l'on cherche à découvrir), materiel, etapes (3 à 5), explication (juste et simple, 3 phrases max), pour_aller_plus_loin, securite (consignes adaptées), duree_minutes, difficulte (1 à 3), age_conseille, illustration_description (scène à dessiner, sans texte).
+Ajoute une introduction (40 à 80 mots), des règles de sécurité générales (5 au plus) et un diplôme de petit scientifique.
 RÈGLES : présence d'un adulte pour toute chaleur, tout outil coupant ou tout produit ménager ; aucun produit dangereux ; aucune marque ni personnage sous licence.
 ${o.c.extraInstructions ? `Consignes supplémentaires : ${o.c.extraInstructions}` : ""}
 ${o.brief ? `Demande initiale : ${o.brief}` : ""}
@@ -159,10 +186,10 @@ export function treasureHuntPrompt(o: ContentPromptArgs) {
 ${persona(o.c, o.def)}
 - ${o.count} énigmes menant chacune à une cachette de la maison, dans cet ordre : ${places}. Chaque énigme existe en DEUX versions : texte (7–8 ans, qui lisent) et image (5–6 ans : décrire la scène à illustrer où la cachette est évidente). Chaque carte texte porte un indice de secours donné par le compagnon (« … dit : cherche … »).
 - Une carte au trésor en ${Math.min(10, o.count)} morceaux : chaque énigme résolue donne un morceau ; le X révèle où dort le trésor ; cadre vide sous le X où le parent écrit la cachette.
-- Lettre du personnage qui lance l'aventure (120 à 160 mots, règle du jeu, présentation du compagnon).
+- Lettre du personnage qui lance l'aventure (70 à 110 mots, règle du jeu en 2 phrases, présentation du compagnon).
 - 6 défis courts, physiques et drôles, sans matériel, à glisser entre les énigmes.
 - Diplôme à personnaliser (nom, date, signature) et invitation d'anniversaire (date, heure, lieu, répondre avant le).
-- Guide de l'organisateur : matériel, préparation en 20 minutes, plan des cachettes avec une variante pour chacune, déroulé 45–60 minutes, adaptations par âge et grand groupe, conseils de sécurité.
+- Guide de l'organisateur, court et pratique : matériel, préparation en 20 minutes (5 étapes max), plan des cachettes avec une variante pour chacune, déroulé 45–60 minutes (5 étapes max), 3 adaptations par âge ou grand groupe, 3 à 5 conseils de sécurité.
 ${o.c.extraInstructions ? `Consignes supplémentaires : ${o.c.extraInstructions}` : ""}
 ${o.brief ? `Demande initiale : ${o.brief}` : ""}
 
@@ -189,9 +216,9 @@ export function pranksPrompt(o: ContentPromptArgs) {
   return `MISSION : écrire le contenu complet de l'e-book « ${o.title} » (${o.def.label.toLowerCase()}) pour enfants de ${ageRangeLabel(o.ageRange)} : ${o.count} idées rapides (5 minutes maximum la veille au soir, matériel courant) à mettre en œuvre au fil des jours.
 ${persona(o.c, o.def)}
 Contenu attendu :
-1. Lettre d'arrivée du personnage (100 à 140 mots) : d'où il vient, ce qu'il fait la nuit, règle d'or, date de départ.
-2. ${o.count} idées, chacune avec numero, titre, resume, materiel, preparation (3 à 5 étapes), temps_minutes, difficulte (1 à 3), age_conseille, message_du_lutin (mot à laisser), variante_sans_materiel (ou null), illustration_description. Répartition : un tiers très faciles, une moitié moyennes, le reste « grand jeu ». Au moins 5 idées impliquent une bonne action, sans moraliser. Rien de salissant irréversible, rien qui abîme le logement, rien d'effrayant.
-3. 6 idées de réserve, 10 petits mots à découper, lettre de départ (90 à 120 mots), certificat à personnaliser, guide des parents (introduire selon l'âge, que faire en cas d'oubli, organisation, sécurité).
+1. Lettre d'arrivée du personnage (70 à 110 mots) : d'où il vient, ce qu'il fait la nuit, règle d'or, date de départ.
+2. ${o.count} idées, chacune avec numero, titre, resume, materiel, preparation (3 étapes, 4 au plus), temps_minutes, difficulte (1 à 3), age_conseille, message_du_lutin (mot à laisser), variante_sans_materiel (ou null), illustration_description. Répartition : un tiers très faciles, une moitié moyennes, le reste « grand jeu ». Au moins 5 idées impliquent une bonne action, sans moraliser. Rien de salissant irréversible, rien qui abîme le logement, rien d'effrayant.
+3. 6 idées de réserve, 10 petits mots à découper, lettre de départ (60 à 90 mots), certificat à personnaliser, guide des parents (introduire selon l'âge, que faire en cas d'oubli, organisation, sécurité).
 ${o.c.extraInstructions ? `Consignes supplémentaires : ${o.c.extraInstructions}` : ""}
 ${o.brief ? `Demande initiale : ${o.brief}` : ""}
 

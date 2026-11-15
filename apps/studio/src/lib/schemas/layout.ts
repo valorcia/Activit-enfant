@@ -43,6 +43,8 @@ export const TextStyleSchema = z.object({
   padding: z.number().min(0).max(30).optional(),
   radius: z.number().min(0).max(30).optional(),
   borderColor: z.string().optional(),
+  /** Bordure en pointillés : lignes de découpe des cartes. */
+  borderStyle: z.enum(["solid", "dashed"]).optional(),
 });
 export type TextStyle = z.infer<typeof TextStyleSchema>;
 

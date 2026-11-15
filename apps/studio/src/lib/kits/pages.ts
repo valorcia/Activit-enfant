@@ -6,7 +6,7 @@
 import type { Block, PageLayout } from "../schemas/layout";
 import type { BuildContext, BuiltPage } from "../layout/engine";
 import { newId } from "../utils";
-import type { PranksKit, TreasureHunt } from "./schemas";
+import type { PranksKit, QuickStart, TreasureHunt } from "./schemas";
 
 export interface KitImage {
   src?: string;
@@ -27,8 +27,8 @@ function text(o: { text: string; x: number; y: number; w: number; h: number; rol
   };
 }
 
-function shape(o: { x: number; y: number; w: number; h: number; color: string; shape?: "rect" | "band" | "circle"; radius?: number; border?: string }): Block {
-  return { id: newId("s"), type: "shape", shape: o.shape ?? "rect", color: o.color, x: o.x, y: o.y, w: o.w, h: o.h, editable: true, style: { radius: o.radius, borderColor: o.border } };
+function shape(o: { x: number; y: number; w: number; h: number; color: string; shape?: "rect" | "band" | "circle"; radius?: number; border?: string; dashed?: boolean }): Block {
+  return { id: newId("s"), type: "shape", shape: o.shape ?? "rect", color: o.color, x: o.x, y: o.y, w: o.w, h: o.h, editable: true, style: { radius: o.radius, borderColor: o.border, borderStyle: o.dashed ? "dashed" : undefined } };
 }
 
 function image(o: { x: number; y: number; w: number; h: number; img?: KitImage; alt: string; fit?: "contain" | "cover"; radius?: number }): Block {
@@ -57,6 +57,74 @@ function chunk<T>(arr: T[], n: number): T[][] {
   return out;
 }
 
+/**
+ * « Comment ça marche ? » : première page intérieure, lisible en une minute.
+ * Âge et durée en pastilles, 3 étapes numérotées en gros, matériel à cocher, une astuce.
+ */
+export function buildQuickStartPage(ctx: BuildContext, q: NonNullable<QuickStart>, img?: KitImage): BuiltPage | null {
+  const steps = (q.etapes ?? []).filter(Boolean).slice(0, 4);
+  const materials = (q.materiel ?? []).filter(Boolean).slice(0, 8);
+  if (steps.length < 2 && !materials.length) return null;
+  const p = page(ctx, "kit_quickstart", CREAM);
+  const m = ctx.theme.marginMm;
+  const w = ctx.widthMm - 2 * m;
+  let y = m;
+  p.layout.blocks.push(text({ text: q.titre || "Comment ça marche ?", x: m, y, w, h: 14, pt: 26, weight: "bold", align: "center", color: ctx.theme.colorPrimary, role: "title" }));
+  y += 16;
+  if (q.accroche) {
+    p.layout.blocks.push(text({ text: q.accroche, x: m + 10, y, w: w - 20, h: 12, pt: 13, align: "center", color: "#4b5563" }));
+    y += 14;
+  }
+  const pills = [q.age ? `Âge : ${q.age}` : "", q.duree ? `Durée : ${q.duree}` : ""].filter(Boolean);
+  if (pills.length) {
+    const pw = 52;
+    const gap = 5;
+    const total = pills.length * pw + (pills.length - 1) * gap;
+    pills.forEach((t, i) => p.layout.blocks.push(text({ text: t, x: m + (w - total) / 2 + i * (pw + gap), y, w: pw, h: 9, pt: 10.5, align: "center", weight: "bold", background: "#ffffff", border: ctx.theme.colorSecondary, padding: 1.5, radius: 4.5, color: ctx.theme.colorPrimary })));
+    y += 15;
+  }
+  if (steps.length) {
+    p.layout.blocks.push(text({ text: steps.length === 3 ? "1, 2, 3… c'est parti !" : "En quelques étapes", x: m, y, w, h: 10, pt: 16, weight: "bold", color: ctx.theme.colorPrimary, role: "heading" }));
+    y += 12;
+    const stepH = steps.length > 3 ? 24 : 28;
+    steps.forEach((st, i) => {
+      p.layout.blocks.push(shape({ x: m, y, w, h: stepH - 4, color: "#ffffff", radius: 5, border: "#e5d3b3" }));
+      p.layout.blocks.push(shape({ x: m + 4, y: y + (stepH - 4) / 2 - 8, w: 16, h: 16, color: ctx.theme.colorSecondary, shape: "circle" }));
+      p.layout.blocks.push(text({ text: String(i + 1), x: m + 4, y: y + (stepH - 4) / 2 - 5, w: 16, h: 10, pt: 18, align: "center", weight: "bold", color: "#ffffff" }));
+      p.layout.blocks.push(text({ text: st, x: m + 25, y: y + (st.length > 60 ? 3 : 7), w: w - 30, h: stepH - 10, pt: 14.5, lineHeight: 1.35 }));
+      y += stepH;
+    });
+    y += 4;
+  }
+  if (materials.length) {
+    p.layout.blocks.push(text({ text: "Ce qu'il faut", x: m, y, w, h: 10, pt: 16, weight: "bold", color: ctx.theme.colorPrimary, role: "heading" }));
+    y += 12;
+    // Deux colonnes si les éléments sont courts, sinon une seule ; hauteur estimée selon les retours à la ligne
+    const twoCols = materials.every((it) => it.length <= 30);
+    const colW = twoCols ? (w - 8) / 2 : w;
+    const perLine = twoCols ? 30 : 68;
+    const cols = twoCols ? [materials.slice(0, Math.ceil(materials.length / 2)), materials.slice(Math.ceil(materials.length / 2))] : [materials];
+    const lines = (col: string[]) => col.reduce((n, it) => n + Math.max(1, Math.ceil((it.length + 3) / perLine)), 0);
+    const h = Math.max(...cols.map(lines)) * 8.4 + 4;
+    cols.forEach((col, ci) => {
+      if (col.length) p.layout.blocks.push(text({ text: col.map((it) => `☐  ${it}`).join("\n"), x: m + ci * (colW + 8), y, w: colW, h, pt: 13.5, lineHeight: 1.6 }));
+    });
+    y += h + 4;
+  }
+  if (q.astuce && y < ctx.heightMm - m - 28) {
+    p.layout.blocks.push(text({ text: `Bon à savoir : ${q.astuce}`, x: m, y: y + 4, w, h: 16, pt: 12.5, background: PAPER, padding: 4, radius: 4, weight: "bold" }));
+    y += 24;
+  }
+  // Place restante : le personnage du kit, pour une page accueillante plutôt qu'un grand vide
+  const room = ctx.heightMm - m - 10 - y;
+  if (img?.src && room > 55) {
+    const ih = Math.min(room, 95);
+    const iw = Math.min(w, ih * 1.5);
+    p.layout.blocks.push(image({ x: m + (w - iw) / 2, y: y + (room - ih) / 2, w: iw, h: ih, img, alt: "Les personnages du kit", fit: "contain", radius: 4 }));
+  }
+  return p;
+}
+
 /** Lettre pleine page (lettre de la Capitaine, lettre d'arrivée du lutin…). */
 export function buildLetterPage(ctx: BuildContext, o: { title: string; body: string; signature?: string; img?: KitImage; templateKey?: string }): BuiltPage {
   const p = page(ctx, o.templateKey ?? "kit_letter", CREAM);
@@ -67,7 +135,7 @@ export function buildLetterPage(ctx: BuildContext, o: { title: string; body: str
   const top = m + (imgH ? imgH + 6 : 4);
   p.layout.blocks.push(shape({ x: m, y: top, w, h: ctx.heightMm - top - m - 8, color: PAPER, radius: 5, border: "#D9B98A" }));
   p.layout.blocks.push(text({ text: o.title, x: m + 8, y: top + 6, w: w - 16, h: 12, role: "title", pt: 20, color: ctx.theme.colorPrimary, weight: "bold" }));
-  p.layout.blocks.push(text({ text: o.body, x: m + 8, y: top + 20, w: w - 16, h: ctx.heightMm - top - m - 48, pt: 12, lineHeight: 1.55 }));
+  p.layout.blocks.push(text({ text: o.body, x: m + 8, y: top + 20, w: w - 16, h: ctx.heightMm - top - m - 48, pt: 13.5, lineHeight: 1.6 }));
   if (o.signature) p.layout.blocks.push(text({ text: o.signature, x: m + 8, y: ctx.heightMm - m - 30, w: w - 16, h: 10, pt: 14, align: "right", weight: "bold", color: ctx.theme.colorPrimary }));
   return p;
 }
@@ -76,15 +144,15 @@ export function buildLetterPage(ctx: BuildContext, o: { title: string; body: str
 export function buildRiddleTextPages(ctx: BuildContext, riddles: TreasureHunt["enigmes"], heroName: string): BuiltPage[] {
   return chunk(riddles, 4).map((group) => {
     const p = page(ctx, "kit_riddle_text");
-    p.layout.blocks.push(text({ text: "Cartes énigmes · version texte · à découper", x: ctx.theme.marginMm, y: ctx.theme.marginMm - 6, w: ctx.widthMm - 2 * ctx.theme.marginMm, h: 5, pt: 7, align: "center", color: "#8a7a63", role: "caption" }));
+    p.layout.blocks.push(text({ text: "✂  Cartes énigmes · version texte · découpez en suivant les pointillés", x: ctx.theme.marginMm, y: ctx.theme.marginMm - 6, w: ctx.widthMm - 2 * ctx.theme.marginMm, h: 5, pt: 7, align: "center", color: "#8a7a63", role: "caption" }));
     grid(ctx, 2).slice(0, group.length).forEach((cell, i) => {
       const r = group[i];
-      p.layout.blocks.push(shape({ x: cell.x, y: cell.y, w: cell.w, h: cell.h, color: PAPER, radius: 5, border: "#C9A66B" }));
+      p.layout.blocks.push(shape({ x: cell.x, y: cell.y, w: cell.w, h: cell.h, color: PAPER, radius: 5, border: "#B08850", dashed: true }));
       p.layout.blocks.push(shape({ x: cell.x + cell.w / 2 - 7, y: cell.y + 5, w: 14, h: 14, color: ctx.theme.colorSecondary, shape: "circle" }));
       p.layout.blocks.push(text({ text: String(r.numero), x: cell.x + cell.w / 2 - 7, y: cell.y + 7.5, w: 14, h: 9, pt: 16, align: "center", weight: "bold", color: "#ffffff" }));
       p.layout.blocks.push(text({ text: heroName ? `Énigme de ${heroName}` : "Énigme", x: cell.x + 4, y: cell.y + 22, w: cell.w - 8, h: 8, pt: 11, align: "center", weight: "bold", color: ctx.theme.colorPrimary }));
-      p.layout.blocks.push(text({ text: r.texte, x: cell.x + 6, y: cell.y + 34, w: cell.w - 12, h: cell.h - 56, pt: 11.5, align: "center", lineHeight: 1.5 }));
-      if (r.indice_secours) p.layout.blocks.push(text({ text: r.indice_secours, x: cell.x + 6, y: cell.y + cell.h - 16, w: cell.w - 12, h: 10, pt: 7.5, align: "center", color: "#6b7280", role: "caption" }));
+      p.layout.blocks.push(text({ text: r.texte, x: cell.x + 6, y: cell.y + 34, w: cell.w - 12, h: cell.h - 56, pt: 15, align: "center", lineHeight: 1.45 }));
+      if (r.indice_secours) p.layout.blocks.push(text({ text: r.indice_secours, x: cell.x + 6, y: cell.y + cell.h - 16, w: cell.w - 12, h: 10, pt: 8.5, align: "center", color: "#6b7280", role: "caption" }));
     });
     return p;
   });
@@ -94,11 +162,11 @@ export function buildRiddleTextPages(ctx: BuildContext, riddles: TreasureHunt["e
 export function buildRiddleImagePages(ctx: BuildContext, riddles: TreasureHunt["enigmes"], images: KitImages): BuiltPage[] {
   return chunk(riddles, 4).map((group) => {
     const p = page(ctx, "kit_riddle_image");
-    p.layout.blocks.push(text({ text: "Cartes énigmes · version images · à découper", x: ctx.theme.marginMm, y: ctx.theme.marginMm - 6, w: ctx.widthMm - 2 * ctx.theme.marginMm, h: 5, pt: 7, align: "center", color: "#8a7a63", role: "caption" }));
+    p.layout.blocks.push(text({ text: "✂  Cartes énigmes · version images · découpez en suivant les pointillés", x: ctx.theme.marginMm, y: ctx.theme.marginMm - 6, w: ctx.widthMm - 2 * ctx.theme.marginMm, h: 5, pt: 7, align: "center", color: "#8a7a63", role: "caption" }));
     grid(ctx, 2).slice(0, group.length).forEach((cell, i) => {
       const r = group[i];
       const img = images[`enigme-image-${r.numero}`];
-      p.layout.blocks.push(shape({ x: cell.x, y: cell.y, w: cell.w, h: cell.h, color: PAPER, radius: 5, border: "#C9A66B" }));
+      p.layout.blocks.push(shape({ x: cell.x, y: cell.y, w: cell.w, h: cell.h, color: PAPER, radius: 5, border: "#B08850", dashed: true }));
       p.layout.blocks.push(image({ x: cell.x + 3, y: cell.y + 3, w: cell.w - 6, h: cell.h - 6, img, alt: r.image_description || `Cachette : ${r.cachette}`, radius: 4 }));
       p.layout.blocks.push(shape({ x: cell.x + 6, y: cell.y + 6, w: 13, h: 13, color: ctx.theme.colorSecondary, shape: "circle" }));
       p.layout.blocks.push(text({ text: String(r.numero), x: cell.x + 6, y: cell.y + 8, w: 13, h: 9, pt: 14, align: "center", weight: "bold", color: "#ffffff" }));
@@ -208,8 +276,8 @@ export function buildGuidePages(ctx: BuildContext, title: string, sections: Arra
   let col = 0;
   let colY = [y, y];
   for (const s of sections.filter((x) => x.items.length)) {
-    const lineH = 5.2;
-    const h = 8 + s.items.reduce((acc, it) => acc + Math.max(1, Math.ceil(it.length / 48)) * lineH, 0);
+    const lineH = 6;
+    const h = 9 + s.items.reduce((acc, it) => acc + Math.max(1, Math.ceil(it.length / 40)) * lineH, 0);
     col = colY[0] <= colY[1] ? 0 : 1;
     if (colY[col] + h > ctx.heightMm - m - 8) {
       p = page(ctx, "kit_guide");
@@ -217,7 +285,7 @@ export function buildGuidePages(ctx: BuildContext, title: string, sections: Arra
       colY = [m, m];
       col = 0;
     }
-    p.layout.blocks.push(list({ title: s.title, items: s.items, x: m + col * (colW + 8), y: colY[col], w: colW, h, pt: 9.5 }));
+    p.layout.blocks.push(list({ title: s.title, items: s.items, x: m + col * (colW + 8), y: colY[col], w: colW, h, pt: 11 }));
     colY[col] += h + 5;
   }
   return pages;
@@ -240,8 +308,8 @@ export function buildIdeaPage(ctx: BuildContext, idea: PranksKit["idees"][number
   const y = imgY + imgH + 6;
   const colW = (w - 8) / 2;
   const bottomH = ctx.heightMm - y - m - 40;
-  p.layout.blocks.push(list({ title: "Matériel", items: idea.materiel.length ? idea.materiel : ["Rien de spécial"], x: m, y, w: colW, h: bottomH, pt: 10 }));
-  p.layout.blocks.push(list({ title: "Préparation", items: idea.preparation, x: m + colW + 8, y, w: colW, h: bottomH, pt: 10 }));
+  p.layout.blocks.push(list({ title: "Matériel", items: idea.materiel.length ? idea.materiel : ["Rien de spécial"], x: m, y, w: colW, h: bottomH, pt: 11.5 }));
+  p.layout.blocks.push(list({ title: "Préparation", items: idea.preparation, x: m + colW + 8, y, w: colW, h: bottomH, pt: 11.5 }));
   if (idea.message_du_lutin) p.layout.blocks.push(text({ text: `Mot à laisser : « ${idea.message_du_lutin} »`, x: m, y: ctx.heightMm - m - 34, w, h: 18, pt: 11, background: PAPER, padding: 4, radius: 4, weight: "bold" }));
   if (idea.variante_sans_materiel) p.layout.blocks.push(text({ text: `Sans matériel : ${idea.variante_sans_materiel}`, x: m, y: ctx.heightMm - m - 14, w, h: 9, pt: 9, color: "#6b7280" }));
   return p;
@@ -276,8 +344,8 @@ export function buildCalendarPage(ctx: BuildContext, ideas: PranksKit["idees"], 
 export function buildNotesPage(ctx: BuildContext, notes: string[], signature: string): BuiltPage {
   const p = page(ctx, "kit_notes");
   grid(ctx, 5).slice(0, Math.min(10, notes.length)).forEach((cell, i) => {
-    p.layout.blocks.push(shape({ x: cell.x, y: cell.y, w: cell.w, h: cell.h, color: i % 2 ? "#FFF4E6" : "#EEF6EC", radius: 4, border: "#d1d5db" }));
-    p.layout.blocks.push(text({ text: notes[i], x: cell.x + 4, y: cell.y + 4, w: cell.w - 8, h: cell.h - 14, pt: 10.5, align: "center" }));
+    p.layout.blocks.push(shape({ x: cell.x, y: cell.y, w: cell.w, h: cell.h, color: i % 2 ? "#FFF4E6" : "#EEF6EC", radius: 4, border: "#9ca3af", dashed: true }));
+    p.layout.blocks.push(text({ text: notes[i], x: cell.x + 4, y: cell.y + 4, w: cell.w - 8, h: cell.h - 14, pt: 12, align: "center" }));
     if (signature) p.layout.blocks.push(text({ text: `— ${signature}`, x: cell.x + 4, y: cell.y + cell.h - 9, w: cell.w - 8, h: 6, pt: 8.5, align: "right", weight: "bold", color: ctx.theme.colorSecondary }));
   });
   return p;

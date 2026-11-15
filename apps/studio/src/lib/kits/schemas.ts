@@ -47,7 +47,26 @@ export type ShopListingImport = z.infer<typeof ShopListingImportSchema>;
 // Chasse au trésor (et missions / enquêtes : même mécanique)
 // ---------------------------------------------------------------------------
 
+/**
+ * « Comment ça marche » : une page au début de chaque e-book, lisible en une minute
+ * (âge, durée, matériel à cocher, 3 étapes). Facultatif : les anciens contenus restent valides.
+ */
+export const QuickStartSchema = z
+  .object({
+    titre: str(80),
+    accroche: str(200),
+    age: str(40),
+    duree: str(40),
+    materiel: z.array(z.string().max(80)).max(8).default([]),
+    etapes: z.array(z.string().max(140)).max(4).default([]),
+    astuce: str(200),
+  })
+  .partial()
+  .optional();
+export type QuickStart = z.infer<typeof QuickStartSchema>;
+
 export const TreasureHuntSchema = z.object({
+  demarrage_rapide: QuickStartSchema,
   titre: z.string().min(2).max(140),
   sous_titre: str(240),
   personnage: z.object({ nom: str(80), description: str(600), compagnon: str(160), vehicule: str(120) }).partial().default({}),
@@ -89,6 +108,7 @@ export type TreasureHunt = z.infer<typeof TreasureHuntSchema>;
 // ---------------------------------------------------------------------------
 
 export const PranksKitSchema = z.object({
+  demarrage_rapide: QuickStartSchema,
   titre: z.string().min(2).max(140),
   sous_titre: str(240),
   personnages: z.array(z.object({ nom: z.string().max(80), description: str(600) })).default([]),
@@ -131,6 +151,7 @@ export type PranksKit = z.infer<typeof PranksKitSchema>;
 const strList = (max = 600) => z.array(z.string().max(max)).default([]);
 
 export const GuideSchema = z.object({
+  demarrage_rapide: QuickStartSchema,
   titre: z.string().min(2).max(160),
   sous_titre: str(240),
   auteur: z.object({ nom: str(120), expertise: str(300) }).partial().default({}),
@@ -170,6 +191,7 @@ export type Guide = z.infer<typeof GuideSchema>;
 // ---------------------------------------------------------------------------
 
 export const RecipesSchema = z.object({
+  demarrage_rapide: QuickStartSchema,
   titre: z.string().min(2).max(160),
   sous_titre: str(240),
   introduction: z.string().min(20).max(4000),
@@ -203,6 +225,7 @@ export type Recipes = z.infer<typeof RecipesSchema>;
 // ---------------------------------------------------------------------------
 
 export const ScienceSchema = z.object({
+  demarrage_rapide: QuickStartSchema,
   titre: z.string().min(2).max(160),
   sous_titre: str(240),
   personnage: z.object({ nom: str(80), description: str(600) }).partial().default({}),
@@ -244,6 +267,7 @@ const DetailLevel = z.preprocess(
 );
 
 export const ColoringSchema = z.object({
+  demarrage_rapide: QuickStartSchema,
   titre: z.string().min(2).max(160),
   sous_titre: str(240),
   theme: str(160),
