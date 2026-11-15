@@ -12,14 +12,18 @@ const PagesPayload = z.array(z.object({ id: z.string(), templateKey: z.string(),
 export async function savePages(bookId: string, pages: unknown) {
   const data = PagesPayload.parse(pages);
   await prisma.$transaction(async (tx) => {
-    const existing = await tx.bookPage.findMany({ where: { bookId }, select: { id: true } });
+    const existing = await tx.bookPage.findMany({ where: { bookId }, select: { id: true, position: true, layout: true, locked: true, templateKey: true } });
     const keep = new Set(data.map((p) => p.id));
     await tx.bookPage.deleteMany({ where: { bookId, id: { notIn: [...keep] } } });
-    const existingIds = new Set(existing.map((e) => e.id));
+    const byId = new Map(existing.map((e) => [e.id, e]));
     for (let i = 0; i < data.length; i++) {
       const p = data[i];
-      if (existingIds.has(p.id)) await tx.bookPage.update({ where: { id: p.id }, data: { position: i, layout: p.layout, locked: p.locked, templateKey: p.templateKey } });
-      else await tx.bookPage.create({ data: { id: p.id, bookId, position: i, layout: p.layout, locked: p.locked, templateKey: p.templateKey, activityId: p.activityId ?? undefined } });
+      const old = byId.get(p.id);
+      if (old) {
+        // Seules les pages modifiées (contenu, ordre, verrou) sont réécrites : un livre de 100 pages s'enregistre vite
+        const same = old.position === i && old.locked === p.locked && old.templateKey === p.templateKey && JSON.stringify(old.layout) === JSON.stringify(p.layout);
+        if (!same) await tx.bookPage.update({ where: { id: p.id }, data: { position: i, layout: p.layout, locked: p.locked, templateKey: p.templateKey } });
+      } else await tx.bookPage.create({ data: { id: p.id, bookId, position: i, layout: p.layout, locked: p.locked, templateKey: p.templateKey, activityId: p.activityId ?? undefined } });
     }
     await tx.book.update({ where: { id: bookId }, data: { version: { increment: 1 } } });
   });
