@@ -241,14 +241,20 @@ export function buildCoverPage(cover: CoverData, ctx: BuildContext, illustration
   const t = ctx.theme;
   const W = ctx.widthMm;
   const H = ctx.heightMm;
+  const longTitle = cover.title.length > 22;
+  const imgY = H * 0.31;
+  const imgH = H * 0.5;
   const blocks: Block[] = [
     { id: newId("s"), type: "shape", shape: "rect", color: t.colorPrimary, x: 0, y: 0, w: W, h: H, style: {}, editable: false },
-    { id: newId("i"), type: "image", role: "cover", illustrationId: illustration?.id, src: illustration?.src, alt: cover.illustrationBrief, caption: "", isDemo: illustration?.isDemo ?? false, fit: "cover", x: 20, y: H * 0.3, w: W - 40, h: H * 0.5, style: { radius: 6, background: "#ffffff" }, editable: true },
-    { id: newId("t"), type: "text", role: "label", text: cover.collection, x: 12, y: 16, w: W - 24, h: 8, style: { fontSizePt: 12, color: "#ffffff", align: "center", weight: "bold" }, editable: true },
-    { id: newId("t"), type: "text", role: "title", text: cover.title, x: 12, y: 28, w: W - 24, h: 30, style: { fontSizePt: cover.title.length > 22 ? 34 : 42, color: "#ffffff", align: "center", weight: "bold", lineHeight: 1.05 }, editable: true },
-    { id: newId("t"), type: "text", role: "subtitle", text: cover.subtitle, x: 12, y: 60, w: W - 24, h: 14, style: { fontSizePt: 18, color: t.colorSecondary, align: "center", weight: "bold" }, editable: true },
-    { id: newId("t"), type: "text", role: "body", text: cover.tagline, x: 12, y: H * 0.82, w: W - 24, h: 10, style: { fontSizePt: 14, color: "#ffffff", align: "center" }, editable: true },
-    { id: newId("t"), type: "text", role: "label", text: cover.ageLabel, x: W - 52, y: H - 26, w: 40, h: 12, style: { fontSizePt: 12, color: t.colorPrimary, background: t.colorSecondary, align: "center", weight: "bold", radius: 6, padding: 2 }, editable: true },
+    // Collection en pastille discrète
+    { id: newId("t"), type: "text", role: "label", text: cover.collection.toUpperCase(), x: W / 2 - 40, y: 14, w: 80, h: 8, style: { fontSizePt: 9.5, color: "#ffffff", align: "center", weight: "bold", background: "#ffffff26", radius: 4, padding: 1.6 }, editable: true },
+    { id: newId("t"), type: "text", role: "title", text: cover.title, x: 14, y: 27, w: W - 28, h: 32, style: { fontSizePt: longTitle ? 33 : 42, color: "#ffffff", align: "center", weight: "bold", lineHeight: 1.05 }, editable: true },
+    { id: newId("t"), type: "text", role: "subtitle", text: cover.subtitle, x: 18, y: 61, w: W - 36, h: 14, style: { fontSizePt: 15, color: t.colorSecondary, align: "center", weight: "bold", lineHeight: 1.25 }, editable: true },
+    // Illustration dans un cadre blanc arrondi
+    { id: newId("s"), type: "shape", shape: "rect", color: "#ffffff", x: 17, y: imgY - 3, w: W - 34, h: imgH + 6, style: { radius: 9 }, editable: false },
+    { id: newId("i"), type: "image", role: "cover", illustrationId: illustration?.id, src: illustration?.src, alt: cover.illustrationBrief, caption: "", isDemo: illustration?.isDemo ?? false, fit: "cover", x: 20, y: imgY, w: W - 40, h: imgH, style: { radius: 7, background: "#ffffff" }, editable: true },
+    { id: newId("t"), type: "text", role: "body", text: cover.tagline, x: 16, y: H * 0.835, w: W - 74, h: 16, style: { fontSizePt: 12.5, color: "#ffffff", lineHeight: 1.35 }, editable: true },
+    { id: newId("t"), type: "text", role: "label", text: cover.ageLabel, x: W - 54, y: H * 0.835, w: 40, h: 11, style: { fontSizePt: 12, color: t.colorPrimary, background: t.colorSecondary, align: "center", weight: "bold", radius: 5.5, padding: 2 }, editable: true },
   ];
   return { templateKey: "cover", layout: { widthMm: W, heightMm: H, showPageNumber: false, blocks } };
 }
@@ -258,13 +264,18 @@ export function buildBackCoverPage(cover: CoverData, ctx: BuildContext): BuiltPa
   const W = ctx.widthMm;
   const H = ctx.heightMm;
   const M = t.marginMm + 5;
+  const textH = estimateTextHeightMm(cover.backText, W - 2 * M, 12.5, 1.55) + 4;
+  const bullets = cover.backBullets.filter(Boolean);
   const blocks: Block[] = [
-    { id: newId("s"), type: "shape", shape: "rect", color: t.colorPanel, x: 0, y: 0, w: W, h: H, style: {}, editable: false },
-    { id: newId("t"), type: "text", role: "title", text: cover.title, x: M, y: M + 10, w: W - 2 * M, h: 18, style: { fontSizePt: 24, color: t.colorPrimary, weight: "bold" }, editable: true },
-    { id: newId("t"), type: "text", role: "body", text: cover.backText, x: M, y: M + 34, w: W - 2 * M, h: estimateTextHeightMm(cover.backText, W - 2 * M, 12, 1.5) + 4, style: { fontSizePt: 12, lineHeight: 1.5 }, editable: true },
-    { id: newId("l"), type: "list", role: "bullets", items: cover.backBullets, x: M, y: M + 44 + estimateTextHeightMm(cover.backText, W - 2 * M, 12, 1.5), w: W - 2 * M, h: 10 + cover.backBullets.length * 7, style: { fontSizePt: 12, background: "#ffffff", padding: 5, radius: 4 }, editable: true },
-    { id: newId("t"), type: "text", role: "label", text: `${cover.collection} · ${cover.ageLabel}`, x: M, y: H - M - 10, w: W - 2 * M, h: 8, style: { fontSizePt: 10, color: "#6b7280", align: "center" }, editable: true },
+    { id: newId("s"), type: "shape", shape: "rect", color: "#ffffff", x: 0, y: 0, w: W, h: H, style: {}, editable: false },
+    { id: newId("s"), type: "shape", shape: "rect", color: t.colorPrimary, x: 0, y: H - 34, w: W, h: 34, style: {}, editable: false },
+    { id: newId("t"), type: "text", role: "label", text: (cover.collection || "").toUpperCase(), x: M, y: M + 2, w: W - 2 * M, h: 6, style: { fontSizePt: 9, color: t.colorSecondary, weight: "bold" }, editable: true },
+    { id: newId("t"), type: "text", role: "title", text: cover.title, x: M, y: M + 10, w: W - 2 * M, h: 20, style: { fontSizePt: 24, color: t.colorPrimary, weight: "bold", lineHeight: 1.1 }, editable: true },
+    { id: newId("s"), type: "shape", shape: "rect", color: t.colorSecondary, x: M, y: M + 32, w: 18, h: 1.6, style: { radius: 1 }, editable: false },
+    { id: newId("t"), type: "text", role: "body", text: cover.backText, x: M, y: M + 39, w: W - 2 * M, h: textH, style: { fontSizePt: 12.5, lineHeight: 1.55 }, editable: true },
   ];
+  if (bullets.length) blocks.push({ id: newId("l"), type: "list", role: "bullets", items: bullets, x: M, y: M + 45 + textH, w: W - 2 * M, h: 12 + bullets.length * 7.5, style: { fontSizePt: 12, background: `${t.colorPrimary.slice(0, 7)}0f`, padding: 5, radius: 6 }, editable: true });
+  blocks.push({ id: newId("t"), type: "text", role: "label", text: [cover.collection, cover.ageLabel].filter(Boolean).join(" · "), x: M, y: H - 21, w: W - 2 * M, h: 8, style: { fontSizePt: 11, color: "#ffffff", align: "center", weight: "bold" }, editable: true });
   return { templateKey: "back_cover", layout: { widthMm: W, heightMm: H, showPageNumber: false, blocks } };
 }
 
