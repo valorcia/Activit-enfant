@@ -1,7 +1,7 @@
 # V2 — Espace créatrices et affiliation (idée d'Angélique)
 
-> Statut : **idée validée, à démarrer plus tard**. Ce document garde la proposition complète pour le jour du lancement.
-> Rien n'est encore développé. Les décisions à prendre sont listées en fin de document.
+> Statut : **phase 1 développée** (novembre 2026) : invitations, propositions d'idées, modération, fabrication par le studio, validation de l'aperçu, commissions et virement manuel. Phases 2 et 3 (affiliation, Stripe Connect, DAC7, ouverture) : à faire.
+> Valeurs par défaut appliquées (modifiables dans Admin → Créatrices → Réglages) : 25 % / 40 %, bonus exclusivité +5 points, 14 jours, seuil 20 €, prix conseillé 3,90 €.
 
 ## L'idée
 
