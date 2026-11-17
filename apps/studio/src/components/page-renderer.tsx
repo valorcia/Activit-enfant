@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { framingStyle } from "@/lib/images/framing";
 import { autoFitAll } from "@/lib/layout/autofit";
 import { withVariant } from "@/lib/images/variant-url";
+import { ProseView } from "@/components/editorial/prose-view";
 
 export interface PageRendererProps {
   layout: PageLayout;
@@ -50,7 +51,7 @@ export function PageRenderer({ layout, theme, pageNumber, pageIndex, mode = "pre
   }, [layout]);
   return (
     <VariantContext.Provider value={imageVariant}>
-    <div ref={pageRef} className={cn("book-page", className)} style={style} data-page-index={pageIndex} onPointerDown={mode === "edit" ? () => onSelect?.(null) : undefined}>
+    <div ref={pageRef} className={cn("book-page", className)} style={style} data-page-index={pageIndex} {...editorialPageAttrs(layout)} onPointerDown={mode === "edit" ? () => onSelect?.(null) : undefined}>
       {layout.blocks.map((b) => (
         <BlockView key={b.id} block={b} theme={theme} mode={mode} selected={selectedId === b.id} onSelect={onSelect} onBlockPointerDown={onBlockPointerDown} onTextCommit={onTextCommit} />
       ))}
@@ -60,6 +61,47 @@ export function PageRenderer({ layout, theme, pageNumber, pageIndex, mode = "pre
     </div>
     </VariantContext.Provider>
   );
+}
+
+/**
+ * Attributs des pages du moteur éditorial (langue pour la césure, gabarit, folio…),
+ * lus par le contrôle qualité. Aucun attribut pour les pages existantes : leur HTML est inchangé.
+ */
+function editorialPageAttrs(layout: PageLayout): Record<string, string | number | undefined> {
+  const ed = layout.editorial;
+  if (!ed) return {};
+  return {
+    lang: ed.lang,
+    "data-ed-template": ed.template,
+    "data-ed-folio": ed.folio,
+    "data-ed-side": ed.side,
+    "data-ed-blank": ed.intentionalBlank ? "" : undefined,
+    "data-ed-sparse": ed.sparse ? "" : undefined,
+    "data-ed-chapter-end": ed.chapterEnd ? "" : undefined,
+    "data-ed-chapter": ed.chapter,
+    "data-ed-safe": ed.safe ? `${ed.safe.top} ${ed.safe.right} ${ed.safe.bottom} ${ed.safe.left}` : undefined,
+  };
+}
+
+/** Réglages typographiques optionnels d'un bloc texte (moteur éditorial) ; vide pour les blocs existants. */
+function textExtensions(s: Record<string, unknown>): React.CSSProperties {
+  const ext: React.CSSProperties = {};
+  if (s.italic) ext.fontStyle = "italic";
+  if (typeof s.weightNum === "number") ext.fontWeight = s.weightNum;
+  if (typeof s.letterSpacingEm === "number") ext.letterSpacing = `${s.letterSpacingEm}em`;
+  if (s.uppercase) ext.textTransform = "uppercase";
+  if (typeof s.features === "string") ext.fontFeatureSettings = s.features;
+  if (s.hyphenate) {
+    ext.hyphens = "auto";
+    ext.WebkitHyphens = "auto";
+  }
+  if (typeof s.opacity === "number") ext.opacity = s.opacity;
+  if (s.valign) {
+    ext.display = "flex";
+    ext.flexDirection = "column";
+    ext.justifyContent = s.valign === "middle" ? "center" : s.valign === "bottom" ? "flex-end" : "flex-start";
+  }
+  return ext;
 }
 
 function BlockView({ block, theme, mode, selected, onSelect, onBlockPointerDown, onTextCommit }: { block: Block; theme: BookTheme; mode: "print" | "preview" | "edit"; selected: boolean; onSelect?: (id: string | null) => void; onBlockPointerDown?: PageRendererProps["onBlockPointerDown"]; onTextCommit?: (id: string, text: string) => void }) {
@@ -73,6 +115,7 @@ function BlockView({ block, theme, mode, selected, onSelect, onBlockPointerDown,
     height: `${block.h}mm`,
     cursor: mode === "edit" ? "move" : undefined,
   };
+  if (typeof s.rotateDeg === "number") base.transform = `rotate(${s.rotateDeg}deg)`;
   const editable = mode === "edit";
   const handlers = editable
     ? {
@@ -94,7 +137,15 @@ function BlockView({ block, theme, mode, selected, onSelect, onBlockPointerDown,
   switch (block.type) {
     case "shape": {
       const borderColor = s.borderColor as string | undefined;
-      return wrap(null, { background: block.color, borderRadius: block.shape === "circle" ? "50%" : `${(s.radius as number) ?? 0}mm`, border: borderColor ? `0.6mm ${(s.borderStyle as string) === "dashed" ? "dashed" : "solid"} ${borderColor}` : undefined });
+      if (block.shape === "rule") {
+        // Filet : horizontal, ou vertical si le cadre est plus haut que large
+        const t = (s.strokeMm as number | undefined) ?? 0.25;
+        const vertical = block.h > block.w;
+        const line: React.CSSProperties = vertical ? { position: "absolute", top: 0, bottom: 0, left: `calc(50% - ${t / 2}mm)`, width: `${t}mm` } : { position: "absolute", left: 0, right: 0, top: `calc(50% - ${t / 2}mm)`, height: `${t}mm` };
+        return wrap(<div style={{ ...line, background: block.color }} />, typeof s.opacity === "number" ? { opacity: s.opacity as number } : undefined);
+      }
+      const stroke = s.strokeMm as number | undefined;
+      return wrap(null, { background: block.color, borderRadius: block.shape === "circle" ? "50%" : `${(s.radius as number) ?? 0}mm`, border: borderColor ? `${stroke ?? 0.6}mm ${(s.borderStyle as string) === "dashed" ? "dashed" : "solid"} ${borderColor}` : undefined, ...(typeof s.opacity === "number" ? { opacity: s.opacity as number } : {}) });
     }
     case "text": {
       const heading = HEADING_ROLES.has(block.role);
@@ -113,19 +164,22 @@ function BlockView({ block, theme, mode, selected, onSelect, onBlockPointerDown,
         overflow: "hidden",
         height: "100%",
         outline: "none",
+        ...textExtensions(s),
       };
+      const gap = s.paragraphGapMm as number | undefined;
       return wrap(
         <div
           data-measure
-          data-autofit=""
+          data-autofit={s.noAutofit ? undefined : ""}
           data-font={style.fontSize as string}
+          lang={s.lang as string | undefined}
           style={style}
           contentEditable={editable && block.editable}
           suppressContentEditableWarning
           onBlur={editable ? (e) => onTextCommit?.(block.id, (e.currentTarget as HTMLElement).innerText) : undefined}
         >
           {block.text.split("\n").map((line, i) => (
-            <p key={i}>{line}</p>
+            <p key={i} style={gap && i > 0 ? { marginTop: `${gap}mm` } : undefined}>{line}</p>
           ))}
         </div>,
       );
@@ -243,6 +297,9 @@ function BlockView({ block, theme, mode, selected, onSelect, onBlockPointerDown,
           ))}
         </div>,
       );
+    }
+    case "prose": {
+      return wrap(<ProseView block={block} accent={theme.colorSecondary} />);
     }
     default:
       return null;

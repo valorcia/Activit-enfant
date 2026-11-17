@@ -33,7 +33,14 @@ export const PAGE_FORMATS = {
   A4_LANDSCAPE: { label: "A4 paysage", widthMm: 297, heightMm: 210 },
   SQUARE: { label: "Carré (210 × 210 mm)", widthMm: 210, heightMm: 210 },
   CUSTOM: { label: "Format personnalisé", widthMm: 210, heightMm: 297 },
+  // Formats éditoriaux (livres UNWRITTEN) : absents des assistants La Malle à Jeux
+  A5_PORTRAIT: { label: "A5 portrait (148 × 210 mm)", widthMm: 148, heightMm: 210, editorialOnly: true },
+  PORTRAIT_3_4: { label: "Portrait 3:4 (180 × 240 mm)", widthMm: 180, heightMm: 240, editorialOnly: true },
 } as const;
+/** Formats proposés dans les assistants de création des livres et kits La Malle à Jeux (inchangés). */
+export function isClassicPageFormat(f: (typeof PAGE_FORMATS)[PageFormatKey]): boolean {
+  return !("editorialOnly" in f);
+}
 export type PageFormatKey = keyof typeof PAGE_FORMATS;
 
 export const ACTIVITY_COUNTS = [10, 20, 30, 50, 100] as const;

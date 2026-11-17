@@ -47,6 +47,36 @@ export const TextStyleSchema = z.object({
   borderStyle: z.enum(["solid", "dashed"]).optional(),
   /** Débordement de texte vérifié et accepté (« Valider tel quel ») : plus d'alerte. */
   overflowOk: z.boolean().optional(),
+  // --- Extensions typographiques (moteur éditorial UNWRITTEN) -----------------------
+  // Toutes optionnelles : absentes, le rendu des pages existantes est strictement inchangé.
+  /** Italique. */
+  italic: z.boolean().optional(),
+  /** Graisse numérique (polices variables : 300 léger, 400 normal, 500 medium…) ; prioritaire sur `weight`. */
+  weightNum: z.number().min(100).max(900).optional(),
+  /** Approche (interlettrage) en em, par ex. 0.18 pour des capitales espacées. */
+  letterSpacingEm: z.number().min(-0.1).max(1).optional(),
+  /** Capitales (transformation CSS : le texte stocké reste en casse normale). */
+  uppercase: z.boolean().optional(),
+  /** Alignement vertical du texte dans son cadre. */
+  valign: z.enum(["top", "middle", "bottom"]).optional(),
+  /** Réglages OpenType (`font-feature-settings`), par ex. "\"onum\" 1, \"liga\" 1". */
+  features: z.string().max(120).optional(),
+  /** Césure automatique selon la langue (`hyphens: auto`). */
+  hyphenate: z.boolean().optional(),
+  /** Langue du bloc (césure, guillemets) : « fr », « en »… */
+  lang: z.string().max(12).optional(),
+  /** Espace entre paragraphes (lignes séparées par « \n »), en mm. */
+  paragraphGapMm: z.number().min(0).max(30).optional(),
+  /** Taille fixe : pas d'ajustement automatique (la composition a été mesurée). */
+  noAutofit: z.boolean().optional(),
+  /** Épaisseur de trait (filets, cercles, cadres) en mm. */
+  strokeMm: z.number().min(0.05).max(5).optional(),
+  /** Opacité du bloc (0–1). */
+  opacity: z.number().min(0).max(1).optional(),
+  /** Lignes équilibrées (`text-wrap: balance`) : titres et citations centrés, jamais de mot seul. */
+  balance: z.boolean().optional(),
+  /** Rotation du bloc autour de son centre, en degrés (filets obliques des couvertures). */
+  rotateDeg: z.number().min(-180).max(180).optional(),
 });
 export type TextStyle = z.infer<typeof TextStyleSchema>;
 
@@ -119,7 +149,8 @@ export const BadgeBlockSchema = z.object({
 export const ShapeBlockSchema = z.object({
   id: z.string(),
   type: z.literal("shape"),
-  shape: z.enum(["rect", "band", "circle"]).default("rect"),
+  /** « rule » : filet horizontal (ou vertical si h > w) centré dans le cadre, épaisseur `style.strokeMm`. */
+  shape: z.enum(["rect", "band", "circle", "rule"]).default("rect"),
   color: z.string().default("#eff6ff"),
   ...Rect,
   style: TextStyleSchema.default({}),
@@ -135,6 +166,60 @@ export const TocBlockSchema = z.object({
   editable: z.boolean().default(false),
 });
 
+// ---------------------------------------------------------------------------
+// Texte composé (moteur éditorial) : fragment d'un flux de texte paginé après mesure
+// réelle dans Chromium. Chaque élément porte ses propres réglages ; le rendu est
+// partagé entre la mesure et l'affichage (src/components/editorial/prose-view.ts).
+// ---------------------------------------------------------------------------
+
+export const ProseRunSchema = z.object({
+  t: z.string(),
+  /** Italique */
+  i: z.boolean().optional(),
+  /** Attaque en capitales espacées (premiers mots d'un chapitre) */
+  sc: z.boolean().optional(),
+});
+export type ProseRun = z.infer<typeof ProseRunSchema>;
+
+export const ProseItemSchema = z.object({
+  kind: z.enum(["p", "quote", "subhead", "break"]),
+  runs: z.array(ProseRunSchema).default([]),
+  /** Retrait de première ligne */
+  indent: z.boolean().optional(),
+  /** Le paragraphe continue page suivante : dernière ligne justifiée */
+  continues: z.boolean().optional(),
+  /** Suite d'un paragraphe commencé page précédente */
+  continued: z.boolean().optional(),
+  /** Espace avant, en lignes de la grille */
+  spaceBefore: z.number().int().min(0).max(6).optional(),
+  /** Espace après, en lignes de la grille */
+  spaceAfter: z.number().int().min(0).max(6).optional(),
+  /** Alignement particulier (signature à droite, mention centrée) */
+  align: z.enum(["right", "center"]).optional(),
+  /** Nombre de lignes attendu (mesuré) : vérifié par le contrôle qualité */
+  lines: z.number().int().min(0).optional(),
+});
+export type ProseItem = z.infer<typeof ProseItemSchema>;
+
+export const ProseBlockSchema = z.object({
+  id: z.string(),
+  type: z.literal("prose"),
+  items: z.array(ProseItemSchema),
+  lang: z.string().default("en"),
+  fontFamily: z.string(),
+  fontSizePt: z.number().min(4).max(96),
+  /** Interligne = pas de la ligne de base, en mm */
+  leadingMm: z.number().min(1).max(40),
+  indentEm: z.number().min(0).max(4).default(1),
+  align: z.enum(["justify", "left", "center", "right"]).default("justify"),
+  hyphenate: z.boolean().default(true),
+  color: z.string().optional(),
+  ...Rect,
+  style: TextStyleSchema.default({}),
+  editable: z.boolean().default(false),
+});
+export type ProseBlock = z.infer<typeof ProseBlockSchema>;
+
 export const BlockSchema = z.discriminatedUnion("type", [
   TextBlockSchema,
   ListBlockSchema,
@@ -143,6 +228,7 @@ export const BlockSchema = z.discriminatedUnion("type", [
   BadgeBlockSchema,
   ShapeBlockSchema,
   TocBlockSchema,
+  ProseBlockSchema,
 ]);
 export type Block = z.infer<typeof BlockSchema>;
 export type TextBlock = z.infer<typeof TextBlockSchema>;
@@ -155,6 +241,25 @@ export const PageLayoutSchema = z.object({
   background: z.string().optional(),
   showPageNumber: z.boolean().default(true),
   blocks: z.array(BlockSchema),
+  /** Pages du moteur éditorial uniquement (absent pour les pages existantes). */
+  editorial: z
+    .object({
+      template: z.string(),
+      /** Numéro de page imprimé (folio) dans la pagination continue du livre */
+      folio: z.number().int().optional(),
+      side: z.enum(["recto", "verso"]).optional(),
+      lang: z.string().optional(),
+      /** Page laissée blanche volontairement (saut de chapitre sur page impaire) */
+      intentionalBlank: z.boolean().optional(),
+      /** Gabarit aéré par nature (couverture, dédicace…) : pas d'alerte « grand vide » */
+      sparse: z.boolean().optional(),
+      /** Dernière page d'un chapitre (page courte admise) */
+      chapterEnd: z.boolean().optional(),
+      chapter: z.number().int().optional(),
+      /** Zone de sécurité (marges du gabarit) en mm */
+      safe: z.object({ top: z.number(), right: z.number(), bottom: z.number(), left: z.number() }).optional(),
+    })
+    .optional(),
 });
 export type PageLayout = z.infer<typeof PageLayoutSchema>;
 

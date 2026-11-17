@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Textarea } from "@/components/ui/input";
 import { JobProgress } from "@/components/job-progress";
 import { createBook } from "@/app/actions/books";
-import { AGE_RANGES, ART_STYLES, BOOK_TYPES, PAGE_FORMATS, ACTIVITY_COUNTS, ageRangeLabel } from "@/lib/schemas/activity";
+import { AGE_RANGES, ART_STYLES, BOOK_TYPES, PAGE_FORMATS, isClassicPageFormat, ACTIVITY_COUNTS, ageRangeLabel } from "@/lib/schemas/activity";
 import { cn, formatUsd } from "@/lib/utils";
 
 const STEPS = ["Type de livre", "Âge", "Nombre d'activités", "Style graphique", "Format", "Sommaire"];
@@ -77,7 +77,7 @@ export function BookWizard({ perActivityCost, textProvider }: { perActivityCost:
         {step === 4 && (
           <div className="space-y-4">
             <div className="grid md:grid-cols-4 gap-3">
-              {Object.entries(PAGE_FORMATS).map(([k, f]) => <Option key={k} active={pageFormat === k} onClick={() => setPageFormat(k)} title={f.label} desc={k !== "CUSTOM" ? `${f.widthMm} × ${f.heightMm} mm` : undefined} />)}
+              {Object.entries(PAGE_FORMATS).filter(([, f]) => isClassicPageFormat(f)).map(([k, f]) => <Option key={k} active={pageFormat === k} onClick={() => setPageFormat(k)} title={f.label} desc={k !== "CUSTOM" ? `${f.widthMm} × ${f.heightMm} mm` : undefined} />)}
             </div>
             {pageFormat === "CUSTOM" && (
               <div className="grid grid-cols-2 gap-3 max-w-sm">

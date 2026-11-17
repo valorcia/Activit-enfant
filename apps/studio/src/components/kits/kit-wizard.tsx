@@ -6,7 +6,7 @@ import { Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { JobProgress } from "@/components/job-progress";
 import { createKitBook } from "@/app/actions/kits";
-import { ART_STYLES, PAGE_FORMATS, ageRangeLabel } from "@/lib/schemas/activity";
+import { ART_STYLES, PAGE_FORMATS, isClassicPageFormat, ageRangeLabel } from "@/lib/schemas/activity";
 import { KIT_TYPES, defaultTypeForPreset, kitType, typesForPreset } from "@/lib/kits/types";
 import { PRESETS } from "@/lib/universes/presets";
 import { siteBySlug, type Site } from "@/lib/universes/sites";
@@ -123,7 +123,7 @@ export function KitWizard({ categories, prices = {}, sites = [], defaultSiteSlug
               ))}
             </div>
             <div className="grid gap-3 md:grid-cols-3">
-              {Object.entries(PAGE_FORMATS).filter(([k]) => k !== "CUSTOM").map(([k, f]) => (
+              {Object.entries(PAGE_FORMATS).filter(([k, f]) => k !== "CUSTOM" && isClassicPageFormat(f)).map(([k, f]) => (
                 <button key={k} type="button" onClick={() => setPageFormat(k)} className={cn("rounded-xl border p-4 text-left", pageFormat === k ? "border-blue-600 bg-blue-50 ring-2 ring-blue-200" : "border-slate-200")}>
                   <div className="font-bold">{f.label}</div>
                   <div className="text-xs text-slate-500">{f.widthMm} × {f.heightMm} mm</div>
