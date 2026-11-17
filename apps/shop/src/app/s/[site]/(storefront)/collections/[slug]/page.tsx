@@ -1,21 +1,14 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Image from "next/image";
-import { prisma } from "@/lib/db";
-import { siteFromParams, siteUrl, getSites } from "@/lib/sites";
+import { siteFromParams, siteUrl } from "@/lib/sites";
 import { getCollectionBySlug } from "@/lib/catalog";
 import { Breadcrumbs } from "@/components/storefront/breadcrumbs";
 import { CatalogView, type CatalogSearchParams } from "@/components/storefront/catalog-view";
 import { JsonLd } from "@/components/storefront/json-ld";
 
-export const revalidate = 300;
-
-export async function generateStaticParams({ params }: { params: { site: string } }) {
-  const site = (await getSites()).find((s) => s.slug === params.site);
-  if (!site) return [];
-  const rows = await prisma.collection.findMany({ where: { siteId: site.id, isVisible: true }, select: { slug: true } });
-  return rows.map((c) => ({ slug: c.slug }));
-}
+// Rendu à la demande : la page lit les filtres de l'URL (searchParams), incompatible avec un rendu ISR
+// (erreur DYNAMIC_SERVER_USAGE en production). Même fonctionnement que /boutique.
 
 export async function generateMetadata({ params }: { params: Promise<{ site: string; slug: string }> }): Promise<Metadata> {
   const { slug } = await params;

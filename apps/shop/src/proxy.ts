@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/db";
 import { DEFAULT_SITE_SLUG, PREVIEW_COOKIE, SITE_HEADER, SITE_ROUTE_PREFIX } from "@/lib/sites/constants";
-import { resolveSiteSlug, type SiteRouting } from "@/lib/sites/host";
+import { isStaticFilePath, resolveSiteSlug, type SiteRouting } from "@/lib/sites/host";
 import { CREATOR_SESSION_COOKIE, isPublicCreatorPath, verifySessionToken } from "@/lib/creators/tokens";
 
 /**
@@ -81,8 +81,9 @@ export async function proxy(req: NextRequest) {
   }
 
   // API, fichiers (sitemap.xml, robots.txt, manifest…) : pas de réécriture, univers transmis par en-tête
-  const lastSegment = pathname.split("/").pop() ?? "";
-  if (pathname.startsWith("/api/") || lastSegment.includes(".")) {
+  // Seules les extensions de fichiers connues comptent : un jeton signé (`/commande/<b64>.<exp>.<sig>`)
+  // contient des points et doit rester une page réécrite.
+  if (pathname.startsWith("/api/") || isStaticFilePath(pathname)) {
     return NextResponse.next({ request: { headers } });
   }
 

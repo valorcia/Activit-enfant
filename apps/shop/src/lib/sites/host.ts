@@ -68,3 +68,10 @@ export function statementDescriptorSuffix(name: string): string {
   const cut = ascii.slice(0, 22).trim();
   return /[A-Z]/.test(cut) ? cut : "BOUTIQUE";
 }
+
+const STATIC_FILE_RE = /\.(xml|txt|ico|png|jpe?g|gif|svg|webp|avif|webmanifest|json|js|mjs|css|map|woff2?|ttf|otf|pdf|mp4|webm)$/i;
+
+/** Vrai si le dernier segment du chemin est un fichier statique (sitemap.xml, robots.txt…), pas une page. */
+export function isStaticFilePath(pathname: string): boolean {
+  return STATIC_FILE_RE.test(pathname.split("/").pop() ?? "");
+}
