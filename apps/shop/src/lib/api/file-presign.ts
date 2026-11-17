@@ -45,3 +45,23 @@ export async function registerPrivateFile(productId: string, key: string, opts: 
     data: { productId, name: opts.name.slice(0, 160), kind: opts.kind ?? "MAIN_PDF", storageKey: key, mime: opts.mime, sizeBytes: size, description: opts.description ?? null, position: (agg._max.position ?? -1) + 1 },
   });
 }
+
+/**
+ * Variante générique (UNWRITTEN : PDF individuel d'un livre personnalisé) : même stockage privé,
+ * mêmes types autorisés, dossier libre sous private/. Null en stockage local.
+ */
+export async function presignPrivateUpload(folder: string, name: string, mime: string): Promise<{ key: string; uploadUrl: string; expiresIn: number } | null> {
+  if (env.storageDriver !== "s3") return null;
+  if (!FILE_MIMES.includes(mime)) throw new Error("Type de fichier non supporté (PDF ou ZIP attendu)");
+  const key = privateKey(folder, `${nanoid(10)}-${safeFileName(name)}`);
+  const expiresIn = 900;
+  const uploadUrl = await getSignedUrl(s3(), new PutObjectCommand({ Bucket: env.s3.bucket, Key: key, ContentType: mime }), { expiresIn });
+  return { key, uploadUrl, expiresIn };
+}
+
+/** Taille d'un objet privé déposé par URL signée (0 s'il est absent). */
+export async function privateObjectSize(key: string): Promise<number> {
+  if (env.storageDriver !== "s3") throw new Error("Téléversement direct indisponible (stockage local)");
+  const head = await s3().send(new HeadObjectCommand({ Bucket: env.s3.bucket, Key: key }));
+  return Number(head.ContentLength ?? 0);
+}

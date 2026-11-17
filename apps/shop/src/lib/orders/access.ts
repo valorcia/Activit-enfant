@@ -52,13 +52,23 @@ export async function authorizeDownload(
 ): Promise<DownloadCheck> {
   const ent = await db.downloadEntitlement.findUnique({
     where: { token: entitlementToken },
-    include: { order: { select: { status: true } }, product: { include: { files: true } } },
+    include: { order: { select: { status: true } }, product: { include: { files: true } }, personalItem: { select: { id: true, fileKey: true, fileName: true, fileMime: true } } },
   });
   if (!ent) return { ok: false, status: 404, reason: "Lien de téléchargement inconnu" };
   if (ent.revokedAt) return { ok: false, status: 403, reason: "Accès révoqué" };
   if (ent.expiresAt && ent.expiresAt < now) return { ok: false, status: 410, reason: "Lien expiré — demandez un nouveau lien depuis « Retrouver mes achats »" };
   if (ent.order.status !== "PAID" && ent.order.status !== "PARTIALLY_REFUNDED") return { ok: false, status: 403, reason: "Commande non payée" };
   if (ent.downloadCount >= ent.maxDownloads) return { ok: false, status: 429, reason: "Nombre maximal de téléchargements atteint — contactez le support" };
+  // Livre personnalisé (UNWRITTEN) : le seul fichier est le PDF individuel, identifié par l'id du livre
+  if (ent.personalItem) {
+    const pi = ent.personalItem;
+    if (fileId !== pi.id || !pi.fileKey) return { ok: false, status: 404, reason: "Fichier introuvable" };
+    await db.$transaction([
+      db.downloadEntitlement.update({ where: { id: ent.id }, data: { downloadCount: { increment: 1 }, lastDownloadedAt: now } }),
+      db.downloadLog.create({ data: { entitlementId: ent.id, ip: meta.ip ?? undefined, userAgent: meta.userAgent?.slice(0, 300) ?? undefined } }),
+    ]);
+    return { ok: true, entitlementId: ent.id, storageKey: pi.fileKey, fileName: pi.fileName ?? "book.pdf", mime: pi.fileMime ?? "application/pdf" };
+  }
   const file = ent.product.files.find((f) => f.id === fileId);
   if (!file) return { ok: false, status: 404, reason: "Fichier introuvable" };
 

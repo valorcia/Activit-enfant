@@ -7,6 +7,10 @@ export interface SiteRouting {
   status: "ACTIVE" | "TEST" | "ARCHIVED";
   domains: string[];
   isDefault: boolean;
+  /** Vitrine (« malle » par défaut, « unwritten ») et langues ouvertes : couche marque. */
+  storefront?: string;
+  locales?: string[];
+  defaultLocale?: string;
 }
 
 export function normalizeHost(host: string | null | undefined): string {

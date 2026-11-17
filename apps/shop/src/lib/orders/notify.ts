@@ -12,6 +12,11 @@ export async function brandForEmail(siteId?: string | null) {
 
 /** Email de confirmation + liens de téléchargement (après livraison). */
 export async function sendOrderConfirmation(orderId: string): Promise<void> {
+  // Commande de livres personnalisés (UNWRITTEN) : e-mail localisé « votre livre est en préparation »
+  if ((await prisma.personalOrderItem.count({ where: { orderId } })) > 0) {
+    const { sendPersonalOrderConfirmation } = await import("@/lib/unwritten/notify");
+    return sendPersonalOrderConfirmation(orderId);
+  }
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     include: { items: true, customer: true },

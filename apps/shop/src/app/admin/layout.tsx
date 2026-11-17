@@ -11,6 +11,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // La page de connexion n'a pas de coque (l'utilisateur n'est pas authentifié)
   if (!user) return <>{children}</>;
   const [brand, sites, adminSite] = await Promise.all([getSetting("brand"), getSites(), getAdminSite()]);
-  const options = sites.map((s) => ({ slug: s.slug, name: s.name, status: s.status, url: s.status === "ACTIVE" && (s.primaryDomain || s.domains[0]) ? siteUrl(s) : `/?site=${s.slug}` }));
+  const options = sites.map((s) => ({ slug: s.slug, name: s.name, status: s.status, url: s.status === "ACTIVE" && (s.primaryDomain || s.domains[0]) ? siteUrl(s) : `/?site=${s.slug}`, personalized: s.kind === "PERSONALIZED" }));
   return <AdminShell user={user} brandName={brand.name} sites={options} currentSite={adminSite?.slug ?? "all"} studioUrl={studioUrl()}>{children}</AdminShell>;
 }

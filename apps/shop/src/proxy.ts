@@ -4,6 +4,8 @@ import { prisma } from "@/lib/db";
 import { DEFAULT_SITE_SLUG, PREVIEW_COOKIE, SITE_HEADER, SITE_ROUTE_PREFIX } from "@/lib/sites/constants";
 import { isStaticFilePath, resolveSiteSlug, type SiteRouting } from "@/lib/sites/host";
 import { CREATOR_SESSION_COOKIE, isPublicCreatorPath, verifySessionToken } from "@/lib/creators/tokens";
+import { LOCALE_COOKIE, REF_COOKIE, REF_COOKIE_DAYS, sanitizeRef, UNWRITTEN_STOREFRONT } from "@/lib/unwritten/constants";
+import { routeUnwritten } from "@/lib/unwritten/proxy-route";
 
 /**
  * Proxy (Next 16) :
@@ -15,6 +17,9 @@ import { CREATOR_SESSION_COOKIE, isPublicCreatorPath, verifySessionToken } from 
  *  3. Espace créatrices : /espace-createur/* (hors connexion) et /api/createur/* exigent le
  *     cookie de session créatrice signé (distinct de l'admin) ; la base est vérifiée dans les pages.
  *     Ces routes sont communes à tous les univers : pas de réécriture.
+ *  4. Marques à vitrine UNWRITTEN (`Site.storefront = "unwritten"`) : URLs localisées `/{en|fr}/…`
+ *     réécrites vers `/u/<locale>/…` (src/app/u), langue négociée (cookie, Accept-Language), paramètre
+ *     `ref` conservé dans un cookie jusqu'au paiement. Les autres univers ne sont pas concernés.
  */
 
 let routingCache: { at: number; sites: SiteRouting[] } | null = null;
@@ -22,7 +27,7 @@ let routingCache: { at: number; sites: SiteRouting[] } | null = null;
 async function getRouting(): Promise<SiteRouting[]> {
   if (routingCache && Date.now() - routingCache.at < 60_000) return routingCache.sites;
   try {
-    const rows = await prisma.site.findMany({ select: { slug: true, status: true, domains: true, isDefault: true } });
+    const rows = await prisma.site.findMany({ select: { slug: true, status: true, domains: true, isDefault: true, storefront: true, locales: true, defaultLocale: true } });
     routingCache = { at: Date.now(), sites: rows };
   } catch (e) {
     console.error("[proxy] univers indisponibles", e instanceof Error ? e.message : e);
@@ -41,6 +46,7 @@ export async function proxy(req: NextRequest) {
   const { pathname, searchParams } = req.nextUrl;
 
   // Accès direct aux routes internes réécrites : interdit
+  // (/u/… n'a pas besoin d'être bloqué : toute page publique est réécrite, /u/… n'est donc jamais servi tel quel)
   if (pathname === SITE_ROUTE_PREFIX || pathname.startsWith(`${SITE_ROUTE_PREFIX}/`)) {
     return new NextResponse("Not found", { status: 404 });
   }
@@ -80,17 +86,44 @@ export async function proxy(req: NextRequest) {
     return NextResponse.next({ request: { headers } });
   }
 
-  // API, fichiers (sitemap.xml, robots.txt, manifest…) : pas de réécriture, univers transmis par en-tête
+  // API, fichiers (sitemap.xml, robots.txt, manifest…) : pas de réécriture, univers transmis par en-tête.
   // Seules les extensions de fichiers connues comptent : un jeton signé (`/commande/<b64>.<exp>.<sig>`)
   // contient des points et doit rester une page réécrite.
   if (pathname.startsWith("/api/") || isStaticFilePath(pathname)) {
     return NextResponse.next({ request: { headers } });
   }
 
-  // Pages publiques : réécriture vers /s/<slug>/…
-  const url = req.nextUrl.clone();
-  url.pathname = `${SITE_ROUTE_PREFIX}/${slug}${pathname === "/" ? "" : pathname}`;
-  const res = NextResponse.rewrite(url, { request: { headers } });
+  // Pages publiques : réécriture vers /s/<slug>/… (ou /u/<locale>/… pour une vitrine UNWRITTEN)
+  const routing = sites.find((s) => s.slug === slug);
+  let res: NextResponse;
+  if (routing?.storefront === UNWRITTEN_STOREFRONT) {
+    const decision = routeUnwritten({
+      pathname,
+      search: req.nextUrl.search,
+      locales: routing.locales ?? [],
+      defaultLocale: routing.defaultLocale ?? "en",
+      cookieLocale: req.cookies.get(LOCALE_COOKIE)?.value,
+      acceptLanguage: req.headers.get("accept-language"),
+    });
+    if (decision.type === "redirect") {
+      res = NextResponse.redirect(new URL(decision.location, req.url), 307);
+      res.headers.set("vary", "accept-language, cookie");
+    } else {
+      const url = req.nextUrl.clone();
+      url.pathname = decision.pathname;
+      res = NextResponse.rewrite(url, { request: { headers } });
+      res.headers.set("content-language", decision.locale);
+      // Sélecteur de langue mémorisé : la dernière langue visitée devient la préférence
+      if (decision.rememberLocale) res.cookies.set(LOCALE_COOKIE, decision.locale, { path: "/", sameSite: "lax", maxAge: 60 * 60 * 24 * 365 });
+    }
+    // Attribution (volet viral) : `ref` conservé 30 jours (dernier clic) puis copié sur le brouillon et la commande
+    const ref = sanitizeRef(searchParams.get("ref"));
+    if (ref) res.cookies.set(REF_COOKIE, ref, { path: "/", httpOnly: true, sameSite: "lax", maxAge: 60 * 60 * 24 * REF_COOKIE_DAYS });
+  } else {
+    const url = req.nextUrl.clone();
+    url.pathname = `${SITE_ROUTE_PREFIX}/${slug}${pathname === "/" ? "" : pathname}`;
+    res = NextResponse.rewrite(url, { request: { headers } });
+  }
   if (previewParam) {
     if (previewParam === "default") res.cookies.delete(PREVIEW_COOKIE);
     else if (sites.some((s) => s.slug === previewParam && s.status !== "ARCHIVED")) {

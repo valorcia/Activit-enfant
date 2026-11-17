@@ -16,6 +16,7 @@ function fallbackSite(): SiteWithAudience {
   return {
     id: DEFAULT_SITE_ID, slug: DEFAULT_SITE_SLUG, name: "La Malle à Jeux", audienceId: "aud-familles-enfants", preset: "kit-enfants",
     status: "ACTIVE", domains: [], primaryDomain: null, isDefault: true, settings: {}, createdAt: now, updatedAt: now,
+    kind: "CATALOG", storefront: "malle", locales: ["fr"], defaultLocale: "fr", currencies: ["EUR"],
     audience: { id: "aud-familles-enfants", slug: "familles-enfants", name: "Familles & enfants", description: null, color: null, createdAt: now },
   };
 }

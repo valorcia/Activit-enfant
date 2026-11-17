@@ -77,13 +77,15 @@ export function applyCoupon(coupon: CouponLike | null | undefined, subtotalCents
 }
 
 export interface CartLineInput {
-  kind: "product" | "bundle";
+  /** « personalized » : livre personnalisé UNWRITTEN, lié à un brouillon figé (`draftId`). */
+  kind: "product" | "bundle" | "personalized";
   id: string;
   quantity: number;
+  draftId?: string;
 }
 
 export interface PricedLine {
-  kind: "product" | "bundle";
+  kind: "product" | "bundle" | "personalized";
   id: string;
   name: string;
   quantity: number;
@@ -91,6 +93,9 @@ export interface PricedLine {
   compareAtCents: number | null;
   totalCents: number;
   taxRateBp: number;
+  /** Ligne personnalisée : brouillon d'origine et copie figée des réponses (OrderItem.snapshot). */
+  draftId?: string;
+  snapshot?: unknown;
 }
 
 export interface CartTotals {

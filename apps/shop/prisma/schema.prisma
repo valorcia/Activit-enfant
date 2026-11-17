@@ -337,6 +337,12 @@ model Product {
   creatorSubmissions CreatorSubmission[]
   commissions        CommissionEntry[]
 
+  // UNWRITTEN : produit personnalisé (questionnaire, brouillons, livres produits à la commande)
+  personalization PersonalizedProduct?
+  questionnaires  Questionnaire[]
+  drafts          PersonalizationDraft[]
+  personalItems   PersonalOrderItem[]
+
   @@index([status, publishedAt])
   @@index([categoryId, status])
   @@index([salesCount])
@@ -493,6 +499,7 @@ model Order {
   reviews      Review[]
   conversions  ConversionEvent[]
   commissions  CommissionEntry[]
+  personalItems PersonalOrderItem[]
 
   @@index([status, createdAt])
   @@index([email])
@@ -515,6 +522,9 @@ model OrderItem {
   taxRateBp      Int      @default(2000)
   snapshot       Json?    // copie du produit au moment de l'achat (historique conservé)
   commissions    CommissionEntry[]
+  // UNWRITTEN : ligne « produit personnalisé » liée à un brouillon figé (null pour La Malle à Jeux)
+  personalDraftId String?
+  personalItem    PersonalOrderItem?
 
   @@index([orderId])
   @@index([productId])
@@ -575,6 +585,9 @@ model DownloadEntitlement {
   lastDownloadedAt DateTime?
   revokedAt        DateTime?
   createdAt        DateTime  @default(now())
+  // UNWRITTEN : droit individuel sur le PDF d'un livre personnalisé (null = fichiers communs du produit)
+  personalItemId   String?            @unique
+  personalItem     PersonalOrderItem? @relation(fields: [personalItemId], references: [id], onDelete: SetNull)
 
   downloads DownloadLog[]
 
@@ -746,6 +759,11 @@ model MarketingEvent {
 // Multi-univers : audiences (identité sociale) et univers (sites / domaines)
 // ---------------------------------------------------------------------------
 
+enum SiteKind {
+  CATALOG      // catalogue de fichiers communs (La Malle à Jeux)
+  PERSONALIZED // livres personnalisés produits à la commande (UNWRITTEN)
+}
+
 enum SiteStatus {
   ACTIVE   // en ligne sur ses domaines
   TEST     // accessible en prévisualisation (?site=slug) ou sous-domaine hub
@@ -778,6 +796,12 @@ model Site {
   primaryDomain String?
   isDefault     Boolean    @default(false)
   settings      Json       @default("{}") // surcharges par clé de réglage (brand, theme, homepage…)
+  // Couche « marque » (UNWRITTEN) : valeurs par défaut = comportement historique de La Malle à Jeux
+  kind          SiteKind   @default(CATALOG) // CATALOG (catalogue de PDF communs) | PERSONALIZED (livres produits à la commande)
+  storefront    String     @default("malle") // arbre de routes et design system : malle (src/app/s) | unwritten (src/app/u)
+  locales       String[]   @default(["fr"]) // langues ouvertes au public
+  defaultLocale String     @default("fr")
+  currencies    String[]   @default(["EUR"]) // devises proposées (prix fixés par devise, pas de conversion)
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 
@@ -790,6 +814,8 @@ model Site {
   campaigns   Campaign[]
   orders      Order[]
   subscribers NewsletterSubscriber[]
+  drafts        PersonalizationDraft[]
+  personalItems PersonalOrderItem[]
 
   @@index([status])
 }
@@ -1269,4 +1295,172 @@ model CreatorPayout {
 
   @@index([creatorId, status])
   @@index([period])
+}
+
+// ---------------------------------------------------------------------------
+// UNWRITTEN : livres personnalisés produits à la commande
+// (docs/unwritten/ARCHITECTURE_UNWRITTEN.md § 3 et 4, docs/unwritten/STORE_UNWRITTEN.md)
+// ---------------------------------------------------------------------------
+
+enum QuestionnaireStatus {
+  DRAFT // version en préparation (non proposée aux clients)
+  ACTIVE // version utilisée pour les nouveaux brouillons (une seule par produit)
+  ARCHIVED // ancienne version, conservée pour les brouillons et commandes qui la citent
+}
+
+enum PersonalizationDraftStatus {
+  ACTIVE // en cours de saisie
+  CHECKOUT // figé : paiement en cours (session Stripe ouverte)
+  ORDERED // payé : réponses copiées dans PersonalOrderItem puis effacées du brouillon
+  EXPIRED // durée de conservation dépassée (purgé par la tâche quotidienne)
+}
+
+enum PersonalItemStatus {
+  AWAITING_RECIPIENT // cadeau : le destinataire doit compléter ses informations
+  PENDING_GENERATION // prêt à produire : en attente du studio
+  IN_PRODUCTION // pris en charge par le studio
+  ERROR // erreur signalée par le studio (relance possible)
+  DELIVERED // PDF déposé, droit de téléchargement créé, e-mail envoyé
+  CANCELLED // commande remboursée ou annulée avant livraison
+}
+
+// Informations propres à un produit personnalisé (1:1 avec Product). Les textes de la
+// vitrine sont bilingues (JSON validé par Zod : src/lib/unwritten/catalog.ts).
+model PersonalizedProduct {
+  productId       String   @id
+  product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  collectionKey   String // secret-book | before-its-too-late | movie-of-my-life
+  content         Json     @default("{}") // { en: {...}, fr: {...} }
+  prices          Json     @default("{}") // prix fixés par devise, en centimes TTC : { "EUR": 1990 } (repli : Product.priceCents)
+  deliveryDaysMin Int      @default(3) // délai estimé de préparation, en jours ouvrés (à valider)
+  deliveryDaysMax Int      @default(7)
+  pagesMin        Int?
+  pagesMax        Int?
+  formats         String[] @default(["PDF"])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// Questionnaire dynamique versionné : la définition (étapes, questions, conditions,
+// textes EN/FR) est un JSON validé par Zod (src/lib/unwritten/questionnaire/schema.ts).
+// Une version publiée n'est jamais modifiée : toute modification crée une nouvelle version.
+model Questionnaire {
+  id          String              @id @default(cuid())
+  productId   String
+  product     Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  version     Int
+  status      QuestionnaireStatus @default(DRAFT)
+  definition  Json
+  note        String?
+  createdBy   String? // e-mail de l'administrateur ou « seed »
+  publishedAt DateTime?
+  createdAt   DateTime            @default(now())
+
+  drafts PersonalizationDraft[]
+
+  @@unique([productId, version])
+  @@index([productId, status])
+}
+
+// Brouillon de personnalisation : réponses sauvegardées à chaque étape, reprise par lien
+// magique (jeton signé à usage unique), conservation limitée (expiresAt glissant).
+model PersonalizationDraft {
+  id                 String                     @id @default(cuid())
+  siteId             String
+  site               Site                       @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  productId          String
+  product            Product                    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  questionnaireId    String
+  questionnaire      Questionnaire              @relation(fields: [questionnaireId], references: [id], onDelete: Restrict)
+  locale             String
+  currency           String                     @default("EUR")
+  status             PersonalizationDraftStatus @default(ACTIVE)
+  mode               String                     @default("self") // self | gift (l'acheteur remplit) | gift_recipient (le destinataire remplit)
+  answers            Json                       @default("{}") // { [questionId]: valeur }
+  // Réservé au volet viral (livre collaboratif) : contributions de proches invités,
+  // [{ contributorId, answers, status, at }]. Non exploité dans cette version.
+  contributions      Json                       @default("[]")
+  currentStep        Int                        @default(0)
+  email              String? // adresse de l'acheteur (lien de reprise), facultative avant le paiement
+  giftRecipientName  String? // prénom seulement, facultatif
+  giftRecipientEmail String? // facultatif : sinon l'acheteur transmet lui-même le lien
+  giftMessage        String?
+  sensitiveConsentAt DateTime? // consentement explicite aux champs sensibles
+  consentText        String?
+  utm                Json? // UTM et paramètre ref (attribution jusqu'au paiement)
+  orderId            String?
+  resumeSentAt       DateTime?
+  lastResumedAt      DateTime? // usage unique des liens de reprise (émis avant = refusés)
+  expiresAt          DateTime
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+
+  @@index([siteId, status])
+  @@index([expiresAt])
+  @@index([orderId])
+}
+
+// Livre personnalisé d'une commande payée : créé par le webhook Stripe (idempotent,
+// une ligne par article), produit par le studio via l'API v1, livré individuellement.
+model PersonalOrderItem {
+  id                  String             @id @default(cuid())
+  siteId              String
+  site                Site               @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  orderId             String
+  order               Order              @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderItemId         String             @unique
+  orderItem           OrderItem          @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  productId           String?
+  product             Product?           @relation(fields: [productId], references: [id], onDelete: SetNull)
+  draftId             String? // brouillon d'origine (peut être purgé)
+  locale              String
+  status              PersonalItemStatus @default(PENDING_GENERATION)
+  isGift              Boolean            @default(false)
+  mode                String             @default("self")
+  answers             Json               @default("{}") // réponses figées au paiement
+  questionnaire       Json               @default("{}") // { id, version, definition } figés
+  studioRef           String? // identifiant du livre côté studio
+  lastError           String?
+  errorCount          Int                @default(0)
+  fileKey             String? // PDF final : stockage privé uniquement
+  fileName            String?
+  fileMime            String?
+  fileSize            Int?
+  productionStartedAt DateTime?
+  deliveredAt         DateTime?
+  cancelledAt         DateTime?
+  remindedAt          DateTime?
+  dataPurgedAt        DateTime? // réponses effacées après la durée de conservation
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  gift        GiftClaim?
+  entitlement DownloadEntitlement?
+
+  @@index([status, createdAt])
+  @@index([siteId, status])
+  @@index([orderId])
+}
+
+// Option cadeau : le destinataire reçoit un lien et complète lui-même ses informations.
+// Le jeton n'est stocké que haché ; une relance émet un nouveau jeton (l'ancien est révoqué).
+model GiftClaim {
+  id                 String            @id @default(cuid())
+  personalItemId     String            @unique
+  personalItem       PersonalOrderItem @relation(fields: [personalItemId], references: [id], onDelete: Cascade)
+  tokenHash          String            @unique
+  recipientName      String?
+  recipientEmail     String?
+  message            String?
+  answers            Json              @default("{}") // réponses du destinataire en cours de saisie
+  sensitiveConsentAt DateTime?
+  sendAt             DateTime? // réservé (volet viral) : envoi programmé
+  sentAt             DateTime?
+  openedAt           DateTime?
+  completedAt        DateTime?
+  revealedAt         DateTime? // réservé (volet viral) : page de révélation
+  revokedAt          DateTime?
+  expiresAt          DateTime?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
 }

@@ -1,7 +1,8 @@
 /**
  * Seed : compte administrateur, catégories, collections, paramètres du site,
  * pages juridiques (brouillons à valider) et le premier produit
- * « Le trésor de la Capitaine Coquelicot ».
+ * « Le trésor de la Capitaine Coquelicot ». Ajoute aussi, si elle est absente,
+ * la marque UNWRITTEN de départ (src/lib/unwritten/seed.ts).
  *
  * Les illustrations et PDF définitifs seront fournis ultérieurement : les
  * emplacements sont clairement identifiés (aucune image → placeholder visuel).
@@ -16,6 +17,7 @@ import "dotenv/config";
 import { PrismaClient, type ProductTemplate } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { resolveDbSchema, withDbSchema } from "../src/lib/db-url";
+import { seedUnwritten } from "../src/lib/unwritten/seed";
 
 /** Identifiant fixe de l'univers par défaut (voir src/lib/sites/constants.ts). */
 const DEFAULT_SITE_ID = "site-default";
@@ -261,6 +263,9 @@ async function main() {
     }
     console.log(`${demos.length} produits d'exemple créés (brouillons)`);
   }
+
+  // --- Marque UNWRITTEN (créée seulement si absente : statut TEST, sans domaine, aperçu /?site=unwritten) ---
+  await seedUnwritten(prisma, (m) => console.log(m));
 
   console.log("Seed terminé.");
 }

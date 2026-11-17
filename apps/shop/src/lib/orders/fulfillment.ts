@@ -4,6 +4,7 @@ import { prisma as defaultPrisma } from "@/lib/db";
 import { randomToken } from "@/lib/tokens";
 import { nextInvoiceNumber } from "./numbers";
 import { applyCommissionRefund, createCommissionsForOrder } from "@/lib/creators/commissions";
+import { cancelPersonalItemsForOrder, createPersonalItemsInTx } from "@/lib/unwritten/orders";
 
 /**
  * Traitement des événements Stripe. Toutes les opérations sont idempotentes :
@@ -71,6 +72,8 @@ export async function fulfillOrderFromSession(
   // Produits à livrer : articles + contenu des packs (dédupliqués)
   const productIds = new Set<string>();
   for (const item of order.items) {
+    // Livre personnalisé (UNWRITTEN) : pas de droit sur des fichiers communs, livraison individuelle plus tard
+    if (item.personalDraftId) continue;
     if (item.productId) productIds.add(item.productId);
     if (item.bundle) for (const bi of item.bundle.items) productIds.add(bi.productId);
   }
@@ -127,6 +130,8 @@ export async function fulfillOrderFromSession(
     if (order.couponId) {
       await tx.coupon.update({ where: { id: order.couponId }, data: { usedCount: { increment: 1 } } });
     }
+    // UNWRITTEN : un livre « en attente de génération » par ligne personnalisée (aucune génération ici)
+    await createPersonalItemsInTx(tx, order, now);
 
     const day = new Date(now.toISOString().slice(0, 10));
     await tx.dailyStat.upsert({
@@ -191,6 +196,14 @@ export async function applyRefund(
       await tx.payment.updateMany({ where: { orderId: order.id }, data: { status: "REFUNDED" } });
     }
   });
+  // UNWRITTEN : remboursement total → livres non encore livrés annulés
+  if (full) {
+    try {
+      await cancelPersonalItemsForOrder(order.id, db);
+    } catch (e) {
+      console.error(`[unwritten] annulation des livres non répercutée pour la commande ${order.id}`, e instanceof Error ? e.message : e);
+    }
+  }
   // Commissions des créatrices : annulées (total) ou réduites au prorata (partiel). Rejoué par le cron quotidien en cas d'échec.
   try {
     await applyCommissionRefund(order.id, { refundedCents, full }, db);

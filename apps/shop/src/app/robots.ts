@@ -1,6 +1,8 @@
 import type { MetadataRoute } from "next";
 import { getSetting } from "@/lib/settings";
 import { getRequestSite, siteUrl } from "@/lib/sites";
+import { UNWRITTEN_STOREFRONT } from "@/lib/unwritten/constants";
+import { unwrittenPrivatePaths } from "@/lib/unwritten/sitemap";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +11,9 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
   const site = await getRequestSite();
   const seo = await getSetting("seo", site);
   if (!seo.robotsIndex || site.status !== "ACTIVE") return { rules: { userAgent: "*", disallow: "/" } };
+  if (site.storefront === UNWRITTEN_STOREFRONT) {
+    return { rules: { userAgent: "*", allow: "/", disallow: ["/admin", "/api", ...unwrittenPrivatePaths()] }, sitemap: `${siteUrl(site)}/sitemap.xml` };
+  }
   return {
     rules: { userAgent: "*", allow: "/", disallow: ["/admin", "/api", "/commande", "/mes-achats", "/panier"] },
     sitemap: `${siteUrl(site)}/sitemap.xml`,
