@@ -180,6 +180,13 @@ S'ajoutent à chaque commande les frais Stripe (environ 1,5 % + 0,25 € pour un
 | A6 | Vercel Pro avant lancement (dépense réelle) | Oui |
 | A7 | Ordre d'ouverture des langues | Anglais et français d'abord, puis espagnol, allemand et italien |
 
+### Décisions prises le 17 novembre 2026
+- **A1** : vitrine UNWRITTEN **dans l'application boutique existante**, arbre de routes séparé.
+- **A2** : **un seul compte Stripe** pour toutes les marques ; libellé bancaire par marque.
+- **A4** : les livres de démonstration seront générés **en mode copier-coller** (Claude et ChatGPT sur abonnement), **sans dépense d'API** pour l'instant. Les coûts réels par API seront mesurés plus tard, sur accord.
+- **A7** : **anglais et français** pour le pilote ; espagnol, allemand et italien ensuite.
+- En attente : A3 (nom de domaine), A5 et A6 (serveur worker et Vercel Pro avant lancement).
+
 ## 11. Plan d'exécution
 
 | Phase | Livrable | Contenu | Dépend d'un arbitrage |
