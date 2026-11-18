@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getSettings } from "@/lib/settings";
 import { getPublicSite, getSites, siteUrl } from "@/lib/sites";
 import { ThemeHead } from "@/components/theme/theme-provider";
+import { UNWRITTEN_STOREFRONT } from "@/lib/unwritten/constants";
 
 export const revalidate = 300;
 
@@ -11,7 +12,9 @@ type Params = { params: Promise<{ site: string }> };
 /** Pré-génère chaque univers en ligne ou en test (les pages enfants combinent univers × slugs). */
 export async function generateStaticParams() {
   const sites = await getSites();
-  return sites.filter((s) => s.status !== "ARCHIVED").map((s) => ({ site: s.slug }));
+  // Les vitrines UNWRITTEN sont servies par /u/[locale] (proxy) : leurs pages /s/<slug>/… ne sont jamais
+  // affichées. Les pré-générer doublait inutilement les requêtes du build (délais de connexion Prisma).
+  return sites.filter((s) => s.status !== "ARCHIVED" && s.storefront !== UNWRITTEN_STOREFRONT).map((s) => ({ site: s.slug }));
 }
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
