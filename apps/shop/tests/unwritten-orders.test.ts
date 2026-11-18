@@ -83,8 +83,9 @@ async function completeDraft(mode: "self" | "gift" | "gift_recipient" = "self") 
   if (mode !== "gift_recipient") {
     expect((await save(d.id, "people", { mainName: "Sam", partnerName: "Léa" })).ok).toBe(true);
     expect((await save(d.id, "story", { shared: "Les crêpes du dimanche" })).ok).toBe(true);
+    expect((await save(d.id, "challenges", { tone: "tender" })).ok).toBe(true);
   }
-  expect((await save(d.id, "voice", { tone: "tender", secret: "Un secret jamais dit", dedication: "Pour toi" })).ok).toBe(true);
+  expect((await save(d.id, "voice", { secret: "Un secret jamais dit", dedication: "Pour toi" })).ok).toBe(true);
   return (await getDraft(d.id, db))!;
 }
 
@@ -134,10 +135,11 @@ describe("brouillon de personnalisation", () => {
     const d = await newDraft();
     const first = d.expiresAt.getTime();
     expect((await save(d.id, "edition", { edition: "growth" })).ok).toBe(true);
-    const refused = await save(d.id, "voice", { tone: "bold", secret: "Une peur" }, false);
+    expect((await save(d.id, "challenges", { tone: "bold" })).ok).toBe(true);
+    const refused = await save(d.id, "voice", { secret: "Une peur" }, false);
     expect(refused.ok).toBe(false);
     expect(refused.errors).toEqual({ secret: "consentRequired" });
-    expect((await save(d.id, "voice", { tone: "bold", secret: "Une peur" }, true)).ok).toBe(true);
+    expect((await save(d.id, "voice", { secret: "Une peur" }, true)).ok).toBe(true);
     const after = (await getDraft(d.id, db))!;
     expect(after.answers).toEqual({ edition: "growth", tone: "bold", secret: "Une peur" });
     expect(after.sensitiveConsentAt).not.toBeNull();
@@ -221,7 +223,7 @@ describe("commande personnalisée", () => {
     expect(order.items).toHaveLength(1);
     expect(order.items[0].personalDraftId).toBe(d.id);
     const snap = order.items[0].snapshot as { personalization: { answers: Record<string, unknown>; version: number } };
-    expect(snap.personalization.version).toBe(1);
+    expect(snap.personalization.version).toBe(2);
     expect(snap.personalization.answers).toMatchObject({ edition: "couple", mainName: "Sam", secret: "Un secret jamais dit" });
     const params = stripeCalls[0];
     expect(params.locale).toBe("fr");
@@ -364,7 +366,7 @@ describe("parcours cadeau (le destinataire complète ses informations)", () => {
     const refreshed = (await findGiftByToken(token, db)) as Extract<Awaited<ReturnType<typeof findGiftByToken>>, { ok: true }>;
     expect((await saveGiftStep(refreshed.claim, "story", { shared: "Nos voyages" }, { consent: false }, db)).ok).toBe(true);
     const again = (await findGiftByToken(token, db)) as typeof refreshed;
-    expect((await saveGiftStep(again.claim, "voice", { tone: "playful", edition: "family" }, { consent: false }, db)).ok).toBe(true);
+    expect((await saveGiftStep(again.claim, "challenges", { tone: "playful", edition: "family" }, { consent: false }, db)).ok).toBe(true);
     await completeGift(again.claim.id, db);
 
     const done = await db.personalOrderItem.findUniqueOrThrow({ where: { id: item.id }, include: { gift: true } });

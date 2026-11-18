@@ -17,6 +17,8 @@ export const LIMITS = {
   magicLinkIp: { max: 10, windowMs: 60 * 60_000 },
   /** Ouverture de liens (reprise, cadeau) par IP. */
   tokenIp: { max: 30, windowMs: 15 * 60_000 },
+  /** Photos téléversées par IP (un livre en compte jusqu'à une vingtaine). */
+  photoUploadIp: { max: 60, windowMs: 60 * 60_000 },
   /** Démarrage d'un paiement par IP. */
   checkoutIp: { max: 10, windowMs: 15 * 60_000 },
 } as const;

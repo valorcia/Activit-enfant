@@ -80,7 +80,42 @@ export function pruneAnswers(def: QuestionnaireDefinition, answers: Answers): An
   return Object.fromEntries(Object.entries(answers).filter(([k, v]) => visible.has(k) && isAnswered(v)));
 }
 
-export type AnswerError = "required" | "tooLong" | "invalidChoice" | "invalidDate" | "invalidNumber" | "consentRequired";
+export type AnswerError = "required" | "tooLong" | "invalidChoice" | "invalidDate" | "invalidNumber" | "consentRequired" | "tooManyPhotos";
+
+/**
+ * Photos : la réponse est une liste « ph_<identifiant>[::légende] ». Les fichiers sont privés
+ * (src/lib/unwritten/photos.ts) ; le navigateur ne peut que réordonner, légender ou retirer
+ * des photos déjà téléversées par lui (voir validateStep).
+ */
+export const PHOTO_ID_RE = /^ph_[a-z0-9]{24}$/;
+export const PHOTO_CAPTION_MAX = 140;
+export const DEFAULT_MAX_PHOTOS = 4;
+
+export interface PhotoEntry { id: string; caption: string }
+
+export function parsePhotoEntry(raw: string): PhotoEntry | null {
+  const i = raw.indexOf("::");
+  const id = i < 0 ? raw : raw.slice(0, i);
+  if (!PHOTO_ID_RE.test(id)) return null;
+  const caption = i < 0 ? "" : raw.slice(i + 2).replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim().slice(0, PHOTO_CAPTION_MAX);
+  return { id, caption };
+}
+
+export function formatPhotoEntry(e: PhotoEntry): string {
+  return e.caption ? `${e.id}::${e.caption}` : e.id;
+}
+
+export function photoEntries(value: AnswerValue | undefined): PhotoEntry[] {
+  if (!Array.isArray(value)) return [];
+  return value.map(parsePhotoEntry).filter((x): x is PhotoEntry => !!x);
+}
+
+/** Identifiants de toutes les photos citées par des réponses (suppression des fichiers). */
+export function photoIdsIn(answers: Answers): string[] {
+  const ids = new Set<string>();
+  for (const v of Object.values(answers)) for (const e of photoEntries(v)) ids.add(e.id);
+  return [...ids];
+}
 
 const DATE_RE = /^\d{4}(-(0[1-9]|1[0-2])(-(0[1-9]|[12]\d|3[01]))?)?$/;
 
@@ -96,6 +131,17 @@ export function normalizeAnswer(q: Question, raw: unknown): AnswerValue | undefi
     case "multi": {
       const list = (Array.isArray(raw) ? raw : [raw]).map((x) => String(x).trim()).filter(Boolean);
       return list.length ? [...new Set(list)] : undefined;
+    }
+    case "photos": {
+      const seen = new Set<string>();
+      const list: string[] = [];
+      for (const x of Array.isArray(raw) ? raw : [raw]) {
+        const e = parsePhotoEntry(String(x));
+        if (!e || seen.has(e.id)) continue;
+        seen.add(e.id);
+        list.push(formatPhotoEntry(e));
+      }
+      return list.length ? list : undefined;
     }
     case "number": {
       if (typeof raw === "string" && raw.trim() === "") return undefined;
@@ -127,6 +173,10 @@ export function checkAnswer(q: Question, value: AnswerValue | undefined, opts: {
     }
     case "date":
       return typeof value === "string" && DATE_RE.test(value) ? null : "invalidDate";
+    case "photos": {
+      if (!Array.isArray(value) || photoEntries(value).length !== value.length) return "invalidChoice";
+      return value.length > (q.maxFiles ?? DEFAULT_MAX_PHOTOS) ? "tooManyPhotos" : null;
+    }
     default:
       return typeof value === "string" && value.length <= defaultMaxLength(q) ? null : "tooLong";
   }
@@ -159,7 +209,13 @@ export function validateStep(
   for (const q of step.questions) {
     // Seules les questions du répondant sont modifiables (cadeau : l'acheteur ne remplit pas celles du destinataire)
     if (q.type === "info" || !inAudience(q, audience)) continue;
-    const value = normalizeAnswer(q, input[q.id]);
+    let value = normalizeAnswer(q, input[q.id]);
+    // Photos : seules celles déjà enregistrées pour ce répondant sont acceptées (téléversement à part)
+    if (q.type === "photos" && Array.isArray(value)) {
+      const known = new Set(photoEntries(existing[q.id]).map((e) => e.id));
+      const kept = value.filter((v) => known.has(parsePhotoEntry(v)!.id));
+      value = kept.length ? kept : undefined;
+    }
     if (value === undefined) delete merged[q.id];
     else merged[q.id] = value;
   }
@@ -198,7 +254,7 @@ export function withoutSensitive(def: QuestionnaireDefinition, answers: Answers)
  */
 export function lintDefinition(def: QuestionnaireDefinition, opts: { min?: number; max?: number } = {}): { min: number; max: number; warnings: string[] } {
   const minWanted = opts.min ?? 5;
-  const maxWanted = opts.max ?? 8;
+  const maxWanted = opts.max ?? 32;
   const questions = allQuestions(def);
   const referenced = new Set<string>();
   for (const s of def.steps) {

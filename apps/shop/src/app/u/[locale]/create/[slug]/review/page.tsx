@@ -10,7 +10,12 @@ import { fill, formatMoney, getDictionary } from "@/lib/unwritten/i18n";
 import { href } from "@/lib/unwritten/i18n/routing";
 import { audienceForMode, visibleSteps } from "@/lib/unwritten/questionnaire/engine";
 import { PRIVATE_ROBOTS } from "@/lib/unwritten/seo";
+import { bookPlan } from "@/lib/unwritten/book-plan";
+import { COLLECTION_KEYS, type CollectionKey } from "@/lib/unwritten/constants";
+import { allQuestions } from "@/lib/unwritten/questionnaire/schema";
+import { photoEntries } from "@/lib/unwritten/questionnaire/engine";
 import { BookCover } from "@/components/unwritten/cover";
+import { BookPlanView } from "@/components/unwritten/book-plan";
 import { CheckoutForm, DeleteDraft } from "@/components/unwritten/draft-tools";
 
 type Props = { params: Promise<{ locale: string; slug: string }> };
@@ -40,6 +45,9 @@ export default async function ReviewPage({ params }: Props) {
   const stripeReady = await isStripeConfigured();
   const price = product.priceCents != null ? formatMoney(product.priceCents, product.currency, locale) : null;
   const recipient = draft.giftRecipientName || null;
+  const key = (COLLECTION_KEYS as readonly string[]).includes(product.collectionKey) ? (product.collectionKey as CollectionKey) : null;
+  const plan = key ? bookPlan(key, { locale, answers, knownQuestions: allQuestions(def).map((x) => x.id) }) : null;
+  const photoSrc = (id: string) => `/api/u/photos/${id}?product=${encodeURIComponent(product.slug)}`;
 
   return (
     <section className="uw-section !pt-10 md:!pt-16">
@@ -50,7 +58,15 @@ export default async function ReviewPage({ params }: Props) {
             <h1 className="uw-h1">{r.title}</h1>
             <p className="uw-lead mt-6">{r.lead}</p>
 
-            <div className="mt-12 border-t border-[var(--uw-line)] py-7">
+            {plan && (
+              <div className="mt-12 border-t border-[var(--uw-line)] py-7">
+                <p className="uw-eyebrow">{dict.plan.title}</p>
+                <p className="uw-small mt-2">{dict.plan.reviewLead}</p>
+                <div className="mt-6"><BookPlanView plan={plan} dict={dict.plan} variant="review" /></div>
+              </div>
+            )}
+
+            <div className="border-t border-[var(--uw-line)] py-7">
               <div className="flex items-baseline justify-between gap-6">
                 <p className="uw-eyebrow">{dict.questionnaire.modeTitle}</p>
                 <Link href={`${create}?step=mode`} className="text-sm uw-underline">{r.edit}</Link>
@@ -68,6 +84,27 @@ export default async function ReviewPage({ params }: Props) {
                 </div>
                 <dl className="mt-4 space-y-5">
                   {questions.filter((q) => q.type !== "info").map((q) => {
+                    if (q.type === "photos") {
+                      const list = photoEntries(answers[q.id]);
+                      return (
+                        <div key={q.id}>
+                          <dt className="text-[0.8125rem] text-[var(--uw-muted)]">{q.label[locale]}</dt>
+                          <dd className="mt-2">
+                            {list.length ? (
+                              <ul className="flex flex-wrap gap-3">
+                                {list.map((e) => (
+                                  <li key={e.id} className="w-[104px]">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={photoSrc(e.id)} alt={e.caption} className="aspect-square w-full bg-[#EFEBE3] object-cover" loading="lazy" />
+                                    {e.caption && <p className="mt-1 line-clamp-2 text-[0.72rem] leading-snug text-[var(--uw-soft)]">{e.caption}</p>}
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : <span className="text-[0.9rem] italic text-[var(--uw-muted)]">{r.empty}</span>}
+                          </dd>
+                        </div>
+                      );
+                    }
                     const v = displayAnswer(q, answers[q.id], locale);
                     const isMissing = missing.includes(q.id);
                     return (

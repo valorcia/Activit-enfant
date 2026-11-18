@@ -281,3 +281,32 @@ Ces points sont antérieurs à cette phase et touchent La Malle à Jeux : je ne 
 - **Lien `/commande/{jeton}` des e-mails de La Malle à Jeux** : il contient des points (jeton signé `charge.expiration.signature`). Or le proxy traite tout dernier segment contenant un point comme un fichier, sans réécriture : la page répond 404 en build locale.
   - À confirmer en production.
   - UNWRITTEN évite le problème en remplaçant `.` par `~` dans ses jetons d'URL.
+
+## 7. Version 2 (18 novembre 2026) : plan du livre, questionnaire par chapitre, photos
+
+Demande : « on répond à deux, trois questions et après, qu'est-ce qu'on a vraiment ? » ; pouvoir ajouter des photos ; savoir ce que l'on obtient.
+
+**Plan du livre** (`src/lib/unwritten/book-plan.ts`, référence unique) : pour chaque collection et édition, les chapitres, leurs pages, leurs emplacements photo et les questions qui les nourrissent. Il alimente :
+- la fiche produit (« Ce que contient votre livre », avec onglets par édition quand le plan en dépend) ;
+- le questionnaire (panneau « Votre livre se construit », mis à jour à chaque étape et après chaque photo) ;
+- le récapitulatif avant paiement (plan personnalisé : réponses, photos, rappels des lieux et prénoms) ;
+- l'API du studio (`plan` dans chaque livre) : **le nombre de pages annoncé est celui que la génération devra suivre**.
+
+| Collection | Pages | Photos |
+|---|---|---|
+| The Secret Book | 32 à 40 | jusqu'à 4 |
+| Before It's Too Late | 40 | jusqu'à 12 |
+| The Movie of My Life | 72 à 88 (7 chapitres) | jusqu'à 22 (21 pour l'édition « un chapitre ») |
+
+**Questionnaires version 2** (`questionnaire/definitions`) : une étape par chapitre, questions surtout facultatives (11 à 28 visibles selon le parcours). Le seed publie la version 2 et archive la version 1 **uniquement** si la version active vient du seed ; les brouillons commencés gardent leur version. Les textes produits ne sont mis à jour que s'ils n'ont jamais été modifiés dans l'admin.
+
+**Photos** (`photos.ts`, `photo-owner.ts`, `/api/u/photos`, type de question `photos`) :
+- réduites dans le navigateur (2400 px, JPEG) puis ré-encodées côté serveur : orientation appliquée, **métadonnées supprimées (dont la position GPS)**, vignette 480 px ;
+- privées (`private/unwritten/photos/`), visibles seulement par le navigateur du brouillon (cookie signé) ou le lien cadeau, et par le studio (`/api/v1/personal/items/:id/photos/:photoId`, scope `personal:read`) ;
+- le navigateur ne peut que légender, réordonner ou retirer des photos qu'il a lui-même téléversées ;
+- supprimées : à leur retrait, avec le brouillon, et avec les données de la commande à la fin de la durée de conservation ;
+- aucune migration de base : la réponse d'une question photos est la liste `ph_<id>[::légende]`.
+
+**Pages d'exemple** sur la fiche : vraies pages du moteur éditorial (livres de démonstration fictifs), limitées aux gabarits qui ne contredisent pas le plan (ouverture de chapitre, page photo, activité, citation). Les livres de démonstration du studio sont plus courts que les nouveaux plans (26 pages pour The Movie of My Life) : ils sont à refaire selon le plan.
+
+**Reste à faire côté studio** : générer en suivant `plan` (chapitres, pages par chapitre) et placer les photos reçues (`photos`) dans les chapitres correspondants ; contrôle qualité sur le nombre de pages réel.

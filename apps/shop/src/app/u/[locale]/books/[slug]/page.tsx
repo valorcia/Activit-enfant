@@ -7,10 +7,21 @@ import { getUwProduct, getUwProducts } from "@/lib/unwritten/catalog";
 import { fill, formatMoney, getDictionary } from "@/lib/unwritten/i18n";
 import { href } from "@/lib/unwritten/i18n/routing";
 import { localizedAlternates } from "@/lib/unwritten/seo";
+import { BLUEPRINTS, bookPlan } from "@/lib/unwritten/book-plan";
+import { COLLECTION_KEYS, type CollectionKey } from "@/lib/unwritten/constants";
 import { BookCover } from "@/components/unwritten/cover";
+import { PlanByEdition } from "@/components/unwritten/plan-by-edition";
 import { Arrow, CollectionCard, Facts, Faq, pagesLabel } from "@/components/unwritten/sections";
 
 type Params = { params: Promise<{ locale: string; slug: string }> };
+
+/** Pages d'exemple (captures du moteur éditorial du studio, livres de démonstration fictifs). */
+const SAMPLE_PAGES = ["chapter_opening", "memory", "activity", "quote"] as const;
+const SAMPLE_CHARACTER: Record<CollectionKey, string> = {
+  "secret-book": "Maya & Grandpa Tom",
+  "before-its-too-late": "Jeanne & Claire",
+  "movie-of-my-life": "Hélène Marchand",
+};
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { site, locale } = await brandFromParams(params);
@@ -38,6 +49,20 @@ export default async function BookPage({ params }: Params) {
   const price = product.priceCents != null ? formatMoney(product.priceCents, currency, locale) : null;
   const create = href(locale, "create", product.slug);
   const faq = [...c.faq.map((f) => ({ q: f.q, a: f.a })), ...dict.home.faq.items.slice(0, 3)];
+  // Plan du livre par édition (un seul onglet quand le plan ne dépend pas de l'édition)
+  const key = (COLLECTION_KEYS as readonly string[]).includes(product.collectionKey) ? (product.collectionKey as CollectionKey) : null;
+  const plans: Array<{ key: string; label: string; plan: ReturnType<typeof bookPlan> }> = [];
+  if (key) {
+    const editions = c.editions.length ? c.editions : [{ key: BLUEPRINTS[key].defaultEdition, label: product.name, text: "" }];
+    for (const e of editions) {
+      const plan = bookPlan(key, { locale, edition: e.key });
+      const sig = JSON.stringify(plan.chapters.map((x) => [x.title, x.pagesMin, x.pagesMax, x.photosMax]));
+      const same = plans.find((p) => JSON.stringify(p.plan.chapters.map((x) => [x.title, x.pagesMin, x.pagesMax, x.photosMax])) === sig);
+      if (same) same.label = `${same.label} · ${e.label}`;
+      else plans.push({ key: e.key, label: e.label, plan });
+    }
+  }
+  const samples = key ? SAMPLE_PAGES.map((p) => ({ src: `/unwritten/samples/${key}/${p}.webp`, p })) : [];
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Product",
@@ -59,6 +84,7 @@ export default async function BookPage({ params }: Params) {
             <div className="mt-4 hidden border border-dashed border-[var(--uw-line-strong)] px-5 py-4 lg:block">
               <p className="uw-eyebrow !text-[0.62rem]">{d.preview.title}</p>
               <p className="uw-small mt-1">{d.preview.text}</p>
+              {samples.length > 0 && <a href="#pages" className="uw-small uw-underline mt-2 inline-block">{d.samplesTitle} ↓</a>}
             </div>
           </div>
 
@@ -131,6 +157,35 @@ export default async function BookPage({ params }: Params) {
           </div>
         </div>
       </section>
+
+      {plans.length > 0 && (
+        <section className="uw-section uw-surface" id="plan">
+          <div className="uw-container grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] lg:gap-20">
+            <div>
+              <h2 className="uw-h2">{d.planTitle}</h2>
+              <p className="uw-body mt-5">{d.planLead}</p>
+            </div>
+            <PlanByEdition plans={plans.length > 1 ? plans : plans.map((p) => ({ ...p, label: "" }))} dict={dict.plan} />
+          </div>
+        </section>
+      )}
+
+      {samples.length > 0 && (
+        <section className="uw-section" id="pages">
+          <div className="uw-container">
+            <h2 className="uw-h2">{d.samplesTitle}</h2>
+            <p className="uw-small mt-4 max-w-[60ch]">{fill(d.samplesNote, { name: SAMPLE_CHARACTER[key!] })}</p>
+          </div>
+          <div className="mt-10 overflow-x-auto pb-6 [scrollbar-width:thin]">
+            <div className="uw-container flex w-max gap-5 sm:gap-7">
+              {samples.map((s) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img key={s.p} src={s.src} alt="" loading="lazy" width={600} height={800} className="uw-page h-auto w-[62vw] max-w-[300px] sm:w-[260px]" />
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {others.length > 0 && (
         <section className="uw-section uw-surface">

@@ -44,6 +44,10 @@ export async function questionnaireView(productId: string, draft: DraftWithRefs 
 /** Réponse lisible pour le récapitulatif (libellés d'options dans la langue). */
 export function displayAnswer(q: Question, value: AnswerValue | undefined, locale: Locale): string | null {
   if (!isAnswered(value)) return null;
+  if (q.type === "photos") {
+    const n = Array.isArray(value) ? value.length : 0;
+    return locale === "fr" ? `${n} photo${n > 1 ? "s" : ""}` : `${n} photo${n > 1 ? "s" : ""}`;
+  }
   if (q.options) {
     const list = Array.isArray(value) ? value : [String(value)];
     return list.map((v) => pick(q.options!.find((o) => o.value === v)?.label, locale) || v).join(", ");

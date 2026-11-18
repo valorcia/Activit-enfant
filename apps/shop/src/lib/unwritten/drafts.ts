@@ -3,7 +3,8 @@ import { prisma as defaultPrisma } from "@/lib/db";
 import { DRAFT_MODES, type DraftMode, type Locale } from "./constants";
 import { readUnwrittenConfig } from "./config";
 import { href } from "./i18n/routing";
-import { audienceForMode, hasSensitiveAnswers, missingAnswers, pruneAnswers, validateStep, withoutSensitive, type Answers, type StepValidation } from "./questionnaire/engine";
+import { audienceForMode, hasSensitiveAnswers, missingAnswers, photoIdsIn, pruneAnswers, validateStep, withoutSensitive, type Answers, type StepValidation } from "./questionnaire/engine";
+import { deletePhotos, removedPhotoIds } from "./photos";
 import { allQuestions, definitionSchema, type QuestionnaireDefinition } from "./questionnaire/schema";
 import { createResumeToken, fromUrlToken, toUrlToken, verifyResumeToken } from "./tokens";
 
@@ -129,6 +130,8 @@ export async function saveDraftStep(
       ...(grantConsent ? { sensitiveConsentAt: now, consentText: opts.consentText ?? null } : {}),
     },
   });
+  // Photos retirées par le client (ou devenues masquées) : fichiers supprimés
+  await deletePhotos(removedPhotoIds(draftAnswers(draft), result.answers));
   return result;
 }
 
@@ -250,10 +253,12 @@ export async function consumeResumeToken(token: string, db: PrismaClient = defau
 
 /** Suppression demandée par le client : définitive (hors brouillon déjà commandé, déjà vidé). */
 export async function deleteDraft(id: string, db: PrismaClient = defaultPrisma): Promise<boolean> {
-  const draft = await db.personalizationDraft.findUnique({ where: { id }, select: { status: true } });
+  const draft = await db.personalizationDraft.findUnique({ where: { id }, select: { status: true, answers: true } });
   if (!draft) return false;
   if (draft.status === "CHECKOUT") throw new DraftError("locked");
   await db.personalizationDraft.delete({ where: { id } });
+  // Un brouillon commandé a transmis ses photos à la commande : elles restent jusqu'à sa purge
+  if (draft.status !== "ORDERED") await deletePhotos(photoIdsIn(draftAnswers(draft)));
   return true;
 }
 
@@ -263,21 +268,29 @@ export async function deleteDraft(id: string, db: PrismaClient = defaultPrisma):
  *  - livres livrés ou annulés au-delà de la conservation : réponses et définition effacées.
  */
 export async function purgeUnwrittenData(db: PrismaClient = defaultPrisma, now = new Date()) {
-  const drafts = await db.personalizationDraft.deleteMany({ where: { expiresAt: { lt: now }, status: { in: ["ACTIVE", "EXPIRED", "ORDERED"] } } });
+  const expired = { expiresAt: { lt: now }, status: { in: ["ACTIVE", "EXPIRED", "ORDERED"] as Array<"ACTIVE" | "EXPIRED" | "ORDERED"> } };
+  // Photos des brouillons jamais commandés (celles des commandes sont purgées avec la commande)
+  const abandoned = await db.personalizationDraft.findMany({ where: { ...expired, status: { in: ["ACTIVE", "EXPIRED"] } }, select: { answers: true } });
+  const photos = await deletePhotos(abandoned.flatMap((d) => photoIdsIn(draftAnswers(d))));
+  const drafts = await db.personalizationDraft.deleteMany({ where: expired });
   const sites = await db.site.findMany({ where: { kind: "PERSONALIZED" }, select: { id: true, settings: true } });
   let items = 0;
+  let photosDeleted = photos;
   for (const site of sites) {
     const cutoff = new Date(now.getTime() - readUnwrittenConfig(site.settings).deliveredDataRetentionDays * DAY);
     const rows = await db.personalOrderItem.findMany({
       where: { siteId: site.id, dataPurgedAt: null, OR: [{ status: "DELIVERED", deliveredAt: { lt: cutoff } }, { status: "CANCELLED", cancelledAt: { lt: cutoff } }] },
-      select: { id: true, questionnaire: true },
+      select: { id: true, questionnaire: true, answers: true, gift: { select: { answers: true } } },
     });
     for (const row of rows) {
+      const own = (row.answers ?? {}) as Answers;
+      const gift = (row.gift?.answers ?? {}) as Answers;
+      photosDeleted += await deletePhotos([...photoIdsIn(own), ...photoIdsIn(gift)]);
       const q = (row.questionnaire ?? {}) as { id?: string; version?: number };
       await db.personalOrderItem.update({ where: { id: row.id }, data: { answers: {}, questionnaire: { id: q.id ?? null, version: q.version ?? null }, dataPurgedAt: now } });
       await db.giftClaim.updateMany({ where: { personalItemId: row.id }, data: { answers: {}, recipientEmail: null, recipientName: null, message: null } });
       items += 1;
     }
   }
-  return { draftsDeleted: drafts.count, itemsPurged: items };
+  return { draftsDeleted: drafts.count, itemsPurged: items, photosDeleted };
 }

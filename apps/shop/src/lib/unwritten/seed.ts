@@ -1,8 +1,8 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
-import { STARTER_PRODUCTS } from "./catalog-content";
+import { STARTER_CONTENT_VERSION, STARTER_PRODUCTS } from "./catalog-content";
 import { UNWRITTEN_SITE_ID, UNWRITTEN_SITE_SLUG, UNWRITTEN_STOREFRONT } from "./constants";
 import { unwrittenConfigSchema } from "./config";
-import { STARTER_DEFINITIONS } from "./questionnaire/definitions";
+import { STARTER_DEFINITIONS, STARTER_DEFINITIONS_VERSION } from "./questionnaire/definitions";
 import { definitionSchema } from "./questionnaire/schema";
 
 /**
@@ -53,7 +53,11 @@ export async function seedUnwritten(db: PrismaClient, log: (msg: string) => void
       update: {},
     });
     const existing = await db.product.findUnique({ where: { slug: starter.slug }, select: { id: true, siteId: true } });
-    if (existing) continue; // jamais d'écrasement : les réglages de l'admin priment
+    if (existing) {
+      // Jamais d'écrasement des réglages de l'admin : mise à niveau des seuls éléments créés par le seed
+      if (existing.siteId === site.id) await upgradeStarter(db, existing.id, starter, log);
+      continue;
+    }
     const product = await db.product.create({
       data: {
         siteId: site.id,
@@ -73,7 +77,7 @@ export async function seedUnwritten(db: PrismaClient, log: (msg: string) => void
         personalization: {
           create: {
             collectionKey: starter.key,
-            content: starter.content as unknown as Prisma.InputJsonValue,
+            content: { ...starter.content, contentVersion: STARTER_CONTENT_VERSION } as unknown as Prisma.InputJsonValue,
             prices: { EUR: starter.priceCents },
             pagesMin: starter.pagesMin,
             pagesMax: starter.pagesMax,
@@ -82,7 +86,7 @@ export async function seedUnwritten(db: PrismaClient, log: (msg: string) => void
         },
         questionnaires: {
           create: {
-            version: 1,
+            version: STARTER_DEFINITIONS_VERSION,
             status: "ACTIVE",
             definition: definitionSchema.parse(STARTER_DEFINITIONS[starter.key]) as unknown as Prisma.InputJsonValue,
             note: "Définition de départ",
@@ -95,4 +99,47 @@ export async function seedUnwritten(db: PrismaClient, log: (msg: string) => void
     log(`Produit UNWRITTEN créé : ${product.name}`);
   }
   return site;
+}
+
+/**
+ * Mise à niveau d'un produit de départ déjà en base (idempotente) :
+ *  - questionnaire : si la version active est une version du seed plus ancienne et qu'aucune version
+ *    plus récente n'existe, la nouvelle version est publiée et l'ancienne archivée. Les brouillons
+ *    déjà commencés gardent leur version (ils y sont rattachés) ;
+ *  - textes et nombre de pages : mis à jour seulement si le produit n'a jamais été modifié dans
+ *    l'admin (date de modification identique à la création) et que la version des textes augmente.
+ */
+async function upgradeStarter(db: PrismaClient, productId: string, starter: (typeof STARTER_PRODUCTS)[number], log: (m: string) => void) {
+  const versions = await db.questionnaire.findMany({ where: { productId }, select: { id: true, version: true, status: true, createdBy: true }, orderBy: { version: "desc" } });
+  const latest = versions[0];
+  if (latest && latest.version < STARTER_DEFINITIONS_VERSION && latest.status === "ACTIVE" && latest.createdBy === "seed") {
+    await db.$transaction([
+      db.questionnaire.update({ where: { id: latest.id }, data: { status: "ARCHIVED" } }),
+      db.questionnaire.create({
+        data: {
+          productId,
+          version: STARTER_DEFINITIONS_VERSION,
+          status: "ACTIVE",
+          definition: definitionSchema.parse(STARTER_DEFINITIONS[starter.key]) as unknown as Prisma.InputJsonValue,
+          note: "Version 2 : questionnaire organisé par chapitre, avec photos",
+          createdBy: "seed",
+          publishedAt: new Date(),
+        },
+      }),
+    ]);
+    log(`Questionnaire UNWRITTEN mis à niveau (v${STARTER_DEFINITIONS_VERSION}) : ${starter.content.en.name}`);
+  }
+  const perso = await db.personalizedProduct.findUnique({ where: { productId }, select: { content: true, createdAt: true, updatedAt: true } });
+  const current = (perso?.content ?? {}) as { contentVersion?: number; seededAt?: string };
+  // « Jamais modifié dans l'admin » : dernière écriture = celle du seed (création ou mise à niveau précédente)
+  const seededAt = current.seededAt ? new Date(current.seededAt).getTime() : perso?.createdAt.getTime() ?? 0;
+  const untouched = perso && Math.abs(perso.updatedAt.getTime() - seededAt) < 5_000;
+  if (perso && untouched && (current.contentVersion ?? 1) < STARTER_CONTENT_VERSION) {
+    await db.personalizedProduct.update({
+      where: { productId },
+      data: { content: { ...starter.content, contentVersion: STARTER_CONTENT_VERSION, seededAt: new Date().toISOString() } as unknown as Prisma.InputJsonValue, pagesMin: starter.pagesMin, pagesMax: starter.pagesMax },
+    });
+    await db.product.update({ where: { id: productId }, data: { pageCount: starter.pagesMax } });
+    log(`Textes UNWRITTEN mis à jour : ${starter.content.en.name}`);
+  }
 }

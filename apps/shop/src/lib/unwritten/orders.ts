@@ -3,9 +3,12 @@ import { prisma as defaultPrisma } from "@/lib/db";
 import { randomToken } from "@/lib/tokens";
 import { readUnwrittenConfig } from "./config";
 import type { PersonalSnapshot } from "./drafts";
-import { missingAnswers, validateStep, type Answers, type StepValidation } from "./questionnaire/engine";
+import { missingAnswers, photoEntries, validateStep, type Answers, type StepValidation } from "./questionnaire/engine";
+import { bookPlan } from "./book-plan";
+import { COLLECTION_KEYS, type CollectionKey, type Locale } from "./constants";
 import { definitionSchema, type QuestionnaireDefinition } from "./questionnaire/schema";
 import { giftTokenHash, newGiftToken } from "./tokens";
+import { deletePhotos, removedPhotoIds } from "./photos";
 
 /**
  * Cycle de vie d'un livre commandé (PersonalOrderItem) :
@@ -119,6 +122,15 @@ type StudioRow = Prisma.PersonalOrderItemGetPayload<{ include: typeof studioIncl
  */
 export function serializeForStudio(row: StudioRow) {
   const q = (row.questionnaire ?? {}) as { id?: string; version?: number; definition?: unknown };
+  const answers = itemAnswers(row);
+  const def = itemDefinition(row);
+  const key = row.product?.personalization?.collectionKey;
+  const collection = key && (COLLECTION_KEYS as readonly string[]).includes(key) ? (key as CollectionKey) : null;
+  const locale: Locale = row.locale === "fr" ? "fr" : "en";
+  // Photos : téléchargées par le studio via /api/v1/personal/items/:id/photos/:photoId (clé personal:read)
+  const photos = def
+    ? def.steps.flatMap((s) => s.questions).filter((x) => x.type === "photos").flatMap((x) => photoEntries(answers[x.id]).map((e, i) => ({ id: e.id, questionId: x.id, position: i, caption: e.caption || null, path: `/api/v1/personal/items/${row.id}/photos/${e.id}` })))
+    : [];
   return {
     id: row.id,
     status: row.status,
@@ -129,7 +141,10 @@ export function serializeForStudio(row: StudioRow) {
     isGift: row.isGift,
     product: row.product ? { id: row.product.id, slug: row.product.slug, name: row.product.name, collectionKey: row.product.personalization?.collectionKey ?? null, pagesMin: row.product.personalization?.pagesMin ?? null, pagesMax: row.product.personalization?.pagesMax ?? null, formats: row.product.personalization?.formats ?? [] } : null,
     questionnaire: { id: q.id ?? null, version: q.version ?? null, definition: q.definition ?? null },
-    answers: itemAnswers(row),
+    answers,
+    photos,
+    // Plan à suivre pour la génération (chapitres, pages, emplacements photo) : voir book-plan.ts
+    plan: collection ? bookPlan(collection, { locale, answers, knownQuestions: def ? def.steps.flatMap((s) => s.questions.map((x) => x.id)) : undefined }) : null,
     gift: row.gift ? { recipientName: row.gift.recipientName, message: row.gift.message } : null,
     studioRef: row.studioRef,
     lastError: row.lastError,
@@ -281,6 +296,7 @@ export async function saveGiftStep(claim: GiftWithItem, stepId: string, input: R
   if (!result.ok) return result;
   // On ne conserve côté destinataire que ses propres réponses
   const own = Object.fromEntries(Object.entries(result.answers).filter(([k]) => !(k in buyer)));
+  await deletePhotos(removedPhotoIds(giftAnswers(claim), own));
   await db.giftClaim.update({
     where: { id: claim.id },
     data: { answers: own as Prisma.InputJsonValue, ...(opts.consent && result.hasSensitive && !claim.sensitiveConsentAt ? { sensitiveConsentAt: now } : {}) },

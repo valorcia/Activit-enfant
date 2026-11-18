@@ -18,7 +18,7 @@ export const localizedSchema = text;
 const idSchema = z.string().regex(/^[a-z][a-zA-Z0-9_]{0,40}$/, "Identifiant : lettre minuscule puis lettres, chiffres ou _ (41 caractères au plus)");
 const optionValueSchema = z.string().regex(/^[a-z0-9][a-z0-9_-]{0,40}$/, "Valeur d'option : minuscules, chiffres, - ou _");
 
-export const QUESTION_TYPES = ["single", "multi", "text", "longtext", "date", "number", "info"] as const;
+export const QUESTION_TYPES = ["single", "multi", "text", "longtext", "date", "number", "info", "photos"] as const;
 export type QuestionType = (typeof QUESTION_TYPES)[number];
 
 export const CONDITION_OPS = ["eq", "neq", "in", "nin", "includes", "answered", "empty"] as const;
@@ -69,6 +69,8 @@ export const questionSchema = z.object({
   options: z.array(optionSchema).min(2).max(12).optional(),
   maxChoices: z.number().int().min(1).max(12).optional(),
   maxLength: z.number().int().min(1).max(4000).optional(),
+  /** Question « photos » : nombre maximal de photos (privées, avec légende facultative). */
+  maxFiles: z.number().int().min(1).max(12).optional(),
   min: z.number().optional(),
   max: z.number().optional(),
   showIf: conditionSchema.optional(),
@@ -80,18 +82,18 @@ export const stepSchema = z.object({
   title: text(120),
   description: text(400).optional(),
   showIf: conditionSchema.optional(),
-  questions: z.array(questionSchema).min(1).max(6),
+  questions: z.array(questionSchema).min(1).max(8),
 });
 export type Step = z.infer<typeof stepSchema>;
 
-export const MAX_QUESTIONS = 20;
+export const MAX_QUESTIONS = 45;
 /** Étapes ajoutées par la vitrine (choix du répondant, récapitulatif). */
 export const RESERVED_STEP_IDS = ["mode", "review"];
 
 const baseDefinitionSchema = z.object({
   schemaVersion: z.literal(1),
   intro: text(400).optional(),
-  steps: z.array(stepSchema).min(1).max(8),
+  steps: z.array(stepSchema).min(1).max(12),
 });
 export type QuestionnaireDefinition = z.infer<typeof baseDefinitionSchema>;
 
@@ -136,13 +138,14 @@ export const definitionSchema = baseDefinitionSchema.superRefine((def, ctx) => {
       if (q.options && new Set(q.options.map((o) => o.value)).size !== q.options.length) ctx.addIssue({ code: "custom", path: [...path, "options"], message: "Valeurs d'options en double" });
       if (q.type === "info" && (q.required || q.sensitive)) ctx.addIssue({ code: "custom", path, message: "Un texte d'information ne peut être ni obligatoire ni sensible" });
       if (q.maxChoices && q.type !== "multi") ctx.addIssue({ code: "custom", path: [...path, "maxChoices"], message: "maxChoices réservé aux choix multiples" });
+      if (q.maxFiles && q.type !== "photos") ctx.addIssue({ code: "custom", path: [...path, "maxFiles"], message: "maxFiles réservé aux questions photos" });
       // Condition d'une question : questions des étapes précédentes et questions précédentes de la même étape
       checkCondition(q.showIf, [...path, "showIf"], new Map(seen));
       seen.set(q.id, q);
       if (q.type !== "info") count += 1;
     });
   });
-  if (count > MAX_QUESTIONS) ctx.addIssue({ code: "custom", path: ["steps"], message: `Trop de questions (${count}) : ${MAX_QUESTIONS} au plus, et 5 à 8 visibles par parcours` });
+  if (count > MAX_QUESTIONS) ctx.addIssue({ code: "custom", path: ["steps"], message: `Trop de questions (${count}) : ${MAX_QUESTIONS} au plus` });
 });
 
 export type DefinitionParse = { ok: true; definition: QuestionnaireDefinition } | { ok: false; errors: string[] };

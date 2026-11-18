@@ -9,7 +9,11 @@ import { href } from "@/lib/unwritten/i18n/routing";
 import { audienceForMode } from "@/lib/unwritten/questionnaire/engine";
 import { PRIVATE_ROBOTS } from "@/lib/unwritten/seo";
 import type { DraftMode } from "@/lib/unwritten/constants";
+import { bookPlan } from "@/lib/unwritten/book-plan";
+import { COLLECTION_KEYS, type CollectionKey } from "@/lib/unwritten/constants";
+import { allQuestions } from "@/lib/unwritten/questionnaire/schema";
 import { BookCover } from "@/components/unwritten/cover";
+import { BookPlanView } from "@/components/unwritten/book-plan";
 import { QuestionnaireForm } from "@/components/unwritten/questionnaire-form";
 import { DeleteDraft, SaveLater } from "@/components/unwritten/draft-tools";
 
@@ -32,6 +36,8 @@ export default async function CreatePage({ params, searchParams }: Props) {
   const found = await browserDraft(product.id);
   const draft = found?.draft ?? null;
   const view = await questionnaireView(product.id, draft, sp.mode);
+  const key = (COLLECTION_KEYS as readonly string[]).includes(product.collectionKey) ? (product.collectionKey as CollectionKey) : null;
+  const plan = key && view ? bookPlan(key, { locale, answers: view.answers, knownQuestions: allQuestions(view.definition).map((x) => x.id) }) : null;
 
   const aside = (
     <aside className="lg:sticky lg:top-28 lg:self-start">
@@ -42,6 +48,13 @@ export default async function CreatePage({ params, searchParams }: Props) {
           {product.priceCents != null && <p className="uw-small mt-1">{formatMoney(product.priceCents, product.currency, locale)}</p>}
         </div>
       </div>
+      {plan && (
+        <div className="mt-10 border-t border-[var(--uw-line)] pt-8">
+          <p className="uw-eyebrow">{dict.plan.building}</p>
+          <p className="uw-small mt-2 !leading-relaxed">{dict.plan.buildingLead}</p>
+          <div className="mt-5"><BookPlanView plan={plan} dict={dict.plan} variant="live" /></div>
+        </div>
+      )}
       {draft && found?.state === "editable" && (
         <div className="mt-10 space-y-8 border-t border-[var(--uw-line)] pt-8">
           <SaveLater locale={locale} draftId={draft.id} labels={q.saveLater} busy={q.saving} defaultEmail={draft.email} />
@@ -96,7 +109,7 @@ export default async function CreatePage({ params, searchParams }: Props) {
     <section className="uw-section !pt-10 md:!pt-16">
       <div className="uw-container">
         <Link href={href(locale, "books", product.slug)} className="text-sm text-[var(--uw-muted)] hover:text-[var(--uw-ink)]">← {product.name}</Link>
-        <div className="mt-8 grid gap-12 lg:mt-12 lg:grid-cols-[minmax(0,1fr)_260px] lg:gap-24">
+        <div className="mt-8 grid gap-12 lg:mt-12 lg:grid-cols-[minmax(0,1fr)_300px] lg:gap-20">
           <div className="max-w-[640px] lg:order-1">{content}</div>
           <div className="lg:order-2">{aside}</div>
         </div>

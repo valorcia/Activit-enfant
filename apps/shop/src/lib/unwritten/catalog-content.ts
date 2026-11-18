@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { pageRange } from "./book-plan";
 import type { CollectionKey } from "./constants";
 
 /**
@@ -38,14 +39,20 @@ export interface StarterProduct {
   content: ProductContent;
 }
 
-/** Les trois collections du pilote. Prix configurables ensuite dans l'admin. */
+/**
+ * Version des textes de départ : le seed met à jour les produits jamais modifiés dans l'admin
+ * lorsque cette version augmente (voir seed.ts).
+ */
+export const STARTER_CONTENT_VERSION = 2;
+
+/** Les trois collections du pilote. Prix configurables ensuite dans l'admin ; pages = plan du livre. */
 export const STARTER_PRODUCTS: StarterProduct[] = [
   {
     key: "secret-book",
     slug: "the-secret-book",
     priceCents: 1990,
-    pagesMin: 32,
-    pagesMax: 40,
+    pagesMin: pageRange("secret-book").min,
+    pagesMax: pageRange("secret-book").max,
     position: 1,
     content: {
       en: {
@@ -64,9 +71,10 @@ export const STARTER_PRODUCTS: StarterProduct[] = [
           { key: "growth", label: "Personal growth", text: "For yourself: reflective challenges, never medical advice." },
           { key: "adventure", label: "Adventure", text: "A story where you are the characters, at home or on the road." },
         ],
-        inside: ["Challenges to live together", "Questions to answer in turn", "Pages to complete by hand", "A dedication on the first page"],
+        inside: ["Your portrait, with up to 4 of your photos", "Twelve to sixteen challenges to live together", "Questions to answer in turn", "Pages to complete by hand", "A dedication on the first page"],
         faq: [
           { q: "Who is it for?", a: "For a couple, a family, friends, or for yourself. You choose the edition when you begin." },
+          { q: "Can I add photos?", a: "Yes, up to 4. They illustrate your portrait at the start of the book. They stay private and are used only for your book." },
           { q: "Is the personal growth edition a therapy?", a: "No. It offers reflective challenges and never gives medical or psychological advice." },
         ],
         seoTitle: "The Secret Book — a personalised book of shared secrets",
@@ -88,9 +96,10 @@ export const STARTER_PRODUCTS: StarterProduct[] = [
           { key: "growth", label: "Développement personnel", text: `Pour vous${n}: des défis introspectifs, jamais de conseil médical.` },
           { key: "adventure", label: "Aventure", text: "Une histoire dont vous êtes les personnages, à la maison ou en chemin." },
         ],
-        inside: ["Des défis à vivre ensemble", "Des questions auxquelles répondre à tour de rôle", "Des pages à compléter à la main", "Une dédicace en première page"],
+        inside: ["Votre portrait, avec jusqu'à 4 de vos photos", "Douze à seize défis à vivre ensemble", "Des questions auxquelles répondre à tour de rôle", "Des pages à compléter à la main", "Une dédicace en première page"],
         faq: [
           { q: `Pour qui est-il${n}?`, a: "Pour un couple, une famille, des amis, ou pour vous-même. Vous choisissez l'édition au début." },
+          { q: `Puis-je ajouter des photos${n}?`, a: "Oui, jusqu'à 4. Elles illustrent votre portrait en début de livre. Elles restent privées et servent uniquement à votre livre." },
           { q: `L'édition développement personnel est-elle une thérapie${n}?`, a: "Non. Elle propose des défis introspectifs et ne donne jamais de conseil médical ou psychologique." },
         ],
         seoTitle: "The Secret Book — un livre personnalisé de secrets partagés",
@@ -102,8 +111,8 @@ export const STARTER_PRODUCTS: StarterProduct[] = [
     key: "before-its-too-late",
     slug: "before-its-too-late",
     priceCents: 2490,
-    pagesMin: 40,
-    pagesMax: 40,
+    pagesMin: pageRange("before-its-too-late").min,
+    pagesMax: pageRange("before-its-too-late").max,
     position: 2,
     content: {
       en: {
@@ -122,9 +131,10 @@ export const STARTER_PRODUCTS: StarterProduct[] = [
           { key: "children", label: "Children", text: "Moments to live with your children, adapted to their age." },
           { key: "friends", label: "Friends", text: "For the friends who have been there all along." },
         ],
-        inside: ["Experiences to live together", "Questions to ask, and space for the answers", "Pages for the memories you make", "A dedication on the first page"],
+        inside: ["A portrait of the people you name, with your photos together", "Twenty questions to ask, and space for the answers", "Ten experiences to live together, each with its page", "A photo album, with frames for the moments to come", "A dedication on the first page"],
         faq: [
           { q: "Do I need to share personal memories?", a: "No. A few first names and your answers are enough. Sensitive questions are optional." },
+          { q: "Can I add photos?", a: "Yes, up to 12: four for the portrait and eight for the album at the end of the book. They stay private and are used only for your book." },
           { q: "Can the whole family contribute?", a: "Not yet. Inviting relatives to add a memory is planned for a later version." },
         ],
         seoTitle: "Before It's Too Late — a personalised book of moments to share",
@@ -146,9 +156,10 @@ export const STARTER_PRODUCTS: StarterProduct[] = [
           { key: "children", label: "Enfants", text: "Des moments à vivre avec vos enfants, adaptés à leur âge." },
           { key: "friends", label: "Amis", text: "Pour les amis qui sont là depuis toujours." },
         ],
-        inside: ["Des expériences à vivre ensemble", "Des questions à poser, et la place pour les réponses", "Des pages pour les souvenirs à venir", "Une dédicace en première page"],
+        inside: ["Un portrait des personnes que vous nommez, avec vos photos ensemble", "Vingt questions à poser, et la place pour les réponses", "Dix expériences à vivre ensemble, chacune avec sa page", "Un album photo, avec des cadres pour les moments à venir", "Une dédicace en première page"],
         faq: [
           { q: `Faut-il partager des souvenirs personnels${n}?`, a: "Non. Quelques prénoms et vos réponses suffisent. Les questions sensibles sont facultatives." },
+          { q: `Puis-je ajouter des photos${n}?`, a: "Oui, jusqu'à 12${n}: quatre pour le portrait et huit pour l'album en fin de livre. Elles restent privées et servent uniquement à votre livre." },
           { q: `Toute la famille peut-elle participer${n}?`, a: "Pas encore. L'invitation de proches à ajouter un souvenir est prévue dans une prochaine version." },
         ],
         seoTitle: "Before It's Too Late — un livre personnalisé de moments à partager",
@@ -160,8 +171,8 @@ export const STARTER_PRODUCTS: StarterProduct[] = [
     key: "movie-of-my-life",
     slug: "the-movie-of-my-life",
     priceCents: 3990,
-    pagesMin: 70,
-    pagesMax: 90,
+    pagesMin: pageRange("movie-of-my-life").min,
+    pagesMax: pageRange("movie-of-my-life").max,
     position: 3,
     content: {
       en: {
@@ -177,9 +188,10 @@ export const STARTER_PRODUCTS: StarterProduct[] = [
           { key: "life", label: "A whole life", text: "From the opening scene to today." },
           { key: "chapter", label: "One chapter", text: "A period that changed everything: a city, a decade, an encounter." },
         ],
-        inside: ["Scenes built from your memories", "Places and turning points", "Chapter openings in the style of a film", "A dedication on the first page"],
+        inside: ["Seven chapters written as scenes, from your answers", "Up to 22 of your photos, each in the matching chapter, and one on the cover", "Places, encounters and turning points", "Closing credits with everyone named in the book", "Blank pages for the family to add their own scenes"],
         faq: [
-          { q: "Can I add photos?", a: "Not yet. Adding photos is planned for a later version; this book is written from text answers." },
+          { q: "Can I add photos?", a: "Yes, up to 22: one for the cover and up to four per chapter (childhood, encounters, places…). They stay private and are used only for your book." },
+          { q: "How many pages?", a: "Between 72 and 88 pages, depending on the length of your answers: seven chapters of 7 to 11 pages, plus the opening pages, the closing credits and the family pages." },
           { q: "What if a memory is not exact?", a: "It is written as a memory (\"you often tell that…\"), never presented as a verified fact." },
         ],
         seoTitle: "The Movie of My Life — a personalised life story book",
@@ -198,9 +210,10 @@ export const STARTER_PRODUCTS: StarterProduct[] = [
           { key: "life", label: "Toute une vie", text: "De la scène d'ouverture à aujourd'hui." },
           { key: "chapter", label: "Un chapitre", text: `Une période qui a tout changé${n}: une ville, une décennie, une rencontre.` },
         ],
-        inside: ["Des scènes construites à partir de vos souvenirs", "Des lieux et des tournants", "Des ouvertures de chapitre comme au cinéma", "Une dédicace en première page"],
+        inside: ["Sept chapitres écrits comme des scènes, à partir de vos réponses", "Jusqu'à 22 de vos photos, chacune dans le chapitre correspondant, et une en couverture", "Les lieux, les rencontres et les tournants", "Un générique de fin avec toutes les personnes citées", "Des pages libres pour que la famille ajoute ses propres scènes"],
         faq: [
-          { q: `Puis-je ajouter des photos${n}?`, a: `Pas encore. L'ajout de photos est prévu dans une prochaine version${n}; ce livre est écrit à partir de réponses écrites.` },
+          { q: `Puis-je ajouter des photos${n}?`, a: `Oui, jusqu'à 22${n}: une pour la couverture et jusqu'à quatre par chapitre (enfance, rencontres, lieux…). Elles restent privées et servent uniquement à votre livre.` },
+          { q: `Combien de pages${n}?`, a: `Entre 72 et 88 pages selon la longueur de vos réponses${n}: sept chapitres de 7 à 11 pages, plus les pages d'ouverture, le générique de fin et les pages de la famille.` },
           { q: `Et si un souvenir n'est pas exact${n}?`, a: `Il est écrit comme un souvenir («${n}tu racontes souvent que…${n}»), jamais présenté comme un fait vérifié.` },
         ],
         seoTitle: "The Movie of My Life — le livre personnalisé d'une vie",

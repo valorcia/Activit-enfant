@@ -113,12 +113,12 @@ describe("validation des réponses d'une étape", () => {
 });
 
 describe("validation des définitions (JSON versionné)", () => {
-  it("accepte les trois définitions de départ, sobres (5 à 8 questions par parcours)", () => {
+  it("accepte les trois définitions de départ (version 2, organisée par chapitre)", () => {
     for (const def of [secret, before, movie]) {
       const lint = lintDefinition(def);
       expect(lint.warnings).toEqual([]);
       expect(lint.min).toBeGreaterThanOrEqual(5);
-      expect(lint.max).toBeLessThanOrEqual(8);
+      expect(lint.max).toBeLessThanOrEqual(32);
     }
   });
   it("couvre les déclinaisons demandées", () => {
@@ -126,7 +126,7 @@ describe("validation des définitions (JSON versionné)", () => {
     expect(values(secret)).toEqual(["couple", "family", "friends", "growth", "adventure"]);
     expect(values(before)).toEqual(["parents", "grandparents", "couple", "children", "friends"]);
     const movieIds = movie.steps.flatMap((s) => s.questions.map((q) => q.id));
-    expect(movieIds).toEqual(expect.arrayContaining(["memory", "turningPoints", "places", "anecdote", "photosLater"]));
+    expect(movieIds).toEqual(expect.arrayContaining(["memory", "turningPoints", "places", "anecdote", "coverPhoto", "childhoodPhotos"]));
   });
   it("refuse une condition qui cite une question placée après, ou inconnue", () => {
     const forward = parseDefinition({ schemaVersion: 1, steps: [
@@ -156,6 +156,8 @@ describe("validation des définitions (JSON versionné)", () => {
     if (!bad.ok) expect(bad.errors[0]).toMatch(/JSON invalide/);
   });
   it("calcule les étapes visibles dans l'ordre", () => {
-    expect(visibleSteps(secret, { edition: "growth" }).map((s) => s.step.id)).toEqual(["edition", "people", "story", "voice"]);
+    expect(visibleSteps(secret, { edition: "growth" }).map((s) => s.step.id)).toEqual(["edition", "people", "story", "challenges", "voice"]);
+    expect(visibleSteps(movie, { scope: "life" }).map((s) => s.step.id)).toEqual(["film", "hero", "childhood", "youth", "people", "scenes", "work", "today"]);
+    expect(visibleSteps(movie, { scope: "chapter" }).map((s) => s.step.id)).toEqual(["film", "hero", "setting", "heart", "people", "scenes", "work", "today"]);
   });
 });
