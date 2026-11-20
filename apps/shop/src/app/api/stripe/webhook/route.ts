@@ -17,6 +17,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request) {
   const webhookSecret = await getStripeWebhookSecret();
   if (!webhookSecret) {
+    console.error("[stripe] webhook reçu mais aucun secret de webhook configuré (Intégrations ou STRIPE_WEBHOOK_SECRET)");
     return NextResponse.json({ error: "Webhook non configuré" }, { status: 500 });
   }
   const signature = req.headers.get("stripe-signature");
@@ -27,12 +28,14 @@ export async function POST(req: Request) {
   try {
     event = (await getStripe()).webhooks.constructEvent(payload, signature, webhookSecret);
   } catch (err) {
-    console.warn("[stripe] signature invalide", err);
+    console.warn("[stripe] signature invalide : le secret enregistré ne correspond pas à cet endpoint (mode test/réel ?)", err instanceof Error ? err.message : err);
     return NextResponse.json({ error: "Signature invalide" }, { status: 400 });
   }
 
   const isNew = await recordStripeEvent(prisma, event);
+  console.info(`[stripe] événement ${event.type} ${event.id} (${event.livemode ? "réel" : "test"})${isNew ? "" : " déjà traité"}`);
   if (!isNew) return NextResponse.json({ received: true, duplicate: true });
+  let outcome = "ok";
 
   try {
     switch (event.type) {
@@ -41,8 +44,16 @@ export async function POST(req: Request) {
         const session = event.data.object as Stripe.Checkout.Session;
         const commerce = await getSetting("commerce");
         const result = await fulfillOrderFromSession(session, { invoicePrefix: commerce.invoicePrefix, maxDownloads: commerce.downloadMaxPerEntitlement });
+        outcome = result.status;
+        console.info(`[stripe] session ${session.id} (paiement : ${session.payment_status}) → ${result.status}`);
         if (result.status === "fulfilled" && result.orderId) {
           await sendOrderConfirmation(result.orderId);
+        }
+        if (result.status === "not_found") {
+          // Commande inconnue (autre base, autre boutique) : l'événement n'est pas marqué traité, un renvoi reste possible
+          await prisma.stripeEvent.delete({ where: { id: event.id } }).catch(() => undefined);
+          console.warn(`[stripe] aucune commande pour la session ${session.id}`);
+          return NextResponse.json({ received: true, status: "not_found", session: session.id }, { status: 404 });
         }
         break;
       }
@@ -82,5 +93,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Erreur de traitement" }, { status: 500 });
   }
 
-  return NextResponse.json({ received: true });
+  // Le corps de la réponse est visible dans Stripe (Développeurs → Webhooks → tentatives) : utile au diagnostic
+  return NextResponse.json({ received: true, status: outcome });
 }

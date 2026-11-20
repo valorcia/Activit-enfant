@@ -116,7 +116,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
           </AdminCard>
 
           <AdminCard title="Actions">
-            <OrderActions orderId={order.id} isPaid={isPaid} canRefund={canRefund} remainingCents={order.totalCents - order.refundedCents} currency={order.currency} hasPaymentIntent={!!order.stripePaymentIntentId} />
+            <OrderActions orderId={order.id} isPaid={isPaid} canRefund={canRefund} remainingCents={order.totalCents - order.refundedCents} currency={order.currency} hasPaymentIntent={!!order.stripePaymentIntentId} canVerify={canRefund && !!order.stripeCheckoutSessionId && (order.status === "PENDING" || order.status === "FAILED" || order.status === "CANCELLED")} />
           </AdminCard>
         </div>
       </div>

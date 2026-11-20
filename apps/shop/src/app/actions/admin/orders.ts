@@ -6,6 +6,8 @@ import { audit } from "@/lib/audit";
 import { assertPermission } from "@/lib/auth/session";
 import { getStripe } from "@/lib/stripe";
 import { sendOrderConfirmation } from "@/lib/orders/notify";
+import { fulfillOrderFromSession } from "@/lib/orders/fulfillment";
+import { getSetting } from "@/lib/settings";
 
 type Result = { ok: true; message?: string } | { ok: false; error: string };
 
@@ -73,5 +75,40 @@ export async function refundOrderAction(raw: { orderId: string; amountCents?: nu
     revalidatePath(`/admin/commandes/${order.id}`);
     revalidatePath("/admin/commandes");
     return { ok: true, message: `Remboursement de ${(amount / 100).toFixed(2)} € émis` };
+  } catch (e) { return fail(e); }
+}
+
+/**
+ * Filet de sécurité quand le webhook n'est pas arrivé : interroge Stripe côté serveur (clé secrète)
+ * sur la session de paiement de la commande. Si Stripe confirme le paiement, la commande est
+ * validée exactement comme par le webhook (même fonction, idempotente). Indique aussi les
+ * webhooks enregistrés chez Stripe dans le mode de la clé, pour le diagnostic.
+ */
+export async function verifyStripePaymentAction(orderId: string): Promise<Result> {
+  try {
+    const user = await assertPermission("orders:refund");
+    const order = await prisma.order.findUnique({ where: { id: orderId }, select: { status: true, stripeCheckoutSessionId: true } });
+    if (!order?.stripeCheckoutSessionId) return { ok: false, error: "Aucune session de paiement Stripe pour cette commande" };
+    const stripe = await getStripe();
+    const session = await stripe.checkout.sessions.retrieve(order.stripeCheckoutSessionId);
+    let hooks = "";
+    try {
+      const list = await stripe.webhookEndpoints.list({ limit: 10 });
+      hooks = list.data.length
+        ? ` Webhooks Stripe (${session.livemode ? "mode réel" : "mode test"}) : ${list.data.map((w) => `${w.url} [${w.status}]`).join(" ; ")}.`
+        : ` Aucun webhook enregistré chez Stripe en ${session.livemode ? "mode réel" : "mode test"} : c'est la cause du blocage.`;
+    } catch {
+      hooks = "";
+    }
+    if (session.payment_status !== "paid" && session.payment_status !== "no_payment_required") {
+      return { ok: false, error: `Stripe indique que cette session n'est pas payée (${session.payment_status}, ${session.status}).${hooks}` };
+    }
+    const commerce = await getSetting("commerce");
+    const result = await fulfillOrderFromSession(session, { invoicePrefix: commerce.invoicePrefix, maxDownloads: commerce.downloadMaxPerEntitlement });
+    if (result.status === "fulfilled" && result.orderId) await sendOrderConfirmation(result.orderId);
+    await audit({ userId: user.id, action: "order.verify_stripe_payment", entity: "order", entityId: orderId, data: { result: result.status } });
+    revalidatePath(`/admin/commandes/${orderId}`);
+    const done = result.status === "fulfilled" ? "Paiement confirmé par Stripe : commande validée et e-mail envoyé au client." : result.status === "already_fulfilled" ? "La commande était déjà validée." : `Résultat : ${result.status}.`;
+    return { ok: true, message: `${done}${hooks}` };
   } catch (e) { return fail(e); }
 }

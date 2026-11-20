@@ -4,15 +4,22 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ConfirmButton } from "@/components/admin/confirm-button";
-import { refundOrderAction, resendConfirmationAction, resetDownloadCountAction, toggleEntitlementAction } from "@/app/actions/admin/orders";
+import { refundOrderAction, resendConfirmationAction, resetDownloadCountAction, toggleEntitlementAction, verifyStripePaymentAction } from "@/app/actions/admin/orders";
 import { formatPrice } from "@/lib/utils";
 
-export function OrderActions({ orderId, isPaid, canRefund, remainingCents, currency, hasPaymentIntent }: { orderId: string; isPaid: boolean; canRefund: boolean; remainingCents: number; currency: string; hasPaymentIntent: boolean }) {
+export function OrderActions({ orderId, isPaid, canRefund, remainingCents, currency, hasPaymentIntent, canVerify = false }: { orderId: string; isPaid: boolean; canRefund: boolean; remainingCents: number; currency: string; hasPaymentIntent: boolean; canVerify?: boolean }) {
   const [pending, start] = useTransition();
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
   return (
     <div className="space-y-4">
+      {canVerify && (
+        <div className="rounded-xl border border-honey/60 bg-honey-light/40 p-3">
+          <p className="text-sm font-bold">Paiement non confirmé</p>
+          <p className="text-xs text-ink-muted">Si le client a payé mais que Stripe n&apos;a pas prévenu la boutique, vérifiez directement auprès de Stripe : la commande sera validée si le paiement est confirmé.</p>
+          <Button className="mt-2" variant="outline" size="sm" disabled={pending} onClick={() => start(async () => { const r = await verifyStripePaymentAction(orderId); r.ok ? toast.success(r.message, { duration: 15000 }) : toast.error(r.error, { duration: 15000 }); })}>Vérifier le paiement auprès de Stripe</Button>
+        </div>
+      )}
       <Button variant="outline" size="sm" disabled={!isPaid || pending} onClick={() => start(async () => { const r = await resendConfirmationAction(orderId); r.ok ? toast.success(r.message) : toast.error(r.error); })}>Renvoyer l&apos;email de confirmation</Button>
       {canRefund && isPaid && hasPaymentIntent && remainingCents > 0 && (
         <div className="rounded-xl border border-line bg-[#FBFAF7] p-3">

@@ -109,13 +109,25 @@ describe("paiement, webhook et livraison de La Malle à Jeux", () => {
     expect(await priceCart([{ kind: "product", id: ok.id, quantity: 2 }], new Date(), DEFAULT_SITE_ID)).toEqual([{ kind: "product", id: ok.id, name: ok.name, quantity: 2, unitPriceCents: 1290, compareAtCents: null, totalCents: 2580, taxRateBp: 2000 }]);
   });
 
+  it("le webhook d'une session inconnue répond 404 et reste rejouable (pas marqué traité)", async () => {
+    const event = { id: "evt_inconnu", type: "checkout.session.completed", data: { object: paidSession("cs_inconnue") } };
+    const req = () => new Request("http://localhost/api/stripe/webhook", { method: "POST", headers: { "stripe-signature": "t=1" }, body: JSON.stringify(event) });
+    const res = await webhook.POST(req());
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ status: "not_found", session: "cs_inconnue" });
+    expect(await db.stripeEvent.count({ where: { id: "evt_inconnu" } })).toBe(0);
+    expect((await webhook.POST(req())).status).toBe(404); // un renvoi est retraité, pas ignoré comme doublon
+  });
+
   it("le webhook livre les fichiers communs et envoie l'e-mail habituel, sans livre personnalisé", async () => {
     const p = await createProductFixture({ slug: "coquelicot", priceCents: 990 });
     const { orderId } = await createCheckoutSession({ site: malleSite, lines: [{ kind: "product", id: p.id, quantity: 1 }], email: "parent@example.com" });
     const order = await db.order.findUniqueOrThrow({ where: { id: orderId } });
     const event = { id: "evt_malle", type: "checkout.session.completed", data: { object: paidSession(order.stripeCheckoutSessionId!, { customer_details: { email: "parent@example.com", name: "Camille", address: null, phone: null, tax_exempt: null, tax_ids: null } }) } };
     const req = () => new Request("http://localhost/api/stripe/webhook", { method: "POST", headers: { "stripe-signature": "t=1" }, body: JSON.stringify(event) });
-    expect((await webhook.POST(req())).status).toBe(200);
+    const first = await webhook.POST(req());
+    expect(first.status).toBe(200);
+    expect(await first.json()).toMatchObject({ received: true, status: "fulfilled" });
     expect(await (await webhook.POST(req())).json()).toMatchObject({ duplicate: true });
     const paid = await db.order.findUniqueOrThrow({ where: { id: orderId }, include: { entitlements: true, personalItems: true } });
     expect(paid.status).toBe("PAID");
