@@ -139,6 +139,7 @@ model User {
   socialPosts     SocialPost[]
   moderatedSubmissions CreatorSubmission[]
   creatorPayouts  CreatorPayout[]
+  pushSubscriptions PushSubscription[]
 }
 
 // Clés d'API pour l'importation / automatisation (hash uniquement)
@@ -1463,4 +1464,21 @@ model GiftClaim {
   expiresAt          DateTime?
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
+}
+
+// Notifications push de l'équipe (application d'administration installée sur un téléphone ou un
+// ordinateur) : une ligne par appareil abonné. Supprimée quand le navigateur la déclare expirée.
+model PushSubscription {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint      String    @unique
+  p256dh        String
+  auth          String
+  deviceLabel   String? // ex. « iPhone · Safari », pour la liste des appareils
+  createdAt     DateTime  @default(now())
+  lastSuccessAt DateTime?
+  failures      Int       @default(0)
+
+  @@index([userId])
 }

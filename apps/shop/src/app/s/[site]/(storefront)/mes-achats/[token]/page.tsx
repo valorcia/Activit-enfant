@@ -6,6 +6,7 @@ import { Alert, EmptyState } from "@/components/ui/misc";
 import { OrderSummary, orderSummaryInclude } from "@/components/storefront/order-summary";
 import { orderAccessUrl } from "@/lib/orders/access";
 import { ShoppingBag } from "lucide-react";
+import { RememberCustomer } from "@/components/storefront/remember-customer";
 
 export const metadata: Metadata = { title: "Mes achats", robots: { index: false, follow: false } };
 export const dynamic = "force-dynamic";
@@ -31,6 +32,7 @@ export default async function MesAchatsTokenPage({ params }: { params: Promise<{
 
   return (
     <div className="container-shell max-w-3xl py-10 sm:py-14">
+      <RememberCustomer input={{ kind: "access", token }} />
       <h1 className="font-heading text-3xl font-bold sm:text-4xl">Mes achats</h1>
       <p className="mt-2 text-ink-soft">{link.customer.email} · lien valable jusqu&apos;au {link.expiresAt.toLocaleString("fr-FR", { dateStyle: "medium", timeStyle: "short" })}</p>
       {orders.length === 0 ? (

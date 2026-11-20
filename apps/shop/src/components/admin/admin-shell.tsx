@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Megaphone, BarChart3, BookOpen, Boxes, FileText, Gift, Home, Import, KeyRound, LayoutGrid, LogOut, Mail, Menu, MessageSquareQuote, Package, Palette, Settings, ShoppingCart, Tags, TicketPercent, Users, X, ExternalLink, Globe2, Lightbulb } from "lucide-react";
+import { Megaphone, BarChart3, BookOpen, Boxes, FileText, Gift, Home, Import, KeyRound, LayoutGrid, LogOut, Mail, Menu, MessageSquareQuote, Package, Palette, Settings, ShoppingCart, Tags, TicketPercent, Users, X, ExternalLink, Globe2, Lightbulb, Bell } from "lucide-react";
 import { setAdminSiteAction } from "@/app/actions/admin/sites";
 import { signOutAction } from "@/app/actions/auth";
 import { roleCan, type Permission, ROLE_LABELS } from "@/lib/auth/permissions";
@@ -16,6 +16,7 @@ const NAV: Array<{ title: string; items: NavItem[] }> = [
   { title: "Pilotage", items: [
     { href: "/admin", label: "Tableau de bord", icon: BarChart3, permission: "dashboard:view" },
     { href: "/admin/commandes", label: "Commandes", icon: ShoppingCart, permission: "orders:read" },
+    { href: "/admin/notifications", label: "Notifications", icon: Bell, permission: "orders:read" },
     { href: "/admin/clients", label: "Clients", icon: Users, permission: "customers:read" },
   ] },
   { title: "Catalogue", items: [

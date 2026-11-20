@@ -1,10 +1,18 @@
+import type { Metadata } from "next";
 import { getAdminUser } from "@/lib/auth/session";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { getSetting } from "@/lib/settings";
 import { getAdminSite, getSites, siteUrl } from "@/lib/sites";
 import { studioUrl } from "@/lib/studio-link";
 
-export const metadata = { title: { default: "Administration", template: "%s · Admin" }, robots: { index: false, follow: false } };
+export const metadata: Metadata = {
+  title: { default: "Administration", template: "%s · Admin" },
+  robots: { index: false, follow: false },
+  // Application installable de l'équipe (notifications push de commandes)
+  manifest: "/equipe.webmanifest",
+  appleWebApp: { capable: true, title: "Boutique", statusBarStyle: "default" },
+  icons: { apple: "/icons/equipe-180.png" },
+};
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await getAdminUser();

@@ -52,10 +52,10 @@ export function orderConfirmationEmail(brand: Brand, opts: {
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:15px;">${rows}
       <tr><td style="padding:12px 0;font-weight:800;">Total</td><td align="right" style="padding:12px 0;font-weight:800;">${formatPrice(opts.totalCents, opts.currency)}</td></tr>
     </table>
-    <p style="font-size:14px;color:#6b7280;">Ce lien reste valable : vous pourrez à tout moment retrouver vos achats depuis la page « Retrouver mes achats » en indiquant votre adresse email.</p>
+    <p style="font-size:14px;color:#6b7280;">Votre compte client est créé, sans mot de passe : retrouvez vos achats et vos téléchargements à tout moment dans « Mon compte » (${escapeHtml(brand.appUrl.replace(/\/$/, ""))}/mon-compte). Sur un nouvel appareil, saisissez simplement votre adresse e-mail pour recevoir un lien de connexion.</p>
     ${opts.invoiceUrl ? `<p style="font-size:14px;"><a href="${opts.invoiceUrl}" style="color:#293241;">Voir ma facture</a></p>` : ""}
     <p>Bonne aventure en famille !</p>`;
-  const text = `Merci ! Votre commande ${opts.orderNumber} est confirmée.\nTéléchargez vos fichiers : ${opts.accessUrl}\n\n${opts.items.map((i) => `- ${i.name} : ${formatPrice(i.totalCents, opts.currency)}`).join("\n")}\nTotal : ${formatPrice(opts.totalCents, opts.currency)}`;
+  const text = `Merci ! Votre commande ${opts.orderNumber} est confirmée.\nTéléchargez vos fichiers : ${opts.accessUrl}\n\n${opts.items.map((i) => `- ${i.name} : ${formatPrice(i.totalCents, opts.currency)}`).join("\n")}\nTotal : ${formatPrice(opts.totalCents, opts.currency)}\n\nVotre compte client (sans mot de passe) : ${brand.appUrl.replace(/\/$/, "")}/mon-compte`;
   return { subject: `Votre commande ${opts.orderNumber} est prête à télécharger`, html: layout(brand, "Commande confirmée", body), text };
 }
 

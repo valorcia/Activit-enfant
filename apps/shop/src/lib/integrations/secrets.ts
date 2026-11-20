@@ -28,6 +28,9 @@ export const SECRET_DEFS = {
   "etsy.apiKey": { env: "ETSY_API_KEY", label: "Keystring de l'application Etsy" },
   "etsy.sharedSecret": { env: "ETSY_SHARED_SECRET", label: "Shared secret de l'application Etsy" },
   "google.geminiApiKey": { env: "GEMINI_API_KEY", label: "Clé API Google Gemini (Veo)" },
+  // Notifications push (générées automatiquement à la première activation)
+  "push.vapidPublicKey": { env: "VAPID_PUBLIC_KEY", label: "Clé publique des notifications push (VAPID)" },
+  "push.vapidPrivateKey": { env: "VAPID_PRIVATE_KEY", label: "Clé privée des notifications push (VAPID)" },
 } as const;
 
 export type SecretKey = keyof typeof SECRET_DEFS;

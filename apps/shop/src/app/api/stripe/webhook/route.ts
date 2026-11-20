@@ -5,6 +5,7 @@ import { getStripe, getStripeWebhookSecret } from "@/lib/stripe";
 import { getSetting } from "@/lib/settings";
 import { applyRefund, fulfillOrderFromSession, markOrderExpired, markOrderFailed, recordStripeEvent } from "@/lib/orders/fulfillment";
 import { sendOrderConfirmation, sendRefundNotification } from "@/lib/orders/notify";
+import { notifyNewOrder } from "@/lib/push";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,6 +49,7 @@ export async function POST(req: Request) {
         console.info(`[stripe] session ${session.id} (paiement : ${session.payment_status}) → ${result.status}`);
         if (result.status === "fulfilled" && result.orderId) {
           await sendOrderConfirmation(result.orderId);
+          await notifyNewOrder(result.orderId); // notification push de l'équipe (n'échoue jamais)
         }
         if (result.status === "not_found") {
           // Commande inconnue (autre base, autre boutique) : l'événement n'est pas marqué traité, un renvoi reste possible

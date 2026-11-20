@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { verifyOrderAccessToken } from "@/lib/orders/access";
 import { OrderSummary, orderSummaryInclude } from "@/components/storefront/order-summary";
+import { RememberCustomer } from "@/components/storefront/remember-customer";
 
 export const metadata: Metadata = { title: "Ma commande", robots: { index: false, follow: false } };
 export const dynamic = "force-dynamic";
@@ -15,6 +16,7 @@ export default async function OrderAccessPage({ params }: { params: Promise<{ to
   if (!order) notFound();
   return (
     <div className="container-shell max-w-3xl py-10 sm:py-14">
+      <RememberCustomer input={{ kind: "order", token }} />
       <h1 className="mb-6 font-heading text-3xl font-bold sm:text-4xl">Ma commande</h1>
       <OrderSummary order={order} invoiceHref={`/commande/${token}/facture`} />
     </div>

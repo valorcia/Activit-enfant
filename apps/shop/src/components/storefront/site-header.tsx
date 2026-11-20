@@ -3,7 +3,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Menu, Search, ShoppingBag, X } from "lucide-react";
+import { Menu, Search, ShoppingBag, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { useCart, cartCount } from "@/lib/cart/store";
@@ -63,6 +63,9 @@ export function SiteHeader({ brand, navigation, banner, categories }: { brand: B
           <div className="flex items-center gap-1 sm:gap-2">
             <Button asChild variant="ghost" size="icon" aria-label="Rechercher">
               <Link href="/boutique?focus=recherche"><Search className="size-5" /></Link>
+            </Button>
+            <Button asChild variant="ghost" size="icon" aria-label="Mon compte">
+              <Link href="/mon-compte"><UserRound className="size-5" /></Link>
             </Button>
             <Button variant="ghost" size="icon" aria-label={`Panier, ${count} article${count > 1 ? "s" : ""}`} onClick={openCart} className="relative">
               <ShoppingBag className="size-5" />

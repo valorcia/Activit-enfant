@@ -8,6 +8,7 @@ import { Alert } from "@/components/ui/misc";
 import { OrderSummary, orderSummaryInclude } from "@/components/storefront/order-summary";
 import { OrderConfirmationClient } from "@/components/storefront/order-confirmation-client";
 import { PostPurchase } from "@/components/storefront/post-purchase";
+import { RememberCustomer } from "@/components/storefront/remember-customer";
 
 export const metadata: Metadata = { title: "Confirmation de commande", robots: { index: false, follow: false } };
 export const dynamic = "force-dynamic";
@@ -44,8 +45,9 @@ export default async function ConfirmationPage({ searchParams }: { searchParams:
             : "Nous attendons la confirmation de Stripe. Cette page se met à jour automatiquement ; vous recevrez un email dès que vos fichiers seront disponibles."}
         </p>
       </div>
+      {paid && session_id && <RememberCustomer input={{ kind: "session", sessionId: session_id }} />}
       {paid && (
-        <Alert variant="info" className="mb-6">Conservez ce lien pour retrouver vos fichiers à tout moment : <Link href={accessPath} className="font-bold underline">page de ma commande</Link>. Vous pourrez aussi recevoir un nouveau lien depuis « Retrouver mes achats ».</Alert>
+        <Alert variant="info" className="mb-6">Votre compte client est créé avec l&apos;adresse <strong>{order.email}</strong>, sans mot de passe : retrouvez vos achats et vos téléchargements à tout moment dans <Link href="/mon-compte" className="font-bold underline">Mon compte</Link> (icône en haut de la page). Sur un autre appareil, il suffit de saisir votre e-mail pour recevoir un lien de connexion. Lien direct vers cette commande : <Link href={accessPath} className="font-bold underline">page de ma commande</Link>.</Alert>
       )}
       <OrderSummary order={order} invoiceHref={paid ? `${accessPath}/facture` : undefined} />
       {paid && <PostPurchase siteId={order.siteId} purchasedProductIds={order.entitlements.map((e) => e.productId)} email={order.email} />}

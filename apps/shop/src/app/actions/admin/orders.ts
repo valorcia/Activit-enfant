@@ -8,6 +8,7 @@ import { getStripe } from "@/lib/stripe";
 import { sendOrderConfirmation } from "@/lib/orders/notify";
 import { fulfillOrderFromSession } from "@/lib/orders/fulfillment";
 import { getSetting } from "@/lib/settings";
+import { notifyNewOrder } from "@/lib/push";
 
 type Result = { ok: true; message?: string } | { ok: false; error: string };
 
@@ -105,7 +106,10 @@ export async function verifyStripePaymentAction(orderId: string): Promise<Result
     }
     const commerce = await getSetting("commerce");
     const result = await fulfillOrderFromSession(session, { invoicePrefix: commerce.invoicePrefix, maxDownloads: commerce.downloadMaxPerEntitlement });
-    if (result.status === "fulfilled" && result.orderId) await sendOrderConfirmation(result.orderId);
+    if (result.status === "fulfilled" && result.orderId) {
+      await sendOrderConfirmation(result.orderId);
+      await notifyNewOrder(result.orderId);
+    }
     await audit({ userId: user.id, action: "order.verify_stripe_payment", entity: "order", entityId: orderId, data: { result: result.status } });
     revalidatePath(`/admin/commandes/${orderId}`);
     const done = result.status === "fulfilled" ? "Paiement confirmé par Stripe : commande validée et e-mail envoyé au client." : result.status === "already_fulfilled" ? "La commande était déjà validée." : `Résultat : ${result.status}.`;
