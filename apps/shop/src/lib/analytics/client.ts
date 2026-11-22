@@ -17,6 +17,11 @@ declare global {
 
 export function trackEvent(name: string, params: Params = {}) {
   if (typeof window === "undefined") return;
+  // Mesure interne du parcours d'achat (indépendante des pixels publicitaires)
+  if (name === "view_item" || name === "add_to_cart" || name === "begin_checkout") {
+    const value = typeof params.value === "number" ? params.value : undefined;
+    void import("./first-party").then((m) => m.trackFunnelStep(name, { productId: typeof params.item_id === "string" ? params.item_id : undefined, value }));
+  }
   try {
     window.gtag?.("event", name, params);
     if (window.fbq) {

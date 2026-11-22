@@ -1482,3 +1482,26 @@ model PushSubscription {
 
   @@index([userId])
 }
+
+// Mesure d'audience interne (parcours d'achat), sans service tiers : visites, fiches vues, paniers,
+// clics « Acheter », achats et paiements refusés. Anonyme : ni IP, ni e-mail, ni lien avec le client ;
+// identifiants aléatoires de visiteur (13 mois au plus) et de visite. Conservation 25 mois (purge).
+model SiteEvent {
+  id        String   @id @default(cuid())
+  siteId    String
+  type      String // page_view | view_item | add_to_cart | begin_checkout | purchase | payment_failed
+  visitorId String?
+  sessionId String?
+  path      String?
+  productId String?
+  value     Int? // centimes
+  source    String? // facebook, google, instagram, direct, newsletter…
+  medium    String?
+  campaign  String?
+  device    String? // mobile | tablet | desktop
+  detail    String? // ex. motif d'un paiement refusé (code Stripe)
+  createdAt DateTime @default(now())
+
+  @@index([siteId, createdAt])
+  @@index([siteId, type, createdAt])
+}

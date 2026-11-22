@@ -5,6 +5,7 @@ import { SiteFooter } from "@/components/storefront/site-footer";
 import { CartDrawer } from "@/components/storefront/cart-drawer";
 import { ConsentBanner } from "@/components/storefront/consent-banner";
 import { AnalyticsScripts } from "@/components/storefront/analytics-scripts";
+import { VisitTracker } from "@/components/storefront/visit-tracker";
 import { UtmCapture } from "@/components/storefront/utm-capture";
 import { publicAnalytics } from "@/lib/settings";
 import { ExitPopup } from "@/components/storefront/exit-popup";
@@ -29,6 +30,7 @@ export default async function StorefrontLayout({ children, params }: { children:
       <CartDrawer withdrawalNotice={settings.commerce.withdrawalNotice} />
       <ConsentBanner enabled={settings.analytics.consentBannerEnabled} />
       <AnalyticsScripts analytics={publicAnalytics(settings.analytics)} />
+      <VisitTracker />
       <UtmCapture />
       <ExitPopup config={settings.conversion.exitPopup} />
     </div>

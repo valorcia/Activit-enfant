@@ -9,6 +9,7 @@ import { UwHeader } from "@/components/unwritten/chrome";
 import { UwFooter } from "@/components/unwritten/footer";
 import { UtmCapture } from "@/components/storefront/utm-capture";
 import "../unwritten.css";
+import { VisitTracker } from "@/components/storefront/visit-tracker";
 
 /**
  * Coque de la vitrine UNWRITTEN (arbre séparé, choisi par le proxy pour `Site.storefront = "unwritten"`).
@@ -54,6 +55,7 @@ export default async function UnwrittenLayout({ children, params }: { children: 
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:bg-white focus:px-4 focus:py-2">{dict.common.skip}</a>
       {preview && <div className="uw-preview-bar">{dict.common.footer.test}</div>}
       <UwHeader locale={locale} locales={openLocales(site)} labels={{ ...dict.common.nav, language: dict.common.language, languages: dict.common.languages }} />
+      <VisitTracker />
       <main id="main" className="flex-1">{children}</main>
       <UwFooter locale={locale} dict={dict} products={products} contactEmail={config.contactEmail} preview={preview} />
       <UtmCapture />

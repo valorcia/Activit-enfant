@@ -6,6 +6,7 @@ import { getSetting } from "@/lib/settings";
 import { applyRefund, fulfillOrderFromSession, markOrderExpired, markOrderFailed, recordStripeEvent } from "@/lib/orders/fulfillment";
 import { sendOrderConfirmation, sendRefundNotification } from "@/lib/orders/notify";
 import { notifyNewOrder } from "@/lib/push";
+import { recordServerEvent } from "@/lib/analytics/events";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -72,6 +73,9 @@ export async function POST(req: Request) {
       case "payment_intent.payment_failed": {
         const intent = event.data.object as Stripe.PaymentIntent;
         await markOrderFailed(intent.id);
+        // Statistiques : motif du refus (code Stripe), sans aucune donnée du client
+        const err = intent.last_payment_error;
+        await recordServerEvent({ siteId: String(intent.metadata?.siteId || "site-default"), type: "payment_failed", value: intent.amount, detail: err?.decline_code ?? err?.code ?? err?.type ?? "inconnu" });
         break;
       }
       case "charge.refunded": {
